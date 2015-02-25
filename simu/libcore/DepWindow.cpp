@@ -89,6 +89,7 @@ void DepWindow::addInst(DInst *dinst) {
 
   I(dinst->getCluster() != 0); // Resource::schedule must set the resource field
 
+  // [sizhuo] if the new instruction doesn't bear dependency, we can wake it up
   if (!dinst->hasDeps()) {
     dinst->setWakeUpTime(wakeUpPort->nextSlot(dinst->getStatsFlag()) + WakeUpDelay);
     preSelect(dinst);
@@ -97,6 +98,7 @@ void DepWindow::addInst(DInst *dinst) {
 
 // Look for dependent instructions on the same cluster (do not wakeup,
 // just get the time)
+// [sizhuo] wake up dinst which has resolved data dependency
 void DepWindow::wakeUpDeps(DInst *dinst) {
   I(!dinst->hasDeps());
 
@@ -114,6 +116,7 @@ void DepWindow::wakeUpDeps(DInst *dinst) {
   I(dinst->getCluster());
   I(srcCluster == dinst->getCluster());
 
+  // [sizhuo] for all other inst depending on me, try to increase their minimum wake up time
   I(dinst->hasPending());
   for(const DInstNext *it = dinst->getFirst();
        it ;
@@ -123,11 +126,13 @@ void DepWindow::wakeUpDeps(DInst *dinst) {
     const Cluster *dstCluster = dstReady->getCluster();
     I(dstCluster); // all the instructions should have a resource after rename stage
 
+	// [sizhuo] only increase wakeup time of inst in same cluster
     if (dstCluster == srcCluster && dstReady->getWakeUpTime() < wakeUpTime)
       dstReady->setWakeUpTime(wakeUpTime);
   }
 }
 
+// [sizhuo] schedule a callback to select the dinst for execution (NOT callback to execute dinst)
 void DepWindow::preSelect(DInst *dinst) {
   // At the end of the wakeUp, we can start to read the register file
   I(dinst->getWakeUpTime());
@@ -140,9 +145,12 @@ void DepWindow::preSelect(DInst *dinst) {
   I(dinst->getCluster());
   //dinst->clearRATEntry(); 
 
+  // [sizhuo] schedule the resource of dinst to call select()
+  // actually it finally let this DepWindow to call select()
   Resource::selectCB::scheduleAbs(wakeUpTime, dinst->getClusterResource(), dinst);
 }
 
+// [sizhuo] select dinst for execution
 void DepWindow::select(DInst *dinst) {
   I(!dinst->getWakeUpTime());
 
@@ -150,6 +158,7 @@ void DepWindow::select(DInst *dinst) {
 
   I(srcCluster == dinst->getCluster());
   //dinst->executingCB.scheduleAbs(schedTime);
+  // [sizhuo] schedule the cluster to execute dinst
   Resource::executingCB::scheduleAbs(schedTime, dinst->getClusterResource(), dinst);
 }
 
@@ -178,8 +187,9 @@ void DepWindow::executed(DInst *dinst) {
   I(dinst->isIssued());
   while (dinst->hasPending()) {
 
-    if (stopAtDst == dinst->getFirstPending())
+    if (stopAtDst == dinst->getFirstPending()) // [sizhuo] list empty, stop
       break;
+	// [sizhuo] remove dependency to dstReady
     DInst *dstReady = dinst->getNextPending();
     I(dstReady);
 
@@ -193,12 +203,17 @@ void DepWindow::executed(DInst *dinst) {
 #endif
     I(!dstReady->isExecuted());
 
+	// [sizhuo] wake up dstReady if it has no dependency now
     if (!dstReady->hasDeps()) {
       // Check dstRes because dstReady may not be issued
       I(dstReady->getCluster());
       const Cluster *dstCluster = dstReady->getCluster();
       I(dstCluster);
 
+	  // [sizhuo XXX] here seems to be a bug in modelling
+	  // we will wakeup an inst using our own wakeup port, not the port at dstCluster
+	  // later call of preSelect() may cause more bandwidth than expected on regfile
+	  // and we don't have wakeUpDelay here...
       Time_t when = wakeUpPort->nextSlot(dinst->getStatsFlag());
       if (dstCluster != srcCluster) {
         wrForwardBus.inc(dinst->getStatsFlag());

@@ -38,6 +38,7 @@ Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  */
 
+// [sizhuo] seems to be a queue for event simulation
 template < class Data, class Time > class TQueue {
 public:
 

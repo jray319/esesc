@@ -88,6 +88,11 @@ public:
   //! returns when the next slot can be free without occupying any slot
   virtual Time_t calcNextSlot() const =0;
 
+  // [sizhuo] creat a port.
+  // nUnits: max number of in flight req
+  // occ: occupation time of a req
+  // occupation time is different from delay, a fully pipelined port may have long delay
+  // In simu.conf, there are separate parameters for occupation time and delay
   static PortGeneric *create(const char *name, 
            NumUnits_t nUnits, 
            TimeDelta_t occ);
@@ -136,7 +141,7 @@ public:
 class PortPipe : public PortGeneric {
 private:
 protected:
-  const  TimeDelta_t ocp; // [sizhuo] fixed delay of a req
+  const  TimeDelta_t ocp; // [sizhuo] fixed occupation time of a req
   Time_t lTime;
 public:
   PortPipe(const char *name, TimeDelta_t occ);

@@ -51,7 +51,7 @@ class GMemorySystem;
 class GProcessor;
 
 // [sizhuo] base class for all types of clusters
-// what is a cluster???
+// cluster is a superscalar functional uint (e.g. load store unit, ALU unit, FP unit, branch unit)
 class Cluster {
  private:
   void buildUnit(const char *clusterName

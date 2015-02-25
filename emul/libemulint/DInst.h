@@ -55,19 +55,22 @@ class Resource;
 class EmulInterface;
 
 // FIXME: do a nice class. Not so public
+//
+// [sizhuo] this class is a node in the linked list of inst that all depend on some inst X
 class DInstNext {
  private:
-  DInst *dinst;
+  DInst *dinst; // [sizhuo] the inst depending on X
 #ifdef DINST_PARENT
-#error "DINST_PARENT defined"
-  DInst *parentDInst;
+// [sizhuo] DINST_PARENT is not defined via test //#error "DINST_PARENT defined"
+  DInst *parentDInst; // [sizhuo] inst X
 #endif
  public:
   DInstNext() {
     dinst = 0;
   }
 
-  DInstNext *nextDep;
+  DInstNext *nextDep; // [sizhuo] next node in the linked list
+  // [sizhuo] isUSed==true means there is pending data dependency between this inst and X
   bool       isUsed; // true while non-satisfied RAW dependence
   
   const DInstNext *getNext() const { return nextDep; }
@@ -95,22 +98,25 @@ class DInstNext {
 #endif
 };
 
-// [sizhuo] seems to track dependency and state of an instruction...
-
+// [sizhuo] an instruction after decode & track its dependency
 class DInst {
 private:
   // In a typical RISC processor MAX_PENDING_SOURCES should be 2
   static const int32_t MAX_PENDING_SOURCES=3;
 
-  static pool<DInst> dInstPool;
+  // [sizhuo] a pool of unused DInst objects for fast memory management 
+  // we allocate new DInst from this pool, and put DInst back when the inst is done
+  static pool<DInst> dInstPool; 
 
-  DInstNext pend[MAX_PENDING_SOURCES];
+  DInstNext pend[MAX_PENDING_SOURCES]; // [sizhuo] the older inst that this inst depends on (i.e. fan in)
+  // [sizhuo] linked list of younger inst depending on this inst (i.e. fan out)
   DInstNext *last;
   DInstNext *first;
 
-  FlowID fid;
+  FlowID fid; // [sizhuo] what is this??
 
   // BEGIN Boolean flags
+  // [sizhuo] these are state bits
   bool loadForwarded;
   bool issued;
   bool executed;
@@ -128,25 +134,28 @@ private:
   // END Boolean flags
 
   // BEGIN Time counters
-  Time_t wakeUpTime;
+  Time_t wakeUpTime; // [sizhuo] the lower bound on the time to wake up??
   // END Time counters
 
-  SSID_t       SSID;
-  AddrType     conflictStorePC;
-  Instruction  inst;
+  // [sizhuo] info about myself (this instruction)
+  SSID_t       SSID; // [sizhuo] store set id
+  AddrType     conflictStorePC; // [sizhuo] PC of older store conflict with this inst (a load), predicted by store set?
+  Instruction  inst; // [sizhuo] uOP
   AddrType     pc;    // PC for the dinst
   AddrType     addr;  // Either load/store address or jump/branch address
-  Cluster    *cluster;
-  Resource   *resource;
-  DInst      **RAT1Entry;
+  Cluster    *cluster; // [sizhuo] cluster it resides?
+  Resource   *resource; // [sizhuo] resource it resides?
+  DInst      **RAT1Entry; // [sizhuo] return address table?
   DInst      **RAT2Entry;
   DInst      **serializeEntry;
   FetchEngine *fetch;
   Time_t fetchTime;
 
+  // [sizhuo] number of older inst that this inst depends on
   char nDeps;              // 0, 1 or 2 for RISC processors
 
   static Time_t currentID;
+  // [sizhuo] unique instruction ID?
   Time_t ID; // static ID, increased every create (currentID). pointer to the
 #ifdef DEBUG
    uint64_t mreq_id;
@@ -217,6 +226,7 @@ public:
     return i;
   }
 
+  // [sizhuo] scrap & destroy seems to kill instruction? recycle is normal commit?
   void scrap(EmulInterface *eint); // Destroys the instruction without any other effects
   void destroy(EmulInterface *eint);
   void recycle();
@@ -291,13 +301,18 @@ public:
   }
 #endif
 
+  // [sizhuo] inform a younger inst that my result is ready
+  // i.e. remove the data dependency of younger inst on me
   DInst *getNextPending() {
     I(first);
+	// [sizhuo] inform the first one in linked list
+	// thus, the closest inst is informed first (FIFO order of add/remove dependency)
     DInst *n = first->getDInst();
 
     I(n);
 
     I(n->nDeps > 0);
+	// [sizhuo] the younger inst n won't depend on en anymore
     n->nDeps--;
 
     first->isUsed = false;
@@ -307,15 +322,20 @@ public:
     return n;
   }
 
+  // [sizhuo] src1 of younger inst d is my result
   void addSrc1(DInst * d) {
     I(d->nDeps < MAX_PENDING_SOURCES);
+	// inst d depends on one more inst
     d->nDeps++;
 
+	// [sizhuo] set fields of d->pend[0]
     DInstNext *n = &d->pend[0];
     I(!n->isUsed);
     n->isUsed = true;
     n->setParentDInst(this);
+	// [sizhuo] n->dinst = d is set in the default construction of d
 
+	// [sizhuo] append d to the fan-out linked list
     I(n->getDInst() == d);
     if (first == 0) {
       first = n;
@@ -326,6 +346,7 @@ public:
     last = n;
   }
 
+  // [sizhuo] src2 of younger inst d is my result
   void addSrc2(DInst * d) {
     I(d->nDeps < MAX_PENDING_SOURCES);
     d->nDeps++;
@@ -344,6 +365,7 @@ public:
     last = n;
   }
 
+  // [sizhuo] src3 of younger inst d is my result
   void addSrc3(DInst * d) {
     I(d->nDeps < MAX_PENDING_SOURCES);
     d->nDeps++;
@@ -372,8 +394,9 @@ public:
   bool     isSrc1Ready() const { return !pend[0].isUsed; }
   bool     isSrc2Ready() const { return !pend[1].isUsed; } 
   bool     isSrc3Ready() const { return !pend[2].isUsed; } 
-  bool     hasPending()  const { return first != 0;      }
+  bool     hasPending()  const { return first != 0;      } // [sizhuo] some younger inst depends on me
 
+  // [sizhuo] I depends on some older inst
   bool hasDeps()     const {
     GI(!pend[0].isUsed && !pend[1].isUsed && !pend[2].isUsed, nDeps==0);
     return nDeps!=0;
@@ -393,6 +416,7 @@ public:
     loadForwarded=true;
   }
 
+  // [sizhuo] read & write of status bits
   bool isIssued() const { return issued; }
 
   void markIssued() {

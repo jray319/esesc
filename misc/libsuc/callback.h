@@ -54,13 +54,14 @@ Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 //
 /////////////////////////////////////////////////////////////////////////////
 
+// [sizhuo] base class for all callback functions/members
 class EventScheduler 
   : public TQueue<EventScheduler *, Time_t>::User 
 {
 private:
   typedef TQueue<EventScheduler *,Time_t> TimedCallbacksQueue;
 
-  static TimedCallbacksQueue cbQ;
+  static TimedCallbacksQueue cbQ; // a queue of callback functions/members
   
 #ifdef DEBUG
   const char *fileName;
@@ -79,6 +80,7 @@ public:
     MSG("BOG ALERT! BUGABUGABUG.\nPerhaps you meant to use scheduleAbs");
     exit(1);
   }
+  // [sizhuo] schedule callback at delta time later
   static void schedule(TimeDelta_t delta, EventScheduler *cb) {
     I( delta );  // Only for performance reasons
 #ifdef DEBUG
@@ -92,6 +94,7 @@ public:
     MSG("BOG ALERT! BUGABUGABUG.\nPerhaps you meant to use schedule");
     exit(1);
   }
+  // [sizhuo] schedule callback at absolute time tim
   static void scheduleAbs(Time_t tim, EventScheduler *cb) {
     I(tim > globalClock); // Only for performance reasons
 #ifdef DEBUG
@@ -104,6 +107,8 @@ public:
     cbQ.insert(cb,tim);
   }
 
+  // [sizhuo] first increase global clock
+  // then activates all callbacks scheduled at this time
   static void advanceClock() {
     EventScheduler *cb;
 
@@ -135,6 +140,7 @@ public:
 
 };
 
+// [sizhuo] base class for all callback functions/members
 class CallbackBase : public EventScheduler {
 private:
 protected:
@@ -179,6 +185,8 @@ class StaticCallbackBase : public CallbackBase {
 // global functions or static methods of a particular class.
 //
 /////////////////////////////////////////////////////////////////////////////
+
+// [sizhuo] CallbackFunctionX is for registering callback function with X parameters
 
 template<class Parameter1, class Parameter2, class Parameter3
          , void (*funcPtr) (Parameter1, Parameter2, Parameter3)>
@@ -511,7 +519,7 @@ public:
 //
 ///////////////////////////////////////////////////////////////////////////
 
-
+// [sizhuo] CallbackMemberX is for registering callback function (which is a class member, not static) with X parameters
 
 /************************************************************************************/
 template<class ClassType ,class Parameter1 ,class Parameter2, class Parameter3, class Parameter4, class Parameter5, class Parameter6
