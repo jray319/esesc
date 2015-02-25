@@ -44,6 +44,8 @@
 
 #include "InstOpcode.h"
 
+// [sizhuo] Instruction class is just an inst after decode
+
 class Instruction {
 private:
 protected:

@@ -44,6 +44,7 @@ typedef Scuop UOPPredecType;
 #else
 #include "Instruction.h"
 
+// [sizhuo] instruction is uOP after crack
 typedef Instruction UOPPredecType;
 #endif
 
@@ -65,10 +66,11 @@ typedef uint32_t FlowID;
 
 typedef uint32_t RAWInstType;
 
+// [sizhuo] inst class before decode & crack?? (raw..)
 class RAWDInst {
 private:
-  RAWInstType insn;
-  AddrType    pc;
+  RAWInstType insn; // [sizhuo] inst binary representation
+  AddrType    pc; // [sizhuo] inst PC??
 #ifdef SCOORE
   bool isClear;
 #else
@@ -82,8 +84,8 @@ private:
   bool inITBlock;
 
 protected:
-  uint32_t ninst;
-  std::vector<UOPPredecType> predec;
+  uint32_t ninst; // [sizhuo] number of uOPs cracked into?
+  std::vector<UOPPredecType> predec; // [sizhuo] cracked into uOPs?
 public:
 #ifdef ENABLE_CUDA
   void setMemaccesstype(CUDAMemType type){

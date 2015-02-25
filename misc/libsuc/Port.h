@@ -66,6 +66,10 @@ public:
   void subscribe() {  nUsers++; }
   void unsubscribe(){ nUsers--; }
 
+  // [sizhuo] what is "en" doing? From .cpp, it seems only relates to stats
+  // nextSlot will occupy the port and return the time when the req is served (port is occupied)
+  // calNextSlot only return time but don't serve req
+
   TimeDelta_t nextSlotDelta(bool en) { return nextSlot(en) - globalClock; }
   //! occupy a time slot in the port. 
   //! Returns when the slot started to be occupied
@@ -90,7 +94,8 @@ public:
   void destroy();
 };
 
-
+// [sizhuo] unlimited capacity of a port
+// the port can serve unlimited number of req in one cycle
 class PortUnlimited : public PortGeneric {
   Time_t lTime;
 public:
@@ -100,11 +105,12 @@ public:
   Time_t calcNextSlot() const;
 };
 
+// [sizhuo] fully pipelined port, can serve exactly one req per cycle
 class PortFullyPipe : public PortGeneric {
 private:
 protected:
   // lTime is the cycle in which the latest use began
-  Time_t lTime;
+  Time_t lTime; 
 public:
   PortFullyPipe(const char *name);
 
@@ -112,6 +118,7 @@ public:
   Time_t calcNextSlot() const;
 };
 
+// [sizhuo] fully pipelined, with N ports
 class PortFullyNPipe : public PortGeneric {
 private:
 protected:
@@ -125,10 +132,11 @@ public:
   Time_t calcNextSlot() const;
 };
 
+// [sizhuo] a single blocking port
 class PortPipe : public PortGeneric {
 private:
 protected:
-  const  TimeDelta_t ocp;
+  const  TimeDelta_t ocp; // [sizhuo] fixed delay of a req
   Time_t lTime;
 public:
   PortPipe(const char *name, TimeDelta_t occ);
@@ -137,6 +145,7 @@ public:
   Time_t calcNextSlot() const;
 };
 
+// [sizhuo] N blocking ports
 class PortNPipe : public PortGeneric {
 private:
 protected:

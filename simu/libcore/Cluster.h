@@ -50,6 +50,8 @@ class Resource;
 class GMemorySystem;
 class GProcessor;
 
+// [sizhuo] base class for all types of clusters
+// what is a cluster???
 class Cluster {
  private:
   void buildUnit(const char *clusterName
@@ -63,13 +65,13 @@ class Cluster {
   const int32_t MaxWinSize;
   int32_t windowSize;
 
-  GProcessor *const gproc;
+  GProcessor *const gproc; // processor it belongs to
 
   GStatsAvg  winNotUsed;
   GStatsCntr rdRegPool;
   GStatsCntr wrRegPool;
 
-  Resource   *res[iMAX];
+  Resource   *res[iMAX]; // [sizhuo] mapping from inst op to computation resource
 
   int32_t regPool;
 

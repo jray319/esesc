@@ -70,11 +70,12 @@ enum StallCause {
 class GProcessor;
 class LSQ;
 
+// [sizhuo] base class for all kinds of architecture components
 class Resource {
 protected:
-  Cluster     *const cluster;
-  PortGeneric *const gen;
-  GProcessor  *const gproc;
+  Cluster     *const cluster; // [sizhuo] which cluster this component belongs to
+  PortGeneric *const gen; // [sizhuo] the port used to model contention???
+  GProcessor  *const gproc; // [sizhuo] which processor this component belongs to
 
   const TimeDelta_t lat;
 
@@ -143,10 +144,11 @@ public:
 
 };
 
+// [sizhuo] base type for load store units
 class MemResource : public MemReplay {
 private:
 protected:
-  MemObj        *DL1;
+  MemObj        *DL1; // [sizhuo] the memory component this object is accessing???
   GMemorySystem *memorySystem;
   LSQ           *lsq;
 
@@ -156,6 +158,9 @@ protected:
 public:
 };
 
+// [sizhuo] base class for load store units without memory speculation
+// memory speculation seems to mean "address speculation"
+// because construct function doesn't take store set as input
 class MemResource_noMemSpec : public Resource {
 private:
 protected:
@@ -224,6 +229,7 @@ public:
 
 };
 
+// [sizhuo] load unit
 class FULoad : public MemResource {
 private:
   const TimeDelta_t LSDelay;
@@ -246,6 +252,7 @@ public:
   void       performed(DInst *dinst);
 };
 
+// [sizhuo] store unit
 class FUStore : public MemResource {
 private:
 

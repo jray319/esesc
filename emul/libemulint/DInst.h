@@ -59,6 +59,7 @@ class DInstNext {
  private:
   DInst *dinst;
 #ifdef DINST_PARENT
+#error "DINST_PARENT defined"
   DInst *parentDInst;
 #endif
  public:
@@ -93,6 +94,8 @@ class DInstNext {
   void setParentDInst(DInst *d) { }
 #endif
 };
+
+// [sizhuo] seems to track dependency and state of an instruction...
 
 class DInst {
 private:

@@ -44,13 +44,15 @@ class DInst;
 class GProcessor;
 class Cluster;
 
+// [sizhuo] issue window in one cluster (way?) ??
 class DepWindow {
 private:
-  GProcessor *gproc;
-  Cluster    *srcCluster;
+  GProcessor *gproc; // [sizhuo] processor it belongs to
+  Cluster    *srcCluster; // [sizhuo] cluster it belongs to
 
   const int32_t Id;
 
+  // [sizhuo] all kinds of delay
   const TimeDelta_t InterClusterLat;
   const TimeDelta_t WakeUpDelay;
   const TimeDelta_t SchedDelay;
@@ -58,6 +60,7 @@ private:
 
   GStatsCntr wrForwardBus;
 
+  // [sizhuo] ports to model contention
   PortGeneric *wakeUpPort;
   PortGeneric *schedPort;
 

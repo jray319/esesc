@@ -38,6 +38,9 @@
 #include <sys/types.h>
 #include <stdint.h>
 
+// [sizhuo] Combined by Instruction.h, it seems that the uOps will calculate effective
+// address in a separate instruction.
+
 enum InstOpcode {
   iOpInvalid = 0,
   //-----------------
@@ -53,11 +56,11 @@ enum InstOpcode {
   iBALU_RCALL,   // call register (same as RBRANCH, but notify predictor)
   iBALU_RET,     // func return (same as RBRANCH, but notify predictor)
   //-----------------
-  iLALU_LD,
+  iLALU_LD, // [sizhuo] load
   //-----------------
-  iSALU_ST,
-  iSALU_LL,
-  iSALU_SC,
+  iSALU_ST, // [sizhuo] store
+  iSALU_LL, // [sizhuo] load linked?
+  iSALU_SC, // [sizhuo] store conditional?
   iSALU_ADDR, // plain add, but it has a store address (break down st addr and data)
   //-----------------
   iCALU_FPMULT,
@@ -66,7 +69,7 @@ enum InstOpcode {
   iCALU_MULT,
   iCALU_DIV,
   //-----------------
-  iMAX
+  iMAX // [sizhuo] maximum opcodes
 };
 
 enum Scopcode {

@@ -197,6 +197,8 @@ Time_t PortNPipe::nextSlot(bool en)
   return nextSlot(ocp, en);
 }
 
+// [sizhuo] a simple scheduler: try to find a free port
+// If impossible, find the earliest freed port
 Time_t PortNPipe::nextSlot(int32_t occupancy, bool en) 
 {
   ID(Time_t cns      = calcNextSlot());

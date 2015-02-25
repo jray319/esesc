@@ -415,6 +415,8 @@ public:
 };
 #endif
 
+// [sizhuo] this class is used to create a branch predictor??
+
 class BPredictor {
 private:
   const int32_t id;
