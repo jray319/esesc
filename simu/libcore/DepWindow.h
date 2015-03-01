@@ -44,7 +44,7 @@ class DInst;
 class GProcessor;
 class Cluster;
 
-// [sizhuo] issue window in one cluster
+// [sizhuo] issue window (reservation station) in one cluster
 class DepWindow {
 private:
   GProcessor *gproc; // [sizhuo] processor it belongs to
@@ -71,13 +71,14 @@ public:
   ~DepWindow();
   DepWindow(GProcessor *gp, Cluster *aCluster, const char *clusterName);
 
-  void wakeUpDeps(DInst *dinst);
+  void wakeUpDeps(DInst *dinst); // [sizhuo] increase wakeup time for inst depending on dinst
 
   void select(DInst *dinst); // [sizhuo] select inst for execution
 
   StallCause canIssue(DInst *dinst) const; // [sizhuo] always return NoStall...
   void addInst(DInst *dinst); // [sizhuo] add new inst into this window
-  void executed(DInst *dinst);
+  // [sizhuo] things to do when dinst finishes execution: wakeup inst depending on dinst when dinst finish execution
+  void executed(DInst *dinst); 
 };
 
 #endif // DEPWINDOW_H

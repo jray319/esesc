@@ -45,6 +45,9 @@
 
 ClusterManager::ClusterManager(GMemorySystem *ms, GProcessor *gproc) {
 
+  // [sizhuo] 1 uOP can be served by multiple function units in differet clusters 
+  // (1 unit per cluster)
+  // this array records the resources that can serve certain uOP
   ResourcesPoolType res(iMAX);
 
   IN(forall((size_t i=1;i<static_cast<size_t>(iMAX);i++),res[i].empty()));
@@ -55,6 +58,7 @@ ClusterManager::ClusterManager(GMemorySystem *ms, GProcessor *gproc) {
 
   int32_t nClusters = SescConf->getRecordSize(coreSection,"cluster");
   
+  // [sizhuo] create all clusters
   for(int32_t i=0;i<nClusters;i++) {
     const char *clusterName = SescConf->getCharPtr(coreSection,"cluster",i);
     SescConf->isCharPtr(coreSection,"cluster",i);

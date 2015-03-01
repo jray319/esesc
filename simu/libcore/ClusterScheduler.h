@@ -46,6 +46,8 @@
 
 typedef std::vector< std::vector<Resource *> > ResourcesPoolType;
 
+// [sizhuo] 1 uOP can be served by multiple function units in differet clusters (1 unit per cluster)
+// this class decides which unit to serve the instruction
 class ClusterScheduler {
  private:
  protected:
@@ -58,6 +60,7 @@ class ClusterScheduler {
   virtual Resource *getResource(DInst *dinst) =0;
 };
 
+// [sizhuo] use a round robin way
 class RoundRobinClusterScheduler : public ClusterScheduler {
  private:
   std::vector<unsigned int> nres;
@@ -70,6 +73,7 @@ class RoundRobinClusterScheduler : public ClusterScheduler {
   Resource *getResource(DInst *dinst);
 };
 
+// [sizhuo] use a LRU way
 class LRUClusterScheduler : public ClusterScheduler {
  private:
  public:

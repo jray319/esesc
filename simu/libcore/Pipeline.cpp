@@ -65,7 +65,9 @@ Pipeline::Pipeline(size_t s, size_t fetch, int32_t maxReqs)
   ,bucketPoolMaxSize(s+1+maxReqs)
   ,MaxIRequests(maxReqs)
   ,nIRequests(maxReqs)
-  ,buffer(s+1+maxReqs)
+  ,buffer(s+1+maxReqs) 
+  // [sizhuo] with dec & rename pipeline(s stages), there can be at most maxReqs+s in flight IBuckt
+  // set buffer size to be s+1+maxReqs prevents deadlock
 
   {
   maxItemCntr = 0;
@@ -74,6 +76,7 @@ Pipeline::Pipeline(size_t s, size_t fetch, int32_t maxReqs)
   bucketPool.reserve(bucketPoolMaxSize);
   I(bucketPool.empty());
   
+  // [sizhuo] create bucket pool and clean bucket pool
   for(size_t i=0;i<bucketPoolMaxSize;i++) {
     IBucket *ib = new IBucket(fetch+1, this); // +1 instructions
     bucketPool.push_back(ib);
@@ -105,10 +108,11 @@ Pipeline::~Pipeline() {
 }
 
 void Pipeline::readyItem(IBucket *b) {
-  b->setClock();
+  b->setClock(); // [sizhuo] record fetch resp time
 
-  nIRequests++;
+  nIRequests++; // [sizhuo] release I$ in flight req entry
   if( b->getPipelineId() != minItemCntr ) {
+	// [sizhuo] resp is received OOO
     received.push(b);
     return;
   }
@@ -116,8 +120,11 @@ void Pipeline::readyItem(IBucket *b) {
   // If the message is received in-order. Do not use the sorting
   // receive structure (remember that a cache can respond
   // out-of-order the memory requests)
+  // [sizhuo] in order resp, directly send to dec & rename
   minItemCntr++;
   
+  // [sizhuo] seems we may fetch empty set of uOPs
+  // we only enq non-empty IBucket to output buffer
   if( b->empty() )
     doneItem(b);
   else
@@ -148,7 +155,7 @@ void Pipeline::clearItems() {
 void Pipeline::doneItem(IBucket *b) {
   I(b->getPipelineId() < minItemCntr);
   I(b->empty());
-    
+  // [sizhuo] all uOPs in b has left front-end, recycle memory 
   bucketPool.push_back(b);
 }
   
@@ -156,7 +163,7 @@ void Pipeline::doneItem(IBucket *b) {
 
 IBucket *Pipeline::nextItem() {
   while(1) {
-    if (buffer.empty()) {
+    if (buffer.empty()) { // [sizhuo] buffer empty
 #ifdef DEBUG
       // It should not be possible to propagate more buckets
       clearItems();
@@ -165,6 +172,7 @@ IBucket *Pipeline::nextItem() {
       return 0;
     }
 
+	// [sizhuo] check whether dec & rename delay has been satisfied
     if( ((buffer.top())->getClock() + PipeLength) > globalClock )
       return 0;
 
@@ -190,6 +198,7 @@ IBucket *Pipeline::nextItem() {
   I(0);
 }
 
+// [sizhuo] pipeline len = dec + rename delay
 PipeQueue::PipeQueue(CPU_t i)
   :pipeLine(
             SescConf->getInt("cpusimu", "decodeDelay",i)
@@ -221,15 +230,17 @@ PipeQueue::~PipeQueue()
 
 
 IBucket *Pipeline::newItem() {
+  // [sizhuo] check whether I$ in flight req is not saturated
   if(nIRequests == 0 || bucketPool.empty())
     return 0;
 
-  nIRequests--;
+  nIRequests--; // [sizhuo] new fetch req
 
   IBucket *b = bucketPool.back();
   bucketPool.pop_back();
 
-  b->setPipelineId(maxItemCntr);
+  // [sizhuo] record time stamp
+  b->setPipelineId(maxItemCntr); 
   maxItemCntr++;
 
   IS(b->fetched = false);

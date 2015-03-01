@@ -42,26 +42,31 @@ protected:
 
 public:
 
-  virtual void insert(DInst *dinst)      = 0;
-  virtual DInst *executing(DInst *dinst) = 0;
-  virtual void remove(DInst *dinst)      = 0;
+  virtual void insert(DInst *dinst)      = 0; // [sizhuo] add inst into LSQ
+  virtual DInst *executing(DInst *dinst) = 0; // [sizhuo] ex an inst?
+  virtual void remove(DInst *dinst)      = 0; // [sizhuo] remove inst from LSQ
 };
 
+// [sizhuo] LSQ for OOO core
 class LSQFull : public LSQ {
 private:
 
   class AddrTypeHashFunc {
-    public:
+    public: 
+	  // [sizhuo] DataType is uint64
       size_t operator()(const DataType p) const {
         return((uint64_t) p);
       }
   };
 
+  // [sizhuo] map from addrType (uint64) to DInst*, i.e. from load/store address to uOP
+  // It's possible that 1 load/store addr is mapped to multiple inst
   typedef HASH_MULTIMAP<AddrType, DInst *, AddrTypeHashFunc> AddrDInstQMap;
 
   GStatsCntr    stldForwarding;
   AddrDInstQMap instMap;
 
+  // [sizhuo] memory access is word aligned, truncate last 2 bits in addr
   static AddrType calcWord(const DInst *dinst) {
     return (dinst->getAddr()) >> 2;
   }
@@ -75,6 +80,7 @@ public:
   void remove(DInst *dinst);
 };
 
+// [sizhuo] an dummy LSQ, used for in order core
 class LSQNone : public LSQ {
 private:
 

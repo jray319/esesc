@@ -47,6 +47,7 @@ class Resource;
 class GMemorySystem;
 class GProcessor;
 
+// [sizhuo] this class manages all the clusters in one core
 class ClusterManager {
  private:
   ClusterScheduler *scheduler;
@@ -55,6 +56,8 @@ class ClusterManager {
  public:
   ClusterManager(GMemorySystem *ms, GProcessor *gproc);
 
+  // [sizhuo] 1 uOP can be served by multiple function units in differet clusters (1 unit per cluster)
+  // we need to choose one
   Resource *getResource(DInst *dinst) const {
     return scheduler->getResource(dinst);
   }

@@ -102,6 +102,10 @@ void DepWindow::addInst(DInst *dinst) {
 void DepWindow::wakeUpDeps(DInst *dinst) {
   I(!dinst->hasDeps());
 
+  // [sizhuo] why we need to just increase wake up time of a inst??
+  // since wake up port is configured to have 0 occupation time
+  // this extra use of wake up port doesn't matter...
+
   // Even if it does not wakeup instructions the port is used
   Time_t wakeUpTime= wakeUpPort->nextSlot(dinst->getStatsFlag());
   //dinst->dump("Clearing:");

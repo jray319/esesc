@@ -62,16 +62,16 @@ class Cluster {
  protected:
   DepWindow window;
 
-  const int32_t MaxWinSize;
-  int32_t windowSize;
+  const int32_t MaxWinSize; // [sizhuo] max issue windown size
+  int32_t windowSize; // [sizhuo] current window size (free space)
 
-  GProcessor *const gproc; // processor it belongs to
+  GProcessor *const gproc; // [sizhuo] processor it belongs to
 
   GStatsAvg  winNotUsed;
   GStatsCntr rdRegPool;
   GStatsCntr wrRegPool;
 
-  Resource   *res[iMAX]; // [sizhuo] mapping from inst op to computation resource
+  Resource   *res[iMAX]; // [sizhuo] mapping from uOP type to function unit
 
   int32_t regPool;
 
@@ -93,6 +93,7 @@ class Cluster {
 
   void select(DInst *dinst);
 
+  // [sizhuo] things to do when dinst issued to ex, finshes ex, retires from ROB
   virtual void executing(DInst *dinst) = 0;
   virtual void executed(DInst *dinst)  = 0;
   virtual bool retire(DInst *dinst, bool replay)    = 0;
@@ -104,8 +105,8 @@ class Cluster {
     return res[type];
   }
 
-  StallCause canIssue(DInst *dinst) const;
-  void addInst(DInst *dinst);
+  StallCause canIssue(DInst *dinst) const; // [sizhuo] can add uOP to cluster
+  void addInst(DInst *dinst); // [sizhuo] add uOP to cluster
 
   GProcessor *getGProcessor() const { return gproc; }
 
@@ -126,6 +127,7 @@ class ExecutingCluster : public Cluster {
   bool retire(DInst *dinst, bool replay);
 };
 
+// [sizhuo] inst is removed from issue window after execution
 class ExecutedCluster : public Cluster {
  public:
   virtual ~ExecutedCluster() {
@@ -139,6 +141,7 @@ class ExecutedCluster : public Cluster {
   bool retire(DInst *dinst, bool replay);
 };
 
+// [sizhuo] inst is removed from issue window when retiring from ROB
 class RetiredCluster : public Cluster {
  public:
   virtual ~RetiredCluster() {

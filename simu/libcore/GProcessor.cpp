@@ -46,7 +46,8 @@ GStatsCntr *GProcessor::wallClock=0;
 Time_t GProcessor::lastWallClock=0;
 
 GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
-  :cpu_id(i)
+  :cpu_id(i) // [sizhuo] cpu ID
+  // [sizhuo] constant params
   ,MaxFlows(numFlows)
   ,FetchWidth(SescConf->getInt("cpusimu", "fetchWidth",i))
   ,IssueWidth(SescConf->getInt("cpusimu", "issueWidth",i))
@@ -54,10 +55,12 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
   ,RealisticWidth(RetireWidth < IssueWidth ? RetireWidth : IssueWidth)
   ,InstQueueSize(SescConf->getInt("cpusimu", "instQueueSize",i))
   ,MaxROBSize(SescConf->getInt("cpusimu", "robSize",i))
+  // [sizhuo] components
   ,memorySystem(gm)
   ,storeset(i)
   ,rROB(SescConf->getInt("cpusimu", "robSize", i))
   ,ROB(MaxROBSize)
+  // [sizhuo] stats
   ,rrobUsed("P(%d)_rrobUsed", i) // avg
   ,robUsed("P(%d)_robUsed", i) // avg
   ,nReplayInst("P(%d)_nReplayInst", i)
@@ -67,7 +70,7 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
   ,nFreeze("P(%d):nFreeze",i)
   ,clockTicks("P(%d):clockTicks",i)
 {
-  active = true;
+  active = true; // [sizhuo] set proc active
 
   lastReplay = 0;
   if (wallClock ==0)
@@ -75,6 +78,8 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
 
   throttlingRatio = SescConf->getDouble("cpusimu", "throttlingRatio" , i);
   throttling_cntr = 0;
+  
+  // [sizhuo] SCOORE style
   bool scooremem = false;
   if (SescConf->checkBool("cpusimu"    , "scooreMemory" , gm->getCoreId()))
     scooremem = SescConf->getBool("cpusimu", "scooreMemory",gm->getCoreId());
@@ -92,7 +97,7 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
     }
   }
 
-
+  // [sizhuo] check params
   SescConf->isInt("cpusimu"    , "issueWidth" , i);
   SescConf->isLT("cpusimu"     , "issueWidth" , 1025, i);
 
@@ -138,11 +143,11 @@ int32_t GProcessor::issue(PipeQueue &pipeQ) {
 
   I(!pipeQ.instQueue.empty());
 
-  do{
+  do{ // [sizhuo] try to issue everything in instQ to ROB
     IBucket *bucket = pipeQ.instQueue.top();
-    do{
+    do{ // [sizhuo] try to issue all uOPs in IBucket
       I(!bucket->empty());
-      if( i >= IssueWidth ) {
+      if( i >= IssueWidth ) { // [sizhuo] limit by issue width
   return i;
       }
 
@@ -152,7 +157,7 @@ int32_t GProcessor::issue(PipeQueue &pipeQ) {
       //  GMSG(getCoreId()==1,"push to pipe %p", bucket);
 
       StallCause c = addInst(dinst);
-      if (c != NoStall) {
+      if (c != NoStall) { // [sizhuo] can't issue
   if (i < RealisticWidth)
     nStall[c]->add(RealisticWidth - i, dinst->getStatsFlag());
   return i;
@@ -163,6 +168,7 @@ int32_t GProcessor::issue(PipeQueue &pipeQ) {
 
     }while(!bucket->empty());
 
+	// this bucket is done, free it from front-end
     pipeQ.pipeLine.doneItem(bucket);
     pipeQ.instQueue.pop();
   }while(!pipeQ.instQueue.empty());

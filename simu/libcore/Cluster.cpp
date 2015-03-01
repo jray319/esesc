@@ -45,6 +45,7 @@
 
 // Begin: Fields used during constructions
 
+// [sizhuo] info about a type of function unit (e.g. AUNIT_AALU)
 struct UnitEntry {
   PortGeneric *gen;
   int32_t num;
@@ -60,7 +61,7 @@ public:
 };
 
 typedef HASH_MAP<const char *,UnitEntry, HASH<const char*>, eqstr> UnitMapType;
-
+// [sizhuo] mapping from uOp to the type of functiona unit dealing with it
 static UnitMapType unitMap;
 
 Cluster::~Cluster() {
@@ -79,6 +80,11 @@ Cluster::Cluster(const char *clusterName, GProcessor *gp)
   bzero(res,sizeof(Resource *)*iMAX);  
 }
 
+// [sizhuo] construct a function unit in the cluster to handle 1 uOP
+// type is the uOP this unit will handle
+// It's possible that multiple units contend for the same port
+// In this case, multiple uOP actually use same hardware
+// By having multiple 1 unit per uOP, maybe we can simulate faster?
 void Cluster::buildUnit(const char *clusterName
       ,GMemorySystem *ms
       ,Cluster *cluster
@@ -86,16 +92,19 @@ void Cluster::buildUnit(const char *clusterName
 {
   const char *unitType = Instruction::opcode2Name(type);
   
-  char utUnit[1024];
-  char utLat[1024];
+  // [sizhuo] get the configure term to read
+  char utUnit[1024]; // the var name of unit name, e.g. iAALUUnit
+  char utLat[1024]; // the var name of unit latency, e.g. iAALULat
   sprintf(utUnit,"%sUnit",unitType);
   sprintf(utLat,"%sLat",unitType);
   
+  // [sizhuo] if this cluster is not configured to have certain unit, don't buid, stop
   if( !SescConf->checkCharPtr(clusterName,utUnit) )
     return;
 
+  // [sizhuo] get unit name: e.g. AUNIT_AALU
   const char *unitName = SescConf->getCharPtr(clusterName,utUnit);
-  
+  // [sizhuo] get unit latency
   TimeDelta_t lat = SescConf->getInt(clusterName,utLat);
   PortGeneric *gen;
 
@@ -103,8 +112,10 @@ void Cluster::buildUnit(const char *clusterName
   UnitMapType::const_iterator it = unitMap.find(unitName);
     
   if( it != unitMap.end() ) {
+	// [sizhuo] this type of unit already exists
     gen = it->second.gen;
   }else{
+	// [sizhuo] new type of unit, get its info, add to hash
     UnitEntry e;
     e.num = SescConf->getInt(unitName,"Num");
     SescConf->isLT(unitName,"Num",1024);
@@ -131,6 +142,7 @@ void Cluster::buildUnit(const char *clusterName
   
   bool noMemSpec = SescConf->getBool("cpusimu", "noMemSpec",gproc->getId());
 
+  // [sizhuo] create the instance of function unit to handle this uOP
   switch(type) {
     case iOpInvalid: 
     case iRALU:
@@ -259,16 +271,17 @@ void Cluster::select(DInst *dinst) {
 
 
 StallCause Cluster::canIssue(DInst *dinst) const { 
-  if (regPool<=0)
+  if (regPool<=0) // [sizhuo] check phy reg available for renaming
     return SmallREGStall;
 
-  if (windowSize<=0)
+  if (windowSize<=0) // [sizhuo] check issue window not full
     return SmallWinStall;
 
-  StallCause sc = window.canIssue(dinst);
+  StallCause sc = window.canIssue(dinst); // [sizhuo] sc will always be NoStall
   if (sc != NoStall)
-    return sc;
+    return sc; 
 
+  // [sizhuo] finally check whether
   return dinst->getClusterResource()->canIssue(dinst);
 }
 
@@ -324,17 +337,22 @@ bool ExecutingCluster::retire(DInst *dinst, bool reply) {
 
 void ExecutedCluster::executing(DInst *dinst) {
 
+  // [sizhuo] dinst is issued to execution, just increase wake up time of inst depending on dinst
   window.wakeUpDeps(dinst);
 }
 
 void ExecutedCluster::executed(DInst *dinst) {
 
+  // [sizhuo] dinst finishes execution, wake up inst depdning on dinst
   window.executed(dinst);
 
   dinst->clearRATEntry(); 
-  delEntry();
+  delEntry(); // [sizhuo] release entry in the issue window in this cluster
 }
 
+// [sizhuo] although dinst is removed from issue window after execution
+// its info may be still maintained in function unit, e.g. LSQ, branch,
+// in order to detect speculation failure or forward data, etc
 bool ExecutedCluster::retire(DInst *dinst, bool reply) {
 
   bool done  = dinst->getClusterResource()->retire(dinst, reply);
@@ -342,6 +360,7 @@ bool ExecutedCluster::retire(DInst *dinst, bool reply) {
     return false;
   dinst->clearRATEntry(); 
 
+  // free physical reg
   bool hasDest = (dinst->getInst()->hasDstRegister());
   if( hasDest )
     regPool++;

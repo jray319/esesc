@@ -84,10 +84,10 @@ class GProcessor {
     const int32_t InstQueueSize;
     const size_t  MaxROBSize;
 
-    EmulInterface   *eint;
-    GMemorySystem   *memorySystem;
+    EmulInterface   *eint; // [sizhuo] ifc to emulator
+    GMemorySystem   *memorySystem; // [sizhuo] memory system 
 
-    StoreSet           storeset;
+    StoreSet           storeset; // [sizhuo] store set
     FastQueue<DInst *> rROB; // ready/retiring/executed ROB
     FastQueue<DInst *> ROB;
 
@@ -125,16 +125,18 @@ class GProcessor {
     uint64_t     lastReplay;
 
     // Construction
+	// [sizhuo] stats for each type of uOP
     void buildInstStats(GStatsCntr *i[iMAX], const char *txt);
+	// [sizhuo] build proc components (func unit -> cluseter -> all clustes)
     void buildUnit(const char *clusterName, GMemorySystem *ms, Cluster *cluster, InstOpcode type);
     void buildCluster(const char *clusterName, GMemorySystem * ms);
     void buildClusters(GMemorySystem *ms);
 
     GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows);
-    int32_t issue(PipeQueue &pipeQ);
+    int32_t issue(PipeQueue &pipeQ); // [sizhuo] issue to ROB from front-end
 
     virtual void retire();
-    virtual StallCause addInst(DInst *dinst) = 0;
+    virtual StallCause addInst(DInst *dinst) = 0; // [sizhuo] add inst to ROB?
 
     virtual void fetch(FlowID fid) = 0;
   public:
