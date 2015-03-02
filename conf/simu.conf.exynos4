@@ -53,6 +53,52 @@ instWidth         = 32
 opcodeWidth       = 11
 nArchRegs         = 32
 
+# [sizhuo] in order core
+[inorderCORE]
+scooreCore        = false
+areaFactor        = 2
+#issueWrongPath    = false not in new simu.conf
+fetchWidth        = 4
+fetchPorts        = 1
+instQueueSize     = 4
+inorder           = true
+throttlingRatio   = 1.0
+issueWidth        = 8 
+retireWidth       = 3 
+decodeDelay       = 3 
+renameDelay       = 2 
+maxBranches       = 1024
+bb4Cycle          = 1 #1
+bpredDelay        = 2 #
+maxIRequests      = 4 # +1 icache hit delay -> 1 outs miss
+interClusterLat   = 1 
+#clusterScheduler = "SCOORE"
+clusterScheduler  = "RoundRobin"
+#clusterScheduler = "LRU"
+cluster[0]        = 'AUNIT'
+cluster[1]        = 'BUNIT'
+cluster[2]        = 'CUNIT'
+cluster[3]        = 'LSUNIT' 
+bpred             = 'BPredIssueX2' 
+robSize           = 128 
+stForwardDelay    = 3  # +1 clk from the instruction latency
+maxLoads          = 128 
+maxStores         = 128 
+#LSQBanks          = 2 not in new simu.conf
+#DL1              = "DL1_core DL1"
+DL1               = "PerCore_DTLB PTLB"
+#IL1               = "IL1_core IL1"
+IL1               = "PerCore_ITLB ITLB"
+MemoryReplay      =  false
+enableICache      = true
+enableDCache      = true
+noMemSpec         = false 
+StoreSetSize      = 8192
+#LFSTSize          = 512 not in new simu.conf
+instWidth         = 32
+opcodeWidth       = 11
+nArchRegs         = 32
+
 #########
 [AUNIT]
 wakeUpNumPorts    = 2 
