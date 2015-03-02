@@ -405,6 +405,8 @@ enum Scopcode {
 
 //enum RegType:short {
 enum RegType {
+  // [sizhuo] in ARM r0 is a GPR, but in SCOORE r0 is a reg without dependency
+  // so when translate ARM reg to simulator, reg id +1: i.e. r0-r15 -> r1-r16
   LREG_R0=0, // No dependence
   LREG_R1,
   LREG_R2,

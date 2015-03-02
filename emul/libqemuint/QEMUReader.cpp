@@ -202,7 +202,7 @@ void QEMUReader::queueInstruction(uint32_t insn, AddrType pc, AddrType addr, cha
   }
 #endif
 
-  crackInst[fid]->expand(rinst);
+  crackInst[fid]->expand(rinst); // [sizhuo] crack raw inst to uOPs
   
  
 #if 0
