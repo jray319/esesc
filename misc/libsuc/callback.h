@@ -1173,7 +1173,7 @@ public:
 // class for multi-casting of notifications of the callback framework.
 //
 /////////////////////////////////////////////////////////////////////////////
-class CallbackContainer {
+class CallbackContainer { // [sizhuo] a FIFO of callbacks
 private:
   CallbackBase *first;
   CallbackBase *last;
@@ -1190,7 +1190,7 @@ public:
     I(first==0);
   }
 
-  void add(CallbackBase * c) {
+  void add(CallbackBase * c) { // [sizhuo] append to last
     I(c->getNextCallbackBase()==0);
     c->setNextCallbackBase(0);
 
@@ -1204,7 +1204,7 @@ public:
     size++;
   }
 
-  void call() {
+  void call() { // [sizhuo] call from first to last
     // optimization for te most common case
     if( first == 0 )
       return;
@@ -1221,7 +1221,7 @@ public:
     }while(first);
   }
 
-  void mycall() {
+  void mycall() { // [sizhuo] optimized version of call()
     // optimization for te most common case
     if( first == 0 )
       return;

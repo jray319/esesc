@@ -40,24 +40,29 @@
 #include "DInst.h"
 #include "nanassert.h"
 
+// [sizhuo] FIFO of inst from emulator
 class EmuDInstQueue {
 private:
 
-  uint32_t head;
-  uint32_t tail;
-  uint32_t ndrop;
-  uint32_t insertpoint;
-  uint32_t nFreeElems;
+  uint32_t head; // [sizhuo] point to inst to be executed
+  uint32_t tail; // [sizhuo] point to inst to be retired
+  // [sizhuo] number of inst killed due to misspec (i.e. addr spec)
+  // BUT doesn't contain wrong path inst due to branch mispredict
+  uint32_t ndrop; 
+  uint32_t insertpoint; // [sizhuo] point to empty entry to insert new inst
+  uint32_t nFreeElems; // [sizhuo] free entries in queue
 
-  std::vector<DInst *> trace;
+  // [sizhuo] without wrapping around, tail < head < insertpoint
+
+  std::vector<DInst *> trace; // [sizhuo] inst FIFO as array, its size is power of 2
 
 protected:
-  void adjust_trace();
+  void adjust_trace(); // [sizhuo] resize trace array
 
 public:
   EmuDInstQueue();
 
-  void popHead() {
+  void popHead() { // [sizhuo] ex an inst, head advance
     I(!empty());
 
     head = (head + 1) & (trace.size()-1);
@@ -79,7 +84,7 @@ public:
     return &trace[insertpoint];
   }
 
-  void add() {
+  void add() { // [sizhuo] advance insertpoint
     I(nFreeElems);
 
     insertpoint = (insertpoint + 1) & (trace.size()-1);
@@ -89,14 +94,14 @@ public:
       adjust_trace();
   }
 
-  void add(DInst *dinst) {
+  void add(DInst *dinst) { // [sizhuo] insert new inst
     trace[insertpoint] = dinst;
     add();
   }
 
-  bool advanceTail() {
-    if (ndrop) {
-      ndrop--;
+  bool advanceTail() { // [sizhuo] inst retire, advance tail
+    if (ndrop) { // [sizhuo] inst reexecuted, reduce ndrop
+      ndrop--; // [sizhuo] FIXME: why not advance tail???
       return true;
     }
     if (insertpoint == tail)
@@ -109,9 +114,10 @@ public:
     return true;
   }
 
-  void moveHead2Tail() {
+  void moveHead2Tail() { // [sizhuo] replay due to addr spec fail (or other..)
     uint32_t tail_copy = tail;
     while( head != tail ) {
+	  // need to clone inst, because original inst are killed and recycled
       trace[tail] = trace[tail]->clone();
       tail        = (tail + 1) & (trace.size()-1);
       ndrop++;

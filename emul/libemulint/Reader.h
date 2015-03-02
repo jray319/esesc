@@ -45,9 +45,10 @@
 class Reader {
 private:
 protected:
-  static FlowID nemul;
-  static ThreadSafeFIFO<RAWDInst> *tsfifo;
-  static EmuDInstQueue            *ruffer;
+  static FlowID nemul; // [sizhuo] number of emulator interfaces
+  // [sizhuo] below are all arrays of size nemul 
+  static ThreadSafeFIFO<RAWDInst> *tsfifo; // [sizhuo] FIFOs of raw inst (uncracked)
+  static EmuDInstQueue            *ruffer; // [sizhuo] FIFOs of cracked uOPs 
   static std::vector <GStatsCntr*>       rawInst;
   static std::vector <GStatsCntr*>       LD_global;
   static std::vector <GStatsCntr*>       LD_shared;

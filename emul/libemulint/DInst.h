@@ -145,7 +145,7 @@ private:
   AddrType     addr;  // Either load/store address or jump/branch address
   Cluster    *cluster; // [sizhuo] cluster it resides?
   Resource   *resource; // [sizhuo] resource it resides?
-  DInst      **RAT1Entry; // [sizhuo] return address table?
+  DInst      **RAT1Entry; // [sizhuo] rename table
   DInst      **RAT2Entry;
   DInst      **serializeEntry;
   FetchEngine *fetch;

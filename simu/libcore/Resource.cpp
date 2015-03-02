@@ -615,7 +615,7 @@ void FULoad::executing(DInst *dinst) {
 
   DInst *qdinst = lsq->executing(dinst);
   I(qdinst==0);
-  if (qdinst) {
+  if (qdinst) { // [sizhuo] should not enter here! qdinst should be 0
     I(qdinst->getInst()->isStore());
     gproc->replay(dinst);
     if(!gproc->isFlushing())

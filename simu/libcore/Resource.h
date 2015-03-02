@@ -104,10 +104,15 @@ public:
   //
   // 4th) When the instruction is retired from the ROB retire is called
 
+  // [sizhuo] whether dinst can be issued into this function unit
   virtual StallCause canIssue(DInst  *dinst) =    0;
+  // [sizhuo] start to execute dinst
   virtual void       executing(DInst *dinst) =    0;
+  // [sizhuo] dinst finishes execution
   virtual void       executed(DInst  *dinst) =    0;
+  // [sizhuo] dinst is ready to retire, i.e. moved from ROB to rROB in GProcessor
   virtual bool       preretire(DInst  *dinst,bool flushing) = 0;
+  // [sizhuo] dinst is truly retired, i.e. removed from rROB in GProcessor
   virtual bool       retire(DInst    *dinst, bool flushing) = 0;
   virtual void       performed(DInst *dinst) =    0;
 

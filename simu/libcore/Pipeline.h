@@ -153,6 +153,7 @@ public:
 
 // [sizhuo] this class simulates the timing of front-end pipeline
 // including: fetch, decode, rename
+// although rename is after enq to instQueue, we still simulate its delay together with decode
 class PipeQueue {
 public:
   PipeQueue(CPU_t i); // [sizhuo] i is core id

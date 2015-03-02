@@ -67,11 +67,11 @@ void InOrderProcessor::fetch(FlowID fid) {
   I(eint);
   I(active);
 
-  if( IFID.isBlocked(0)) {
+  if( IFID.isBlocked(0)) { // [sizhuo] can't fetch
     busy = true;
-  }else{
+  }else{ // [sizhuo] fetch new inst from emulator
     IBucket *bucket = pipeQ.pipeLine.newItem();
-    if( bucket ) {
+    if( bucket ) { // [sizhuo] allocate new fetch req success
       IFID.fetch(bucket, eint, fid);
       if (!bucket->empty()) {
         busy = true;
@@ -88,9 +88,9 @@ bool InOrderProcessor::advance_clock(FlowID fid) {
     return false;
   }
  
-  fetch(fid);
+  fetch(fid); // [sizhuo] fetch stage: try to fetch new inst
 
-  if (!busy)
+  if (!busy) // [sizhuo] no work to do, just return
     return false;
 
   bool getStatsFlag = false;
@@ -125,7 +125,13 @@ bool InOrderProcessor::advance_clock(FlowID fid) {
     return true;
   }
 
-  retire();
+  // [sizhuo] the timing of dec & rename are both simulated in pipeQ.pipeline
+  //
+  // [sizhuo] inst execution has two types
+  // 1. inst not subject to dependency are scheduled for execution in cluster.addInst()
+  // 2. inst subject to dependency are scheduled for execution when waked up by others
+
+  retire(); // [sizhuo] retire inst
 
   return true;
 }
@@ -134,6 +140,8 @@ StallCause InOrderProcessor::addInst(DInst *dinst) {
 
   const Instruction *inst = dinst->getInst();
 
+  // [sizhuo] if there is RAW/WAW dependency, we don't issue this uOP
+  // FIXME: uOP without dst reg will write RAT[LREG_InvalidOutput], later uOP will stall on WAW hazard
   if(RAT[inst->getSrc1()] != 0 ||
      RAT[inst->getSrc2()] != 0 ||
      RAT[inst->getDst1()] != 0 ||
@@ -141,11 +149,12 @@ StallCause InOrderProcessor::addInst(DInst *dinst) {
     return SmallWinStall;
   }
 
+  // [sizhuo] we issue uOP to ROB & cluster at same time, so check both can issue or not
   if( (ROB.size()+rROB.size()) >= MaxROBSize )
     return SmallROBStall;
 
   Cluster *cluster = dinst->getCluster();
-  if( !cluster ) {
+  if( !cluster ) { // [sizhuo] assign cluster to uOP
     Resource *res = clusterManager.getResource(dinst);
     cluster       = res->getCluster();
     dinst->setCluster(cluster, res);
@@ -162,26 +171,31 @@ StallCause InOrderProcessor::addInst(DInst *dinst) {
 
   nInst[inst->getOpcode()]->inc(dinst->getStatsFlag()); // FIXME: move to cluster
 
+  // [sizhuo] after check, we can now truly issue the uOP
   ROB.push(dinst);
 
+  // [sizhuo] seems to track dependency, but due to the early dependency check 
+  // no dependency is added
   if( !dinst->isSrc2Ready() ) {
     // It already has a src2 dep. It means that it is solved at
     // retirement (Memory consistency. coherence issues)
-    if( RAT[inst->getSrc1()] )
+    if( RAT[inst->getSrc1()] ) // [sizhuo] this will always be false
       RAT[inst->getSrc1()]->addSrc1(dinst);
   }else{
-    if( RAT[inst->getSrc1()] )
+    if( RAT[inst->getSrc1()] ) // [sizhuo] this will always be false
       RAT[inst->getSrc1()]->addSrc1(dinst);
 
-    if( RAT[inst->getSrc2()] )
+    if( RAT[inst->getSrc2()] ) // [sizhuo] this will always be false
       RAT[inst->getSrc2()]->addSrc2(dinst);
   }
 
+  // [sizhuo] update rename table / scoreboard
   dinst->setRAT1Entry(&RAT[inst->getDst1()]);
   dinst->setRAT2Entry(&RAT[inst->getDst2()]);
 
   dinst->getCluster()->addInst(dinst);
 
+  // [sizhuo] FIXME: should not update RAT if uOP is not writing dst reg
   RAT[inst->getDst1()] = dinst;
   RAT[inst->getDst2()] = dinst;
 
@@ -195,12 +209,14 @@ void InOrderProcessor::retire() {
   // Pass all the ready instructions to the rrob
   bool stats = false;
   while(!ROB.empty()) {
+	// [sizhuo] move executed inst from ROB to rROB
     DInst *dinst = ROB.top();
     stats = dinst->getStatsFlag();
 
     if( !dinst->isExecuted() )
       break; 
 
+	// [sizhuo] actions in function unit
     bool done = dinst->getClusterResource()->preretire(dinst, false);
     if( !done )
       break;
@@ -214,6 +230,7 @@ void InOrderProcessor::retire() {
   robUsed.sample(ROB.size(), stats);
   rrobUsed.sample(rROB.size(), stats);
 
+  // [sizhuo] retire from rROB, limit by retire bandwidth
   for(uint16_t i=0 ; i<RetireWidth && !rROB.empty() ; i++) {
     DInst *dinst = rROB.top();
 

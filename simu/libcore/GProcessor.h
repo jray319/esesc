@@ -88,8 +88,9 @@ class GProcessor {
     GMemorySystem   *memorySystem; // [sizhuo] memory system 
 
     StoreSet           storeset; // [sizhuo] store set
+	// [sizhuo[ rROB contains inst ready to retire
     FastQueue<DInst *> rROB; // ready/retiring/executed ROB
-    FastQueue<DInst *> ROB;
+    FastQueue<DInst *> ROB; // [sizhuo] rob of inst not ready to retire
 
     // Updated by Processor or SMTProcessor. Shows the number of clocks
     // that the processor have been active (fetch + exe engine)
@@ -133,10 +134,11 @@ class GProcessor {
     void buildClusters(GMemorySystem *ms);
 
     GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows);
-    int32_t issue(PipeQueue &pipeQ); // [sizhuo] issue to ROB from front-end
+	// [sizhuo] issue to ROB from front-end, return number of issued uOPs
+    int32_t issue(PipeQueue &pipeQ); 
 
     virtual void retire();
-    virtual StallCause addInst(DInst *dinst) = 0; // [sizhuo] add inst to ROB?
+    virtual StallCause addInst(DInst *dinst) = 0; // [sizhuo] add inst to ROB & cluster
 
     virtual void fetch(FlowID fid) = 0;
   public:

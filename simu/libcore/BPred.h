@@ -67,6 +67,7 @@ enum PredType {
   MissPrediction
 };
 
+// [sizhuo] base class for all branch predict unit
 class BPred {
 public:
   typedef unsigned long long HistoryType;
@@ -103,8 +104,10 @@ public:
   BPred(int32_t i, int32_t fetchWidth, const char *section, const char *name);
   virtual ~BPred();
 
+  // [sizhuo] this func only predicts, doesn't change stats
   virtual PredType predict(DInst *dinst, bool doUpdate) = 0;
 
+  // [sizhuo] this func predicts and collect stats
   PredType doPredict(DInst *dinst, bool doUpdate) {
     PredType pred = predict(dinst, doUpdate);
     if (!doUpdate || pred == NoPrediction)
@@ -118,7 +121,7 @@ public:
   
 };
 
-
+// [sizhuo] return addr stack
 class BPRas : public BPred {
 private:
   const uint16_t RasSize;
@@ -133,6 +136,7 @@ public:
 
 };
 
+// [sizhuo] BTB
 class BPBTB : public BPred {
 private:
 
@@ -163,6 +167,7 @@ public:
 
 };
 
+// [sizhuo] various kinds of predictors
 class BPOracle : public BPred {
 private:
   BPBTB btb;
@@ -415,8 +420,7 @@ public:
 };
 #endif
 
-// [sizhuo] this class is used to create a branch predictor??
-
+// [sizhuo] this class is the final branch predictor (RAS + BTB + BHT)
 class BPredictor {
 private:
   const int32_t id;
@@ -449,12 +453,14 @@ public:
     nBranches.inc(doUpdate);
     nTaken.inc(dinst->isTaken());
   
+	// [sizhuo] first try to use returen addr stack
     PredType p= ras.doPredict(dinst, doUpdate);
     if( p != NoPrediction ) {
       nMiss.inc(p != CorrectPrediction && doUpdate);
       return p;
     }
 
+	// [sizhuo] then use BTB+BHT to predict
     p = pred->doPredict(dinst, doUpdate);
 
     // Overall stats

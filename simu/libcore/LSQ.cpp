@@ -74,10 +74,14 @@ DInst *LSQFull::executing(DInst *dinst)
     if(oooExecuted){
 
       if(qdinst->isExecuted() && qdinst->getPC() != dinst->getPC()) { 
-
+		// [sizhuo] FIXME: BUG in memory dependency
+		// if qinst get bypass from store younger than dinst, it's not a violation
+		// if both qinst and dinst are loads to same addr, some actions are needed
         if(inst->isStore() && qinst->isLoad()) { 
           if (faulty == 0)
             faulty = qdinst; 
+		  // [sizhuo] FIXME: it should be faulty->getID() > qdinst->getID()
+		  // we need to kill the oldest inst with violation
           else if (faulty->getID() < qdinst->getID())
             faulty = qdinst;
         }

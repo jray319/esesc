@@ -51,7 +51,7 @@
 FetchEngine::FetchEngine(FlowID id
   ,GProcessor *gproc_
   ,GMemorySystem *gms_
-  ,FetchEngine *fe)
+  ,FetchEngine *fe) // [sizhuo] fe is used for SMT to copy fetch engine
   :gms(gms_)
   ,gproc(gproc_)
   ,avgBranchTime("P(%d)_FetchEngine_avgBranchTime", id)
@@ -80,6 +80,7 @@ FetchEngine::FetchEngine(FlowID id
 
   const char *bpredSection = SescConf->getCharPtr("cpusimu","bpred",id);
 
+  // [sizhuo] construct branch predictor
   if( fe )
     bpred = new BPredictor(id, FetchWidth, bpredSection, fe->bpred);
   else
@@ -91,6 +92,7 @@ FetchEngine::FetchEngine(FlowID id
   BTACDelay = SescConf->getInt(bpredSection, "BTACDelay");
 
   //Supporting multiple SPs (processing elements) in the processor
+  // [sizhuo] what is numSP?? in current configure, numSP = 1
   if(SescConf->checkInt("cpusimu", "sp_per_sm", id)) {
     numSP = SescConf->getInt("cpusimu", "sp_per_sm", id); 
   } else {
@@ -132,19 +134,22 @@ FetchEngine::~FetchEngine() {
   delete bpred;
 }
 
+// [sizhuo] return whether we need to stall fetch for some time
 bool FetchEngine::processBranch(DInst *dinst, uint16_t n2Fetched, uint16_t* to_delete_maxbb) {
   const Instruction *inst = dinst->getInst();
   Time_t missFetchTime=0;
 
   I(dinst->getInst()->isControl()); // getAddr is target only for br/jmp
-  PredType prediction     = bpred->predict(dinst, true);
+  PredType prediction     = bpred->predict(dinst, true); // [sizhuo] make branck prediction
 
-  if(prediction == CorrectPrediction) {
-    if( dinst->isTaken() ) {
+  if(prediction == CorrectPrediction) { // [sizhuo] branch predict correct
+    if( dinst->isTaken() ) { // [sizhuo] taken branch
       bool dobreak = false;
       // Only when the branch is taken check maxBB
       if (bpredDelay > 1) {
         // Block fetching (not really a miss, but the taken takes time).
+		// [sizhuo] block fetching, because branch prediction needs time
+		// FIXME: prediction still takes time even with BTB???
         missFetchTime = globalClock;
         setMissInst(dinst);
         unBlockFetchBPredDelayCB::schedule(bpredDelay-1, this , dinst, missFetchTime);
@@ -153,27 +158,31 @@ bool FetchEngine::processBranch(DInst *dinst, uint16_t n2Fetched, uint16_t* to_d
 
       if( maxBB <= 1 ) {
         // No instructions fetched (stall)
-        if (!missInst[dinst->getPE()]) {
+        if (!missInst[dinst->getPE()]) { // [sizhuo] I think we never enter here
           nDelayInst2.add(n2Fetched, dinst->getStatsFlag());
           //I(0);
           return true;
         }
       }
+	  // [sizhuo] a taken branch ends a basic block
       maxBB--;
-      return dobreak;
+      return dobreak; 
     }
+	// [sizhuo] branch not taken, don't need to stall fetching
     return false;
   }
+
+  // [sizhuo] now we mispredict (BPredictor class never returns NoPrediction)
 
   I(!missInst[dinst->getPE()]);
   I(missFetchTime==0);
 
-  missFetchTime = globalClock;
+  missFetchTime = globalClock; // [sizhuo] record mispredict time
 
   //MSG("2: Dinst not taken Adding PC %x ID %llu\t  ",dinst->getPC(), dinst->getID());
-  setMissInst(dinst);
+  setMissInst(dinst); // [sizhuo] set mispredict info
 
-  if( BTACDelay ) {
+  if( BTACDelay ) { // [sizhuo] what is BTAC???
     if( prediction == NoBTBPrediction && inst->doesJump2Label() ) {
       nBTAC.inc(dinst->getStatsFlag());
       unBlockFetchBPredDelayCB::schedule(BTACDelay,this, dinst,globalClock); // Do not add stats for it
@@ -183,6 +192,7 @@ bool FetchEngine::processBranch(DInst *dinst, uint16_t n2Fetched, uint16_t* to_d
   }else{
     dinst->lockFetch(this); // blocked fetch (awaked in Resources)
   }
+  // [sizhuo] after we block fetching, we resume when dinst is resolved at branch func unit
 
   return true;
 }
@@ -192,8 +202,9 @@ void FetchEngine::realfetch(IBucket *bucket, EmulInterface *eint, FlowID fid, DI
   uint16_t tempmaxbb = maxbb; // FIXME: delete me
   bool getStatsFlag = false;
 
-  if (oldinst) {
-    if (missInst[oldinst->getPE()]) {
+  if (oldinst) { // [sizhuo] we have oldinst to fetch, try to fetch it
+    if (missInst[oldinst->getPE()]) { 
+	  // [sizhuo] we are blocked by branch misprediction, try next time
       if (lastd[oldinst->getPE()] != oldinst) {
         cbPending[oldinst->getPE()].add(realfetchCB::create(this,bucket,eint,fid,oldinst,n2Fetched,tempmaxbb));
       }else{
@@ -202,6 +213,7 @@ void FetchEngine::realfetch(IBucket *bucket, EmulInterface *eint, FlowID fid, DI
       return;
     }
     
+	// we can fetch oldisnt, 
     if(oldinst->getInst()->isControl()) {
       processBranch(oldinst, n2Fetched,&tempmaxbb);
     }
@@ -210,7 +222,10 @@ void FetchEngine::realfetch(IBucket *bucket, EmulInterface *eint, FlowID fid, DI
    n2Fetched--;
 
   } else {
+	// [sizhuo] try to fetch as many inst as possible (limit by fetch bandwidth)
     do {
+	  // [sizhuo] interact with emulator get the inst to fetch
+	  // this is the only place in fetch engine to communicate with emulator
       DInst *dinst = eint->executeHead(fid);
       if (dinst == 0) {
         //if (fid)
@@ -220,6 +235,7 @@ void FetchEngine::realfetch(IBucket *bucket, EmulInterface *eint, FlowID fid, DI
       getStatsFlag |= dinst->getStatsFlag();
 
       if (missInst[dinst->getPE()]) {
+		// [sizhuo] blocked by misprediction, try to fetch it next time
         I(lastd[dinst->getPE()] != dinst);
         //MSG("Oops! FID: %d PE: %d is locked now..Adding DInst ID %d to a list of callback[%d]", (int) fid, (int) dinst->getPE(), (int) dinst->getID(),(int) dinst->getPE()); 
         cbPending[dinst->getPE()].add(realfetchCB::create(this,bucket,eint,fid,dinst,n2Fetched,tempmaxbb));
@@ -246,7 +262,11 @@ void FetchEngine::realfetch(IBucket *bucket, EmulInterface *eint, FlowID fid, DI
 
   nFetched.add(tmp, getStatsFlag);
 
+  // [sizhuo] simulate fetch timing. 
   if(enableICache && !bucket->empty()) {
+	// [sizhuo] register callback: when resp comes back, mark bucket to be fetched, inform front-end pipeline
+	// FIXME: what if uOPs in one IBucket is not in the same cache line?? 
+	// is there any guarantee in emulator when it returns a new inst??
     MemRequest::sendReqRead(gms->getIL1(), bucket->top(), bucket->top()->getPC(), &(bucket->markFetchedCB));
   }else{
     bucket->markFetchedCB.schedule(IL1HitDelay);

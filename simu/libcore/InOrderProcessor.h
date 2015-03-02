@@ -45,25 +45,29 @@
 class InOrderProcessor : public GProcessor {
 private:
   FetchEngine IFID;
-  PipeQueue   pipeQ;
-  int32_t     spaceInInstQueue;
+  PipeQueue   pipeQ; // [sizhuo] timing for front-end
+  int32_t     spaceInInstQueue; // [sizhuo] free space of instQ (in pipeQ)
 
   LSQNone     lsq;
-  bool        busy;
+  bool        busy; // [sizhuo] we have work to do in this cycle
 
+  // [sizhuo] rename table, RAT[i] is the last uOP that writes reg i.
+  // Here it is similar to a scoreboard
   DInst *RAT[LREG_MAX];
 
+  // [sizhuo] why not use the rROB in GProcessor class??
   FastQueue<DInst *> rROB; // ready/retiring/executed ROB
-
-  void fetch(FlowID fid);
+  // [sizhuo] start fetching new inst for hw thread fid from emulator
+  void fetch(FlowID fid); 
 protected:
   ClusterManager clusterManager;
   // BEGIN VIRTUAL FUNCTIONS of GProcessor
-
+  // [sizhuo] all actions in one cycle, called by TaskHandler::boot (main sim loop)
+  // maybe it should be "public"??
   bool advance_clock(FlowID fid);
   void retire();
-
-  StallCause addInst(DInst *dinst);
+  // [sizhuo] add inst to ROB & cluster, used in GProcessor::issue
+  StallCause addInst(DInst *dinst); 
   // END VIRTUAL FUNCTIONS of GProcessor
 
 public:
