@@ -11,7 +11,7 @@ coreType   = 'tradCORE'
 #coreType   = 'scooreCORE'
 SMcoreType = 'gpuCORE'
 
-# [sizhuo] core count - 1, __CPU_MAX_ID__ should be substituted
+# [sizhuo] core count - 1, cpuMaxID will be substituted
 cpuMaxID = __CPU_MAX_ID__
 
 # Target benchmark
@@ -26,7 +26,7 @@ cpuMaxID = __CPU_MAX_ID__
 #benchName = "launcher -- fft -p2 -m18"
 #benchName  = "crafty.armel"
 
-# [sizhuo] __BENCH_NAME__ should be substituted
+# [sizhuo] benchName will be substituted
 benchName = "__BENCH_NAME__"
 
 # Emulator and simulator mode
@@ -43,7 +43,7 @@ samplerSel  = "nosampler"
 
 # Suffix for report file group name:
 #  e.g. esesc_microdemo
-# [sizhuo] __REPORT_FILE__ should be substituted
+# [sizhuo] reportFile will be substituted
 reportFile = '__REPORT_FILE__'
 
 # Thermal configuraiton settings
