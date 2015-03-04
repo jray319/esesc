@@ -991,17 +991,17 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
             //If RM == STACKPTR or RM == PC_REG, UNPREDICTABLE
 
             if((SHIFT_IMM == 0) && (shift == 0)) {
-			  // [sizhuo] Here is orr.w inst: cracked into 1 uOP
-			  // we can treat orr.w ry, ry, ry as a MAGIC inst to denote costumized inst
-			  // its hex code is: 0y0yea0y, where y+1 = RN = RM = RD
-			  uint32_t regName = insn & 0xF;
-			  uint32_t magicInst = (regName << 24) | (regName << 16) | 0x0ea40L | regName;
-			  if(magicInst == insn) {
-				  MSG("Thum32Crack.cpp expand magic inst %lx at PC = %lx", rinst->getInsn(), rinst->getPC());
-			  }
-			  /////
+							// [sizhuo] Here is orr.w inst: cracked into 1 uOP
+							// we can treat orr.w ry, ry, ry as a MAGIC inst to denote costumized inst
+							// its hex code is: 0y0yea0y, where y+1 = RN = RM = RD
+							uint32_t regName = insn & 0xF;
+							uint32_t magicInst = (regName << 24) | (regName << 16) | 0x0ea40L | regName;
+							if(magicInst == insn) {
+								MSG("Thum32Crack.cpp expand magic inst %lx at PC = %lx", rinst->getInsn(), rinst->getPC());
+							}
+							/////
               CrackInst::setup(rinst, iAALU, OP_S64_OR, RN, RM, 0, RD, Sbit, 0, 0);
-			}
+						}
             else
               CrackInst::setup(rinst, iAALU, OP_S64_OR, RN, LREG_TMP2, 0, RD, Sbit, 0, 0);
           }
