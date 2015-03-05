@@ -53,7 +53,7 @@ launch_param['fluidanimate'] = {
 		}
 
 launch_param['swaptions'] = {
-		'dev'    : '-ns 3 -sm 50 -nt __THREAD_NUM__'     ,
+		'dev'    : '-ns 8 -sm 50 -nt __THREAD_NUM__'     , # change 3 to 8 to enable 4 threads
 		'small'  : '-ns 16 -sm 5000 -nt __THREAD_NUM__'  ,
 		'medium' : '-ns 32 -sm 10000 -nt __THREAD_NUM__' ,
 		'large'  : '-ns 64 -sm 20000 -nt __THREAD_NUM__'
@@ -94,6 +94,82 @@ launch_param['radix'] = {
 		'medium' : '-p__THREAD_NUM__ -r4096 -n16777216 -m2147483647' ,
 		'large'  : '-p__THREAD_NUM__ -r4096 -n67108864 -m2147483647' 
 		}
+
+# params to run PARSEC 3.0
+parsec3_param = {}
+
+parsec3_param['blackscholes'] = {
+		'dev'    : '__THREAD_NUM__ in_16.txt prices.txt'  ,
+		'small'  : '__THREAD_NUM__ in_4K.txt prices.txt'  ,
+		'medium' : '__THREAD_NUM__ in_16K.txt prices.txt' ,
+		'large'  : '__THREAD_NUM__ in_64K.txt prices.txt' ,
+		'more_core' : '1'
+		}
+
+parsec3_param['bodytrack'] = { # we use posix thread model (2)
+		'dev'    : 'sequenceB_1 4 1 100 3 2 __THREAD_NUM__'  ,
+		'small'  : 'sequenceB_1 4 1 1000 5 2 __THREAD_NUM__' ,
+		'medium' : 'sequenceB_2 4 2 2000 5 2 __THREAD_NUM__' ,
+		'large'  : 'sequenceB_4 4 4 4000 5 2 __THREAD_NUM__' ,
+		'more_core' : '1'
+		}
+
+parsec3_param['fluidanimate'] = {
+		'dev'    : '__THREAD_NUM__ 3 in_15K.fluid out.fluid'  ,
+		'small'  : '__THREAD_NUM__ 5 in_35K.fluid out.fluid'  ,
+		'medium' : '__THREAD_NUM__ 5 in_100K.fluid out.fluid' ,
+		'large'  : '__THREAD_NUM__ 5 in_300K.fluid out.fluid' ,
+		'more_core' : '1'
+		}
+
+parsec3_param['freqmine'] = {
+		'dev'    : 'T10I4D100K_1k.dat 3 out.txt __THREAD_NUM__'  ,
+		'small'  : 'kosarak_250k.dat 220 out.txt __THREAD_NUM__'  ,
+		'medium' : 'kosarak_500k.dat 410 out.txt __THREAD_NUM__' ,
+		'large'  : 'kosarak_990k.dat 790 out.txt __THREAD_NUM__' ,
+		'more_core' : '0' # openMP limit threads to OMP_NUM_THREADS
+		}
+
+parsec3_param['streamcluster'] = {
+		'dev'    : '3 10 3 16 16 10 none output.txt __THREAD_NUM__'            ,
+		'small'  : '10 20 32 4096 4096 1000 none output.txt __THREAD_NUM__'    ,
+		'medium' : '10 20 64 8192 8192 1000 none output.txt __THREAD_NUM__'    ,
+		'large'  : '10 20 128 16384 16384 1000 none output.txt __THREAD_NUM__' ,
+		'more_core' : '1'
+		}
+
+parsec3_param['swaptions'] = {
+		'dev'    : '-ns 8 -sm 50 -nt __THREAD_NUM__'     , # change 3 to 8, enable 4 threads
+		'small'  : '-ns 16 -sm 5000 -nt __THREAD_NUM__'  ,
+		'medium' : '-ns 32 -sm 10000 -nt __THREAD_NUM__' ,
+		'large'  : '-ns 64 -sm 20000 -nt __THREAD_NUM__' ,
+		'more_core' : '1'
+		}
+
+parsec3_param['vips'] = { # additional arg for thread num
+		'dev'    : 'im_benchmark barbados_256x288.v output.v __THREAD_NUM__'      ,
+		'small'  : 'im_benchmark pomegranate_1600x1200.v output.v __THREAD_NUM__' ,
+		'medium' : 'im_benchmark vulture_2336x2336.v output.v __THREAD_NUM__'     ,
+		'large'  : 'im_benchmark bigben_2662x5500.v output.v __THREAD_NUM__'      ,
+		'more_core' : '2' # it needs two more threads for simdev (other not tested)
+		}
+
+parsec3_param['x264'] = {
+		'dev'    : ('--quiet --qp 20 --partitions b8x8,i4x4 --ref 5 --direct auto --b-pyramid ' +
+					'--weightb --mixed-refs --no-fast-pskip --me umh --subme 7 --analyse b8x8,i4x4 ' +
+					'--threads __THREAD_NUM__ -o eledream.264 eledream_64x36_3.y4m')     ,
+		'small'  : ('--quiet --qp 20 --partitions b8x8,i4x4 --ref 5 --direct auto --b-pyramid ' +
+					'--weightb --mixed-refs --no-fast-pskip --me umh --subme 7 --analyse b8x8,i4x4 ' +
+					'--threads __THREAD_NUM__ -o eledream.264 eledream_640x360_8.y4m')   ,
+		'medium' : ('--quiet --qp 20 --partitions b8x8,i4x4 --ref 5 --direct auto --b-pyramid ' +
+					'--weightb --mixed-refs --no-fast-pskip --me umh --subme 7 --analyse b8x8,i4x4 ' +
+					'--threads __THREAD_NUM__ -o eledream.264 eledream_640x360_32.y4m')  ,
+		'large'  : ('--quiet --qp 20 --partitions b8x8,i4x4 --ref 5 --direct auto --b-pyramid ' +
+					'--weightb --mixed-refs --no-fast-pskip --me umh --subme 7 --analyse b8x8,i4x4 ' +
+					'--threads __THREAD_NUM__ -o eledream.264 eledream_640x360_128.y4m') ,
+		'more_core' : '1'
+		}
+
 
 # helper to remove files in current dir
 def remove_here(file_list):
@@ -152,6 +228,12 @@ def run_launcher(name, size, core_num, thread_num):
 	print(shell_cmd)
 	os.system(shell_cmd)
 
+	# special cases
+	if name == 'facesim':
+		if os.path.isdir('Storytelling'):
+			shutil.rmtree('Storytelling')
+		os.makedirs('Storytelling/output')
+
 	# run
 	log_file = report_file + '.log'
 	shell_cmd = '../main/esesc 2>&1 | tee ' + log_file
@@ -168,14 +250,71 @@ def run_launcher(name, size, core_num, thread_num):
 	return True
 ####
 
+# subroutine to run one benchmark in launcher
+def run_parsec3(name, size, thread_num):
+	# check we have param for benchmark
+	if name not in parsec3_param:
+		print(name + " doesn't have parameters!")
+		return False
+	elif size not in parsec3_param[name]:
+		print(name + " doesn't have parameter for size " + size)
+		return False
+
+	# copy exe
+	if os.path.isfile(name): # remove existing one
+		os.remove(name)
+	exe_path = os.path.join(bench_root_dir, name, name)
+	if not os.path.isfile(exe_path):
+		print(exe_path + " doesn't exist!")
+		return False
+	shutil.copy(exe_path, '.')
+
+	# copy input files
+	input_dir = os.path.join(bench_root_dir, name, size)
+	all_inputs = copy_here(input_dir)
+	
+	# change esesc.conf
+	core_num = thread_num + int(parsec3_param[name]['more_core'])
+	cpu_max_id = str(core_num - 1)
+	bench_cmd = name + ' ' + parsec3_param[name][size]
+	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
+	report_file = 'parsec3_' + name + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num)
+
+	shell_cmd = (
+			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
+			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
+			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
+			)
+	print(shell_cmd)
+	os.system(shell_cmd)
+
+	# run
+	log_file = report_file + '.log'
+	shell_cmd = '../main/esesc 2>&1 | tee ' + log_file
+	print(shell_cmd)
+	os.system(shell_cmd)
+
+	# remove input files & exe
+	remove_here(all_inputs)
+	os.remove(name)
+
+	# change report file mode
+	shell_cmd = 'chmod 644 esesc_' + report_file + '.*'
+	os.system(shell_cmd)
+
+	return True
+####
+
 size = 'dev'
 thread = 4
+
+'''
 # PARSEC 2.1 by launcher
 run_launcher('blackscholes', size, thread + 1, thread)
 run_launcher('bodytrack', size, thread + 1, thread)
 run_launcher('canneal', size, thread + 1, thread)
-run_launcher('facesim', size, thread + 1, thread)
-run_launcher('ferret', size, thread + 1, thread)
+#run_launcher('facesim', size, thread + 1, thread) # seems only single thread...
+#run_launcher('ferret', size, thread + 1, thread) # needs more flows...
 run_launcher('fluidanimate', size, thread + 1, thread)
 run_launcher('swaptions', size, thread + 1, thread)
 run_launcher('x264', size, thread + 1, thread)
@@ -184,3 +323,13 @@ run_launcher('ocean', size, thread, thread)
 run_launcher('fft', size, thread, thread)
 run_launcher('radix', size, thread, thread)
 #run_launcher('fmm', size, thread, thread)
+'''
+
+run_parsec3('blackscholes', size, thread)
+run_parsec3('bodytrack', size, thread)
+run_parsec3('fluidanimate', size, thread)
+run_parsec3('freqmine', size, thread)
+run_parsec3('swaptions', size, thread)
+run_parsec3('streamcluster', size, thread)
+run_parsec3('vips', size, thread)
+run_parsec3('x264', size, thread)
