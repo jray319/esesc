@@ -804,6 +804,7 @@ bool FUStore::retire(DInst *dinst, bool flushing) {
   if(dinst->getInst()->isStoreAddress())
     return true;
 
+	// [sizhuo] FIXME: store should be able to retire before globally performed
   if(!dinst->isPerformed())
     return false;
 

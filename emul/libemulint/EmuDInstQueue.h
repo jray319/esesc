@@ -101,7 +101,12 @@ public:
 
   bool advanceTail() { // [sizhuo] inst retire, advance tail
     if (ndrop) { // [sizhuo] inst reexecuted, reduce ndrop
-      ndrop--; // [sizhuo] FIXME: why not advance tail???
+      ndrop--; 
+			// [sizhuo] this advanceTail() is called by a killed inst
+			// this inst will be reexecuted later, so tail pointer should not move
+			// FIXME: we can do this because when speculation fails
+			// we first commit all good inst, then flush bad inst
+			// We may not still do so when we have more agressive rollback scheme
       return true;
     }
     if (insertpoint == tail)

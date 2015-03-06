@@ -71,37 +71,48 @@ private:
   
   const bool MemoryReplay;
   
-  FetchEngine IFID;
-  PipeQueue   pipeQ;
-  LSQFull     lsq;
+  FetchEngine IFID; // [sizhuo] ifc with emulator
+  PipeQueue   pipeQ; // [sizhuo] front-end pipeline
+  LSQFull     lsq; // [sizhuo] load/store queue
 
+	// [sizhuo] level of serial execuction (see OoOProcessor() func in .cpp)
+	// 0: all inst ex in serial
+	// 1: all loads ex in serial
+	// 2: same reg inst ex in serial???
   uint32_t  serialize_level;
-  uint32_t  serialize;
+	// [sizhuo] number of serially executed inst after a (memory) dependency violation
+	// This parameter is 0 for non-SCOORE core
+  uint32_t  serialize; 
+	// [sizhuo] number of inst needed to be executed in serial
+	// it is 0 for non-SCOORE core
   uint32_t  serialize_for;
+	// [sizhuo] threshold to determine whether we are experiencing frequent flush for replay
   uint32_t  forwardProg_threshold;
+	// [sizhuo] last serially executed insts / store inst
+	// they are NULL for non-SCOORE core
   DInst    *last_serialized;
   DInst    *last_serializedST;
 
-  int32_t spaceInInstQueue;
-  DInst   *RAT[LREG_MAX];
+  int32_t spaceInInstQueue; // [sizhuo] remaining free space in inst queue
+  DInst   *RAT[LREG_MAX]; // [sizhuo] rename table
 
   DInst   *serializeRAT[LREG_MAX];
   RegType  last_serializeLogical;
   AddrType last_serializePC;
 
-  bool busy;
+  bool busy; // [sizhuo] processor still has sth to do
   bool replayRecovering;
   Time_t replayID;
   bool flushing;
 
-  FlowID flushing_fid;
+  FlowID flushing_fid; // [sizhuo] QEMU flow being flushed
 
   RetireState last_state;
   void retire_lock_check();
   bool scooreMemory;
   StaticCallbackMember0<OoOProcessor, &OoOProcessor::retire_lock_check> retire_lock_checkCB;
 
-  void fetch(FlowID fid);
+  void fetch(FlowID fid); // [sizhuo] fetch inst from emulator into front-end
 protected:
   ClusterManager clusterManager;
 

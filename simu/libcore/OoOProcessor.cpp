@@ -74,7 +74,7 @@ OoOProcessor::OoOProcessor(GMemorySystem *gm, CPU_t i)
   if (SescConf->checkInt("cpusimu","serialize",i))
     serialize= SescConf->getInt("cpusimu","serialize",i);
   else
-    serialize= 0;
+    serialize= 0; // [sizhuo] for non-SCOORE core, we haven't set serialize in config file
 
   serialize_level = 2; // 0 full, 1 all ld, 2 same reg  
   serialize_for   = 0;
@@ -173,21 +173,30 @@ bool OoOProcessor::advance_clock(FlowID fid)
   // RENAME Stage
   if( replayRecovering ) {
     if ((rROB.empty() && ROB.empty())) {
+			// [sizhuo] FIXME: why have to wait ROB empty to complete replay??
+			// we only need to flush inst younger than the inst with violation/exception?
+
       // Recovering done
       EmulInterface *eint = TaskHandler::getEmul(flushing_fid);
       eint->syncHeadTail( flushing_fid );
 
+			// [sizhuo] we are done with flushing for replay
       I(flushing);
       replayRecovering = false;
       flushing         = false;
 
       if ((lastReplay+2*forwardProg_threshold) < replayID){
+				// [sizhuo] last replay is a long time before the current replay
+				// We can try to issue load more aggressively
+				// FIXME: this is a stupid way to reduce serialization, 
+				// because we have to wait for a violation...
         serialize_level = 3; // One over max to start with 2
         //MSG("%d Reset Serialize level @%lld : %lld %lld",cpu_id, globalClock,lastReplay, replayID);
       }
       if ((lastReplay+forwardProg_threshold) > replayID){
         if (serialize_level) {
             //MSG("%d One level less %d for %d @%lld : %lld %lld", cpu_id, serialize_level, serialize_for, globalClock, lastReplay, replayID);
+						// [sizhuo] we experience two close memory dependency violation, be more serialized
           serialize_level--;
         }else{
           //MSG("%d already at level 0 @%lld", cpu_id, globalClock);
@@ -196,15 +205,17 @@ bool OoOProcessor::advance_clock(FlowID fid)
         //forwardProg_threshold = replayID - lastReplay;
         //serialize_for = forwardProg_threshold; 
       }
-      
+      // [sizhuo] current replayed inst becomes lastReplay, record the inst ID
       lastReplay = replayID;
     }else{
+			// [sizhuo] we are still in flushing for replay state
       nStall[ReplaysStall]->add(RealisticWidth, getStatsFlag);
-      retire();
-      return true;
+      retire(); // [sizhuo] try to retire inst
+      return true; // [sizhuo] don't do anything else
     }
   }
   
+	// [sizhuo] issue inst into ROB
   if( !pipeQ.instQueue.empty() ) {
     spaceInInstQueue += issue(pipeQ);
   }else if( ROB.empty() && rROB.empty() ) {
@@ -213,6 +224,7 @@ bool OoOProcessor::advance_clock(FlowID fid)
     return true;
   }
 
+	// [sizhuo] retire stage
   retire();
 
   return true;
@@ -223,12 +235,16 @@ StallCause OoOProcessor::addInst(DInst *dinst)
   /* rename (or addInst) a new instruction {{{1 */
 {
   if(replayRecovering && dinst->getID() > replayID) {
+		// [sizhuo] can't issue new inst when flushing ROB for replay
     return ReplaysStall;
   }
 
-  if( (ROB.size()+rROB.size()) >= MaxROBSize )
+  if( (ROB.size()+rROB.size()) >= MaxROBSize ) {
+		// [sizhuo] can't issue due to limited ROB size
     return SmallROBStall;
+	}
 
+	// [sizhuo] get the cluster to ex this inst
   Cluster *cluster = dinst->getCluster();
   if( !cluster ) {
     Resource *res = clusterManager.getResource(dinst);
@@ -236,6 +252,7 @@ StallCause OoOProcessor::addInst(DInst *dinst)
     dinst->setCluster(cluster, res);
   }
 
+	// [sizhuo] whether we can add dinst into cluster
   StallCause sc = cluster->canIssue(dinst);
   if (sc != NoStall)
     return sc;
@@ -248,6 +265,9 @@ StallCause OoOProcessor::addInst(DInst *dinst)
 
   //#if 1
   if(!scooreMemory){ //no dynamic serialization for tradcore
+		// [sizhuo] try to update something about serial execution
+		// but here is non-SCOORE core, and serialize_for = serialize = 0 (in configuration)
+		// we can ignore these...
     if (serialize_for>0 && !replayRecovering) {
       serialize_for--;
       if (inst->isMemory() && dinst->isSrc3Ready()) {
@@ -258,7 +278,7 @@ StallCause OoOProcessor::addInst(DInst *dinst)
       } 
     }
     //#else
-  }else{
+  }else{ // [sizhuo] below are for SCOORE, ignore...
     if (serialize_for>0 && !replayRecovering) {
       serialize_for--;
 
@@ -318,13 +338,19 @@ StallCause OoOProcessor::addInst(DInst *dinst)
 
   nInst[inst->getOpcode()]->inc(dinst->getStatsFlag()); // FIXME: move to cluster
 
-  ROB.push(dinst);
+	// [sizhuo] now we can issue dinst
+
+  ROB.push(dinst); // [sizhuo] issue to ROB
 
   I(dinst->getCluster() != 0); // Resource::schedule must set the resource field
 
+	// [sizhuo] track dependency of the inst
   if( !dinst->isSrc2Ready() ) {
     // It already has a src2 dep. It means that it is solved at
     // retirement (Memory consistency. coherence issues)
+		//
+		// [sizhuo] here is some black magic I can't understand...
+		// why src2 can be ready ...
     if( RAT[inst->getSrc1()] )
       RAT[inst->getSrc1()]->addSrc1(dinst);
   }else{
@@ -338,8 +364,10 @@ StallCause OoOProcessor::addInst(DInst *dinst)
   dinst->setRAT1Entry(&RAT[inst->getDst1()]);
   dinst->setRAT2Entry(&RAT[inst->getDst2()]);
 
+	// [sizhuo] issue to cluster
   dinst->getCluster()->addInst(dinst);
 
+	// [sizhuo] write rename table
   RAT[inst->getDst1()] = dinst;
   RAT[inst->getDst2()] = dinst;
 
@@ -429,6 +457,7 @@ void OoOProcessor::retire()
     
     FlowID fid = dinst->getFlowId();
     if( dinst->isReplay() ) {
+			// [sizhuo] detect the inst to replay at retire time
       flushing = true;
       flushing_fid = fid;
     }
@@ -449,6 +478,11 @@ void OoOProcessor::retire()
 }
 /* }}} */
 
+// [sizhuo] this func is called when memory dependency violation is detected
+// (e.g. when store issues)
+// The replay process is to
+// 1. wait all good inst to commit
+// 2. flush all bad inst
 void OoOProcessor::replay(DInst *target)
   /* trigger a processor replay {{{1 */
 {
@@ -462,14 +496,15 @@ void OoOProcessor::replay(DInst *target)
   if( !MemoryReplay ) {
     return;
   }
-  target->markReplay();
+  target->markReplay(); // [sizhuo] mark inst as being replayed
 
+	// [sizhuo] record inst ID
   if (replayID < target->getID())
     replayID = target->getID();
 
   if( replayRecovering )
     return;
-  replayRecovering = true; 
+  replayRecovering = true; // [sizhuo] enter recovery mode
 
   // Count the # instructions wasted
   size_t fetch2rename = 0;

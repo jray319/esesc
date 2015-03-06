@@ -60,7 +60,7 @@ enum CUDAMemType{
 
 typedef uint64_t DataType;
 typedef uint64_t AddrType;
-typedef uint32_t FlowID; // [sizhuo] used for SMT, 1 flow -- 1 hw thread
+typedef uint32_t FlowID; // [sizhuo] QEMU flow (1 thread)
 
 #include "nanassert.h"
 

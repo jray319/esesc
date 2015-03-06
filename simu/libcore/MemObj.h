@@ -51,7 +51,7 @@ private:
 protected:
   friend class MRouter;
 
-  MRouter *router;
+  MRouter *router; // [sizhuo] routing table for where msg to go from this MemObj
   const char *section;
   const char *name;
   const uint16_t id;
@@ -79,9 +79,15 @@ public:
   virtual TimeDelta_t ffread(AddrType addr) = 0;
   virtual TimeDelta_t ffwrite(AddrType addr) = 0;
 
+	// [sizhuo] down: closer to memory, up: closer to core
+
   // DOWN
+	
+	// [sizhuo] handle upgrade req from upper level
   virtual void req(MemRequest *req) = 0;
+	// [sizhuo] handle downgrade resp from upper level
   virtual void setStateAck(MemRequest *req) = 0;
+	// [sizhuo] handle evicted cache line from upper level
   virtual void disp(MemRequest *req) = 0;
 
   virtual void doReq(MemRequest *req) = 0;
@@ -89,7 +95,10 @@ public:
   virtual void doDisp(MemRequest *req) = 0;
 
   // UP
+	
+	// [sizhuo] handle upgrade resp from lower level
   virtual void reqAck(MemRequest *req) = 0;
+	// [sizhuo] handle downgrade req from lower level
   virtual void setState(MemRequest *req) = 0;
 
   virtual void doReqAck(MemRequest *req) = 0;

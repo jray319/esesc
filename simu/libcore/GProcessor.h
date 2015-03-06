@@ -88,7 +88,9 @@ class GProcessor {
     GMemorySystem   *memorySystem; // [sizhuo] memory system 
 
     StoreSet           storeset; // [sizhuo] store set
-	// [sizhuo[ rROB contains inst ready to retire
+		// [sizhuo] rROB contains inst able to retire but not guaranteed to retire
+		// rROB is introduced mostly for simulation convenience
+		// so there is no bandwidth limit from ROB to rROB
     FastQueue<DInst *> rROB; // ready/retiring/executed ROB
     FastQueue<DInst *> ROB; // [sizhuo] rob of inst not ready to retire
 
