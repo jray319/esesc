@@ -11,10 +11,10 @@ bench_root_dir = '/home/szzhang/local-proj/mem-model/simulation/program'
 launch_param = {}
 
 launch_param['blackscholes'] = {
-		'dev'    : '__THREAD_NUM__ in_16.txt prices.txt'  ,
-		'small'  : '__THREAD_NUM__ in_4K.txt prices.txt'  ,
-		'medium' : '__THREAD_NUM__ in_16K.txt prices.txt' ,
-		'large'  : '__THREAD_NUM__ in_64K.txt prices.txt'
+		'dev'    : '__THREAD_NUM__ in_16.txt blackscholes.out'  ,
+		'small'  : '__THREAD_NUM__ in_4K.txt blackscholes.out'  ,
+		'medium' : '__THREAD_NUM__ in_16K.txt blackscholes.out' ,
+		'large'  : '__THREAD_NUM__ in_64K.txt blackscholes.out'
 		}
 
 launch_param['bodytrack'] = { # we use posix thread model (2)
@@ -39,17 +39,17 @@ launch_param['facesim'] = {
 		}
 
 launch_param['ferret'] = {
-		'dev'    : 'corel lsh queries 5 5 __THREAD_NUM__ output.txt'   ,
-		'small'  : 'corel lsh queries 10 20 __THREAD_NUM__ output.txt' ,
-		'medium' : 'corel lsh queries 10 20 __THREAD_NUM__ output.txt' ,
-		'large'  : 'corel lsh queries 10 20 __THREAD_NUM__ output.txt' 
+		'dev'    : 'corel lsh queries 5 5 __THREAD_NUM__ ferret.out'   ,
+		'small'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret.out' ,
+		'medium' : 'corel lsh queries 10 20 __THREAD_NUM__ ferret.out' ,
+		'large'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret.out' 
 		}
 
 launch_param['fluidanimate'] = {
-		'dev'    : '__THREAD_NUM__ 3 in_15K.fluid out.fluid'  ,
-		'small'  : '__THREAD_NUM__ 5 in_35K.fluid out.fluid'  ,
-		'medium' : '__THREAD_NUM__ 5 in_100K.fluid out.fluid' ,
-		'large'  : '__THREAD_NUM__ 5 in_300K.fluid out.fluid'
+		'dev'    : '__THREAD_NUM__ 3 in_15K.fluid fluidanimate.out'  ,
+		'small'  : '__THREAD_NUM__ 5 in_35K.fluid fluidanimate.out'  ,
+		'medium' : '__THREAD_NUM__ 5 in_100K.fluid fluidanimate.out' ,
+		'large'  : '__THREAD_NUM__ 5 in_300K.fluid fluidanimate.out'
 		}
 
 launch_param['swaptions'] = {
@@ -99,11 +99,11 @@ launch_param['radix'] = {
 parsec3_param = {}
 
 parsec3_param['blackscholes'] = {
-		'dev'    : '__THREAD_NUM__ in_16.txt prices.txt'  ,
-		'small'  : '__THREAD_NUM__ in_4K.txt prices.txt'  ,
-		'medium' : '__THREAD_NUM__ in_16K.txt prices.txt' ,
-		'large'  : '__THREAD_NUM__ in_64K.txt prices.txt' ,
-		'more_core' : '1'
+		'dev'    : '__THREAD_NUM__ in_16.txt blackscholes.out'  ,
+		'small'  : '__THREAD_NUM__ in_4K.txt blackscholes.out'  ,
+		'medium' : '__THREAD_NUM__ in_16K.txt blackscholes.out' ,
+		'large'  : '__THREAD_NUM__ in_64K.txt blackscholes.out' ,
+		'thread' : lambda core : core
 		}
 
 parsec3_param['bodytrack'] = { # we use posix thread model (2)
@@ -111,31 +111,39 @@ parsec3_param['bodytrack'] = { # we use posix thread model (2)
 		'small'  : 'sequenceB_1 4 1 1000 5 2 __THREAD_NUM__' ,
 		'medium' : 'sequenceB_2 4 2 2000 5 2 __THREAD_NUM__' ,
 		'large'  : 'sequenceB_4 4 4 4000 5 2 __THREAD_NUM__' ,
-		'more_core' : '1'
+		'thread' : lambda core : core - (core - 4) / 4 - 1
+		}
+
+parsec3_param['ferret'] = {
+		'dev'    : 'corel lsh queries 5 5 __THREAD_NUM__ ferret.out'   ,
+		'small'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret.out' ,
+		'medium' : 'corel lsh queries 10 20 __THREAD_NUM__ ferret.out' ,
+		'large'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret.out' ,
+		'thread' : lambda core : core / 4
 		}
 
 parsec3_param['fluidanimate'] = {
-		'dev'    : '__THREAD_NUM__ 3 in_15K.fluid out.fluid'  ,
-		'small'  : '__THREAD_NUM__ 5 in_35K.fluid out.fluid'  ,
-		'medium' : '__THREAD_NUM__ 5 in_100K.fluid out.fluid' ,
-		'large'  : '__THREAD_NUM__ 5 in_300K.fluid out.fluid' ,
-		'more_core' : '1'
+		'dev'    : '__THREAD_NUM__ 3 in_15K.fluid fluidanimate.out'  ,
+		'small'  : '__THREAD_NUM__ 5 in_35K.fluid fluidanimate.out'  ,
+		'medium' : '__THREAD_NUM__ 5 in_100K.fluid fluidanimate.out' ,
+		'large'  : '__THREAD_NUM__ 5 in_300K.fluid fluidanimate.out' ,
+		'thread' : lambda core : core
 		}
 
 parsec3_param['freqmine'] = {
-		'dev'    : 'T10I4D100K_1k.dat 3 out.txt __THREAD_NUM__'  ,
-		'small'  : 'kosarak_250k.dat 220 out.txt __THREAD_NUM__'  ,
-		'medium' : 'kosarak_500k.dat 410 out.txt __THREAD_NUM__' ,
-		'large'  : 'kosarak_990k.dat 790 out.txt __THREAD_NUM__' ,
-		'more_core' : '0' # openMP limit threads to OMP_NUM_THREADS
+		'dev'    : 'T10I4D100K_1k.dat 3 freqmine.out __THREAD_NUM__'  ,
+		'small'  : 'kosarak_250k.dat 220 freqmine.out __THREAD_NUM__' ,
+		'medium' : 'kosarak_500k.dat 410 freqmine.out __THREAD_NUM__' ,
+		'large'  : 'kosarak_990k.dat 790 freqmine.out __THREAD_NUM__' ,
+		'thread' : lambda core : core
 		}
 
 parsec3_param['streamcluster'] = {
-		'dev'    : '3 10 3 16 16 10 none output.txt __THREAD_NUM__'            ,
-		'small'  : '10 20 32 4096 4096 1000 none output.txt __THREAD_NUM__'    ,
-		'medium' : '10 20 64 8192 8192 1000 none output.txt __THREAD_NUM__'    ,
-		'large'  : '10 20 128 16384 16384 1000 none output.txt __THREAD_NUM__' ,
-		'more_core' : '1'
+		'dev'    : '3 10 3 16 16 10 none streamcluster.out __THREAD_NUM__'            ,
+		'small'  : '10 20 32 4096 4096 1000 none streamcluster.out __THREAD_NUM__'    ,
+		'medium' : '10 20 64 8192 8192 1000 none streamcluster.out __THREAD_NUM__'    ,
+		'large'  : '10 20 128 16384 16384 1000 none streamcluster.out __THREAD_NUM__' ,
+		'thread' : lambda core : core
 		}
 
 parsec3_param['swaptions'] = {
@@ -143,15 +151,15 @@ parsec3_param['swaptions'] = {
 		'small'  : '-ns 16 -sm 5000 -nt __THREAD_NUM__'  ,
 		'medium' : '-ns 32 -sm 10000 -nt __THREAD_NUM__' ,
 		'large'  : '-ns 64 -sm 20000 -nt __THREAD_NUM__' ,
-		'more_core' : '1'
+		'thread' : lambda core : core
 		}
 
 parsec3_param['vips'] = { # additional arg for thread num
-		'dev'    : 'im_benchmark barbados_256x288.v output.v __THREAD_NUM__'      ,
-		'small'  : 'im_benchmark pomegranate_1600x1200.v output.v __THREAD_NUM__' ,
-		'medium' : 'im_benchmark vulture_2336x2336.v output.v __THREAD_NUM__'     ,
-		'large'  : 'im_benchmark bigben_2662x5500.v output.v __THREAD_NUM__'      ,
-		'more_core' : '2' # it needs two more threads for simdev (other not tested)
+		'dev'    : 'im_benchmark barbados_256x288.v vips.v __THREAD_NUM__'      ,
+		'small'  : 'im_benchmark pomegranate_1600x1200.v vips.v __THREAD_NUM__' ,
+		'medium' : 'im_benchmark vulture_2336x2336.v vips.v __THREAD_NUM__'     ,
+		'large'  : 'im_benchmark bigben_2662x5500.v vips.v __THREAD_NUM__'      ,
+		'thread' : lambda core : core - 2
 		}
 
 parsec3_param['x264'] = {
@@ -167,7 +175,7 @@ parsec3_param['x264'] = {
 		'large'  : ('--quiet --qp 20 --partitions b8x8,i4x4 --ref 5 --direct auto --b-pyramid ' +
 					'--weightb --mixed-refs --no-fast-pskip --me umh --subme 7 --analyse b8x8,i4x4 ' +
 					'--threads __THREAD_NUM__ -o eledream.264 eledream_640x360_128.y4m') ,
-		'more_core' : '1'
+		'thread' : lambda core : core - 1
 		}
 
 
@@ -251,7 +259,7 @@ def run_launcher(name, size, core_num, thread_num):
 ####
 
 # subroutine to run one benchmark in launcher
-def run_parsec3(name, size, thread_num):
+def run_parsec3(name, size, core_num, thread_num = 0):
 	# check we have param for benchmark
 	if name not in parsec3_param:
 		print(name + " doesn't have parameters!")
@@ -274,7 +282,8 @@ def run_parsec3(name, size, thread_num):
 	all_inputs = copy_here(input_dir)
 	
 	# change esesc.conf
-	core_num = thread_num + int(parsec3_param[name]['more_core'])
+	if thread_num == 0: # thread_num is at default, we use func in parsec_param to calculate it
+		thread_num = parsec3_param[name]['thread'](core_num)
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = name + ' ' + parsec3_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
@@ -305,9 +314,6 @@ def run_parsec3(name, size, thread_num):
 	return True
 ####
 
-size = 'dev'
-thread = 4
-
 '''
 # PARSEC 2.1 by launcher
 run_launcher('blackscholes', size, thread + 1, thread)
@@ -325,11 +331,18 @@ run_launcher('radix', size, thread, thread)
 #run_launcher('fmm', size, thread, thread)
 '''
 
-run_parsec3('blackscholes', size, thread)
-run_parsec3('bodytrack', size, thread)
-run_parsec3('fluidanimate', size, thread)
-run_parsec3('freqmine', size, thread)
-run_parsec3('swaptions', size, thread)
-run_parsec3('streamcluster', size, thread)
-run_parsec3('vips', size, thread)
-run_parsec3('x264', size, thread)
+'''
+run_parsec3('freqmine', size, core) # can't run..
+'''
+
+size = 'dev'
+core = 8
+
+run_parsec3('blackscholes', size, core)
+run_parsec3('bodytrack', size, core)
+run_parsec3('ferret', size, core)
+run_parsec3('fluidanimate', size, core)
+run_parsec3('swaptions', size, core)
+run_parsec3('streamcluster', size, core)
+run_parsec3('vips', size, core)
+run_parsec3('x264', size, core)

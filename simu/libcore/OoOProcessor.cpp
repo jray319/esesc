@@ -178,6 +178,8 @@ bool OoOProcessor::advance_clock(FlowID fid)
 
       // Recovering done
       EmulInterface *eint = TaskHandler::getEmul(flushing_fid);
+			// [sizhuo] FIXME: this is buggy... we sync head tail after flushing??
+			// we should do it when the replayed inst reaches ROB head
       eint->syncHeadTail( flushing_fid );
 
 			// [sizhuo] we are done with flushing for replay

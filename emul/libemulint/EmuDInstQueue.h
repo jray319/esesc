@@ -107,6 +107,7 @@ public:
 			// FIXME: we can do this because when speculation fails
 			// we first commit all good inst, then flush bad inst
 			// We may not still do so when we have more agressive rollback scheme
+			// FIXME: the place to call this func in OoOProcessor.cpp is wrong...
       return true;
     }
     if (insertpoint == tail)

@@ -7,8 +7,9 @@
 ##########################################################
 
 # Select simulated core type. Defined in simu.conf
-coreType   = 'tradCORE'
+#coreType   = 'tradCORE'
 #coreType   = 'scooreCORE'
+coreType   = 'wmmCORE'
 SMcoreType = 'gpuCORE'
 
 # [sizhuo] core count - 1, cpuMaxID will be substituted
