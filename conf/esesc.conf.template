@@ -134,12 +134,12 @@ runtime  = false
 type               = "inst"
 nInstSkip          = 1
 nInstSkipThreads   = 1
-maxnsTime         =  1e12 # required
-nInstMax           = 1e9
+maxnsTime         =  1e12 # required # [sizhuo] 1e12 seems to be max
+nInstMax           = 1e15 # [sizhuo] maximum # of inst simulated
 nInstRabbit       = 0
 nInstWarmup       = 0
 nInstDetail       = 0
-nInstTiming       = 2e9
+nInstTiming       = 2e15 # [sizhuo] inst for timing: larger than nInstMax
 PowPredictionHist = 5
 doPowPrediction   = 1
 
