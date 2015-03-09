@@ -119,7 +119,7 @@ parsec3_param['facesim'] = { # all input sizes are the same
 		'small'  : '-timing -threads __THREAD_NUM__' ,
 		'medium' : '-timing -threads __THREAD_NUM__' ,
 		'large'  : '-timing -threads __THREAD_NUM__' ,
-		'thread' : lambda core : core - (core - 4) / 2
+		'thread' : lambda core : core # exp shows that we can run 8 threads on 8 cores for simlarge input
 		}
 
 parsec3_param['ferret'] = {
@@ -127,7 +127,8 @@ parsec3_param['ferret'] = {
 		'small'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret_small.out'  ,
 		'medium' : 'corel lsh queries 10 20 __THREAD_NUM__ ferret_medium.out' ,
 		'large'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret_large.out'  ,
-		'thread' : lambda core : core / 4
+		'thread' : lambda core : 1 # exp shows that with 8 cores, running 2 threads will end up with insufficient cores
+		# but 1 thread only uses 7 cores
 		}
 
 parsec3_param['fluidanimate'] = {
@@ -143,7 +144,7 @@ parsec3_param['freqmine'] = { # freqmine.out will be removed in program
 		'small'  : 'kosarak_250k.dat 220 freqmine.out __THREAD_NUM__' ,
 		'medium' : 'kosarak_500k.dat 410 freqmine.out __THREAD_NUM__' ,
 		'large'  : 'kosarak_990k.dat 790 freqmine.out __THREAD_NUM__' ,
-		'thread' : lambda core : core
+		'thread' : lambda core : core # only 4 cores are really used on 8 cores
 		}
 
 parsec3_param['streamcluster'] = {
