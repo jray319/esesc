@@ -334,36 +334,3 @@ def run_parsec3(name, size, core_num, thread_num = 0, comment = ""):
 	return True
 ####
 
-'''
-# PARSEC 2.1 by launcher
-run_launcher('blackscholes', size, thread + 1, thread)
-run_launcher('bodytrack', size, thread + 1, thread)
-run_launcher('canneal', size, thread + 1, thread)
-#run_launcher('facesim', size, thread + 1, thread) # seems only single thread...
-#run_launcher('ferret', size, thread + 1, thread) # needs more flows...
-run_launcher('fluidanimate', size, thread + 1, thread)
-run_launcher('swaptions', size, thread + 1, thread)
-run_launcher('x264', size, thread + 1, thread)
-# SPLASH 2 by launcher
-run_launcher('ocean', size, thread, thread)
-run_launcher('fft', size, thread, thread)
-run_launcher('radix', size, thread, thread)
-#run_launcher('fmm', size, thread, thread)
-'''
-
-'''
-'''
-
-size = 'dev'
-core = 8
-
-run_parsec3('blackscholes', size, core)
-run_parsec3('bodytrack', size, core)
-run_parsec3('facesim', size, core)
-run_parsec3('ferret', size, core)
-run_parsec3('fluidanimate', size, core)
-run_parsec3('freqmine', size, core)
-run_parsec3('swaptions', size, core)
-run_parsec3('streamcluster', size, core)
-run_parsec3('vips', size, core)
-run_parsec3('x264', size, core)
