@@ -214,10 +214,8 @@ void DepWindow::executed(DInst *dinst) {
       const Cluster *dstCluster = dstReady->getCluster();
       I(dstCluster);
 
-	  // [sizhuo XXX] here seems to be a bug in modelling
-	  // we will wakeup an inst using our own wakeup port, not the port at dstCluster
-	  // later call of preSelect() may cause more bandwidth than expected on regfile
-	  // and we don't have wakeUpDelay here...
+			// [sizhuo] this function is called by a callback, and wake up port is unlimited
+			// XXX: the selectCB scheduled in preSelect will be called in the same cycle...
       Time_t when = wakeUpPort->nextSlot(dinst->getStatsFlag());
       if (dstCluster != srcCluster) {
         wrForwardBus.inc(dinst->getStatsFlag());
