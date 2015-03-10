@@ -948,7 +948,7 @@ void FUBranch::executed(DInst *dinst) {
   dinst->markExecuted();
   cluster->executed(dinst);
 
-  if (dinst->getFetch()) {
+  if (dinst->getFetch()) { // [sizhuo] branch resolves, resume fetch engine
     (dinst->getFetch())->unBlockFetch(dinst, dinst->getFetchTime());
     //IS(dinst->setFetch(0));
     IS(dinst->lockFetch(0));

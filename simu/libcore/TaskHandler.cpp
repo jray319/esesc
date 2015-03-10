@@ -426,11 +426,13 @@ void TaskHandler::boot()
       }
       if (needIncreaseClock)
         EventScheduler::advanceClock();
-    }else{
+    }else{ // [sizhuo] here is the main simulation loop
       for(size_t i =0;i<running_size;i++) {
+				// [sizhuo] simulate each core
         FlowID fid = running[i];
         allmaps[fid].simu->advance_clock(fid);
       }
+			// [sizhuo] increase global clock and then call callbacks
       EventScheduler::advanceClock();
     }
   }

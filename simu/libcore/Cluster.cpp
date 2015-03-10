@@ -39,6 +39,7 @@
 #include "GProcessor.h"
 #include "Port.h"
 #include "Resource.h"
+#include "WMMResource.h" // [sizhuo] include WMM resource
 #include "SescConf.h"
 
 #include "estl.h"
@@ -142,11 +143,20 @@ void Cluster::buildUnit(const char *clusterName
   
   bool noMemSpec = SescConf->getBool("cpusimu", "noMemSpec",gproc->getId());
 
+	// [sizhuo] check whether is WMM processor
+	bool wmmProc = SescConf->getBool("cpusimu", "wmmProc", gproc->getId());
+	// [sizhuo] WMM proc can't have SCOORE mem, but must have address speculation
+	GI(wmmProc, !scooreMemory && !noMemSpec); 
+
   // [sizhuo] create the instance of function unit to handle this uOP
   switch(type) {
     case iOpInvalid: 
     case iRALU:
-      r = new FURALU(cluster, gen, lat, scooreMemory, gproc->getId());
+			if(wmmProc) { // [sizhuo] add WMM RALU unit
+				r = new WMMFURALU(cluster, gen, lat, gproc->getId());
+			} else {
+				r = new FURALU(cluster, gen, lat, scooreMemory, gproc->getId());
+			}
       break ;
     case iAALU:
     case iCALU_FPMULT:
@@ -173,7 +183,16 @@ void Cluster::buildUnit(const char *clusterName
       break;
     case iLALU_LD: 
       {
-        if(scooreMemory){
+				if(wmmProc) { // [sizhuo] add WMM load unit
+          TimeDelta_t ldstdelay=SescConf->getInt("cpusimu", "stForwardDelay",gproc->getId());
+          SescConf->isInt("cpusimu", "maxLoads",gproc->getId());
+          SescConf->isBetween("cpusimu", "maxLoads", 0, 256*1024, gproc->getId());
+          int32_t maxLoads=SescConf->getInt("cpusimu", "maxLoads",gproc->getId());
+          if( maxLoads == 0 )
+            maxLoads = 256*1024;
+
+					r = new WMMFULoad(cluster, gen, ldstdelay, lat, ms, maxLoads, gproc->getId());
+				} else if(scooreMemory){
           r = new FUSCOORELoad(cluster, gen, gproc->getSS(), lat, ms, gproc->getId(), "scooreld");
         }else{
           TimeDelta_t ldstdelay=SescConf->getInt("cpusimu", "stForwardDelay",gproc->getId());
@@ -196,7 +215,15 @@ void Cluster::buildUnit(const char *clusterName
     case iSALU_ST:
     case iSALU_ADDR:
       {
-        if(scooreMemory){
+				if(wmmProc) { // [sizhuo] add WMM store unit
+          SescConf->isInt("cpusimu", "maxStores",gproc->getId());
+          SescConf->isBetween("cpusimu", "maxStores", 0, 256*1024, gproc->getId());
+          int32_t maxStores=SescConf->getInt("cpusimu", "maxStores",gproc->getId());
+          if( maxStores == 0 )
+            maxStores = 256*1024;
+
+					r = new WMMFUStore(cluster, gen, lat, ms, maxStores, gproc->getId());
+				} else if(scooreMemory){
           r = new FUSCOOREStore(cluster, gen, gproc->getSS(), lat, ms, gproc->getId(), "scoorest");
         }else{
           SescConf->isInt("cpusimu", "maxStores",gproc->getId());
@@ -244,7 +271,7 @@ Cluster *Cluster::create(const char *clusterName, GMemorySystem *ms, GProcessor 
     cluster = new RetiredCluster(clusterName, gproc);
   }else if( strcasecmp(recycleAt,"executing") == 0) {
     cluster = new ExecutingCluster(clusterName, gproc);
-  }else{
+  }else{ // [sizhuo] I prefer this type of cluster
     I( strcasecmp(recycleAt,"execute") == 0);
     cluster = new ExecutedCluster(clusterName, gproc);
   }
@@ -314,9 +341,9 @@ void ExecutingCluster::executed(DInst *dinst) {
   dinst->clearRATEntry(); 
 }
 
-bool ExecutingCluster::retire(DInst *dinst, bool reply) {
+bool ExecutingCluster::retire(DInst *dinst, bool replay) {
 
-  bool done = dinst->getClusterResource()->retire(dinst, reply);
+  bool done = dinst->getClusterResource()->retire(dinst, replay);
 
   if( !done )
     return false;
@@ -345,7 +372,8 @@ void ExecutedCluster::executed(DInst *dinst) {
 
   // [sizhuo] dinst finishes execution, wake up inst depdning on dinst
   window.executed(dinst);
-
+	// [sizhuo] later inst should not depend on dinst any more, 
+	// otherwise they may never wake up --> deadlock
   dinst->clearRATEntry(); 
   delEntry(); // [sizhuo] release entry in the issue window in this cluster
 }
@@ -353,9 +381,9 @@ void ExecutedCluster::executed(DInst *dinst) {
 // [sizhuo] although dinst is removed from issue window after execution
 // its info may be still maintained in function unit, e.g. LSQ, branch,
 // in order to detect speculation failure or forward data, etc
-bool ExecutedCluster::retire(DInst *dinst, bool reply) {
+bool ExecutedCluster::retire(DInst *dinst, bool replay) {
 
-  bool done  = dinst->getClusterResource()->retire(dinst, reply);
+  bool done  = dinst->getClusterResource()->retire(dinst, replay);
   if( !done )
     return false;
   dinst->clearRATEntry(); 
@@ -382,9 +410,9 @@ void RetiredCluster::executed(DInst *dinst) {
   window.executed(dinst);
 }
 
-bool RetiredCluster::retire(DInst *dinst, bool reply) {
+bool RetiredCluster::retire(DInst *dinst, bool replay) {
 
-  bool done = dinst->getClusterResource()->retire(dinst, reply);
+  bool done = dinst->getClusterResource()->retire(dinst, replay);
   if( !done )
     return false;
   dinst->clearRATEntry(); 

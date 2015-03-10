@@ -352,7 +352,7 @@ StallCause OoOProcessor::addInst(DInst *dinst)
     // retirement (Memory consistency. coherence issues)
 		//
 		// [sizhuo] here is some black magic I can't understand...
-		// why src2 can be ready ...
+		// when we add the dependency of src2??
     if( RAT[inst->getSrc1()] )
       RAT[inst->getSrc1()]->addSrc1(dinst);
   }else{

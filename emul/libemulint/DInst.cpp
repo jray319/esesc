@@ -87,7 +87,7 @@ void DInst::dump(const char *str) {
 }
 
 void DInst::clearRATEntry() {
-  I(RAT1Entry);
+  I(RAT1Entry); // [sizhuo] RAT pointer can't be NULL
   if ( (*RAT1Entry) == this )
     *RAT1Entry = 0;
   if ( (*RAT2Entry) == this )

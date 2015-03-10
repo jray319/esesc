@@ -156,7 +156,7 @@ parsec3_param['streamcluster'] = {
 		}
 
 parsec3_param['swaptions'] = {
-		'dev'    : '-ns 8 -sm 50 -nt __THREAD_NUM__'     , # change 3 to 8, enable 4 threads
+		'dev'    : '-ns 16 -sm 50 -nt __THREAD_NUM__'    , # change 3 to 16, enable 8 threads
 		'small'  : '-ns 16 -sm 5000 -nt __THREAD_NUM__'  ,
 		'medium' : '-ns 32 -sm 10000 -nt __THREAD_NUM__' ,
 		'large'  : '-ns 64 -sm 20000 -nt __THREAD_NUM__' ,

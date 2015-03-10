@@ -997,7 +997,7 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
 							uint32_t regName = insn & 0xF;
 							uint32_t magicInst = (regName << 24) | (regName << 16) | 0x0ea40L | regName;
 							if(magicInst == insn) {
-								MSG("Thum32Crack.cpp expand magic inst %lx at PC = %lx", rinst->getInsn(), rinst->getPC());
+								MSG("Thum32Crack.cpp expand magic inst %x at PC = %lx", rinst->getInsn(), rinst->getPC());
 							}
 							/////
               CrackInst::setup(rinst, iAALU, OP_S64_OR, RN, RM, 0, RD, Sbit, 0, 0);

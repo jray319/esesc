@@ -105,6 +105,7 @@ public:
   // 4th) When the instruction is retired from the ROB retire is called
 
   // [sizhuo] whether dinst can be issued into this function unit
+	// XXX: this function has side effect, if returns NoStall, must call addInst in cluster
   virtual StallCause canIssue(DInst  *dinst) =    0;
   // [sizhuo] start to execute dinst
   virtual void       executing(DInst *dinst) =    0;
