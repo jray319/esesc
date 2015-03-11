@@ -61,14 +61,14 @@ template<class State, class Addr_t>
   static const int32_t STR_BUF_SIZE=1024;
  
   protected:
-  const uint32_t  size;
-  const uint32_t  lineSize;
+  const uint32_t  size; // [sizhuo] cache size in byte
+  const uint32_t  lineSize; // [sizhuo] cache line size in byte
   const uint32_t  addrUnit; //Addressable unit: for most caches = 1 byte
   const uint32_t  assoc;
   const uint32_t  log2Assoc;
-  const uint64_t  log2AddrLs;
+  const uint64_t  log2AddrLs; // [sizhuo] byte offset within cache line
   const uint64_t  maskAssoc;
-  const uint32_t  sets;
+  const uint32_t  sets; // [sizhuo] number of cache sets
   const uint32_t  maskSets;
   const uint32_t  log2Sets;
   const uint32_t  numLines;
@@ -241,6 +241,7 @@ template<class State, class Addr_t>
   Addr_t calcAddr4Tag(Addr_t tag)      const { return (tag << log2AddrLs);               }
 };
 
+// [sizhuo] we generally use this one for normal cache in cofig
 template<class State, class Addr_t>
 class CacheAssoc : public CacheGeneric<State, Addr_t> {
   using CacheGeneric<State, Addr_t>::numLines;
@@ -452,6 +453,8 @@ public:
  }
 };
 
+// [sizhuo] generic cache line: only a tag
+// tag == 0 means an invalid cache line
 template<class Addr_t>
 class StateGeneric {
 private:

@@ -49,7 +49,10 @@
 
 class MemRequest {
 private:
+	// [sizhuo] go to next mem obj
   void setNextHop(MemObj *m);
+
+	// [sizhuo] let current mem obj to start req/resp
   void startReq();
   void startReqAck();
   void startSetState();
@@ -67,11 +70,11 @@ private:
 
   /* MsgType declarations {{{1 */
   enum MsgType {
-		mt_req,
-		mt_reqAck,
-		mt_setState,
-		mt_setStateAck,
-		mt_disp
+		mt_req, // [sizhuo] upgrade req
+		mt_reqAck, // [sizhuo] upgrade resp
+		mt_setState, // [sizhuo] downgrade req
+		mt_setStateAck, // [sizhuo] downgrade resp
+		mt_disp // [sizhuo] eviction downgrade resp
 	};
 
 
@@ -96,9 +99,12 @@ private:
   MsgType      mt;
   MsgAction    ma;
 
-  MemObj       *creatorObj;
+  MemObj       *creatorObj; // [sizhuo] mem obj to create this msg
   MemObj       *homeMemObj; // Starting home node
-  MemObj       *currMemObj;
+  MemObj       *currMemObj; // [sizhuo] current mem obj
+
+	// [sizhuo] backup of mem obj & action when we adjust req
+	// so we can revert back later
   MemObj       *firstCache;
   MsgAction     firstCache_ma;
 
@@ -108,9 +114,13 @@ private:
   Time_t        lastCallTime;
 #endif
 
+	// [sizhuo] callback func to be called when this req finishes
   CallbackBase *cb;
 
+	// [sizhuo] I need how many downgrade resp in order to proceed
   int16_t       pendingSetStateAck;
+
+	// [sizhuo] the original req that causes this downgrade req or resp
   MemRequest   *setStateAckOrig;
 
   Time_t        startClock;
@@ -125,35 +135,39 @@ private:
   MemRequest();
   virtual ~MemRequest();
 
+	// [sizhuo] these functions are not implemented
   void memReq();    // E.g: L1 -> L2
   void memReqAck(); // E.gL L2 -> L1 ack
-
   void memSetState();    // E.g: L2 -> L1
   void memSetStateAck(); // E.gL L1 -> L2 ack
-
   void memDisp();  // E.g: L1 -> L2
+	////////
 
 
 	friend class MRouter; // only mrouter can call the req directly
+
+	// [sizhuo] schedule redo some req/resp
   void redoReq(TimeDelta_t       lat)  { redoReqCB.schedule(lat); }
   void redoReqAck(TimeDelta_t    lat)  { redoReqAckCB.schedule(lat); }
   void redoSetState(TimeDelta_t  lat)  { redoSetStateCB.schedule(lat);          }
   void redoSetStateAck(TimeDelta_t   lat)  { redoSetStateAckCB.schedule(lat);          }
   void redoDisp(TimeDelta_t   lat)  { redoDispCB.schedule(lat); }
 
+	// [sizhuo] start some req/resp to mem obj m
   void startReq(MemObj *m, TimeDelta_t       lat)    { setNextHop(m); startReqCB.schedule(lat); }
   void startReqAck(MemObj *m, TimeDelta_t    lat)    { setNextHop(m); startReqAckCB.schedule(lat); }
   void startSetState(MemObj *m, TimeDelta_t  lat)    { setNextHop(m); startSetStateCB.schedule(lat);          }
   void startSetStateAck(MemObj *m, TimeDelta_t   lat){ setNextHop(m); startSetStateAckCB.schedule(lat);          }
   void startDisp(MemObj *m, TimeDelta_t   lat)       { setNextHop(m); startDispCB.schedule(lat); }
 
+	// [sizhuo] let current mem obj to handle req/resp
   void redoReq();
   void redoReqAck();
   void redoSetState();
   void redoSetStateAck();
   void redoDisp();
 
-
+	// [sizhuo] downgrade req is handled, inform setStateAckOrig that ack comes
   void setStateAckDone(TimeDelta_t lat);
 
 #ifdef DEBUG_CALLPATH
@@ -246,6 +260,7 @@ protected:
     ma         = firstCache_ma;
   }
 
+	// [sizhuo] convert current req to corresponding resp
   void convert2ReqAck(MsgAction _ma) {
 		I(mt == mt_req);
 		ma = _ma;
@@ -296,6 +311,7 @@ protected:
   bool isMMU() const {return ma == ma_MMU; }
   bool isVPCWriteUpdate() const {return ma == ma_VPCWU; }
 
+	// [sizhuo] do ack 
   void ack() {
     if(cb)
       cb->call();

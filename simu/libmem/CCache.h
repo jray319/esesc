@@ -52,6 +52,7 @@ class MemRequest;
 
 class CCache: public MemObj {
 protected:
+	// [sizhuo] state of one cache line: tag + directory
   class CState : public StateGeneric<AddrType> {
   private:
     enum StateType {

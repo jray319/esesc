@@ -8,7 +8,7 @@
 #include "FetchEngine.h"
 #include "GMemorySystem.h"
 #include "GProcessor.h"
-#include "OoOProcessor.h"
+#include "WMMProcessor.h"
 #include "MemRequest.h"
 #include "Port.h"
 #include "LSQ.h"
@@ -108,8 +108,25 @@ void WMMFULoad::executing(DInst *dinst) {
 	cluster->executing(dinst); // [sizhuo] just change wake up time
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
-	// [sizhuo] mark performed 1 cycle later
-	performedCB::scheduleAbs(when+1, this, dinst);
+	// [sizhuo] schedule call back to access cache
+	cacheDispatchedCB::scheduleAbs(when, this, dinst);
+}
+
+void WMMFULoad::cacheDispatched(DInst *dinst) {
+	if(DL1->isBusy(dinst->getAddr())) {
+		// [sizhuo] cache is busy, schedule again
+    Time_t when = gen->nextSlot(dinst->getStatsFlag());
+		// [sizhuo] to stop infinite loop
+		if(when == globalClock) {
+			when++;
+		}
+		//MSG("Core %d: clock %llx, load cache dispatch fail, try again at %llx", gproc->getId(), globalClock, when);
+		// [sizhuo] schedule call back to access cache again
+		cacheDispatchedCB::scheduleAbs(when, this, dinst);
+		return;
+	}
+	// [sizhuo] cache available, send read req
+  MemRequest::sendReqRead(DL1, dinst, dinst->getAddr(), performedCB::create(this,dinst));
 }
 
 void WMMFULoad::performed(DInst *dinst) {
@@ -162,14 +179,41 @@ void WMMFUStore::executing(DInst *dinst) {
 	if(dinst->getInst()->isStoreAddress()) {
 		executed(dinst);
 	} else {
-		// [sizhuo] mark performed 1 cycle later
-		performedCB::scheduleAbs(when+1, this, dinst);
+		// [sizhuo] schedule call back to access cache
+		cacheDispatchedCB::scheduleAbs(when, this, dinst);
 	}
+}
+
+void WMMFUStore::cacheDispatched(DInst *dinst) {
+	if(DL1->isBusy(dinst->getAddr())) {
+		// [sizhuo] cache is busy, schedule again
+    Time_t when = gen->nextSlot(dinst->getStatsFlag());
+		// [sizhuo] to stop infinite loop
+		if(when == globalClock) {
+			when++;
+		}
+		//MSG("Core %d: clock %llx, store cache dispatch fail, try again at %llx", gproc->getId(), globalClock, when);
+		// [sizhuo] schedule call back to access cache again
+		cacheDispatchedCB::scheduleAbs(when, this, dinst);
+		return;
+	}
+	// [sizhuo] cache available, send write req
+	char dumpStr[100];
+	sprintf(dumpStr, "Core %d issue store", gproc->getId());
+	dinst->dump(dumpStr);
+  MemRequest::sendReqWrite(DL1, dinst, dinst->getAddr(), executedCB::create(this,dinst));
+  //executedCB::scheduleAbs(gen->nextSlot(dinst->getStatsFlag())+lat, this, dinst);
 }
 
 void WMMFUStore::executed(DInst *dinst) {
 	// TODO: wake up inst with addr dependency on dinst via store set
 	//
+	// [sizhuo] debug
+	char dumpStr[100];
+	sprintf(dumpStr, "Core %d finish store", gproc->getId());
+	dinst->dump(dumpStr);
+	/////
+	
   dinst->markExecuted();
 	// [sizhuo] wake up inst with data dependency on dinst
   cluster->executed(dinst);

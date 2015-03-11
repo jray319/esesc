@@ -56,10 +56,12 @@ protected:
   const char *name;
   const uint16_t id;
   static uint16_t id_counter;
-  int16_t coreid;
+	// [sizhuo] core id it belongs to, only valid for L1?? otherwise -1
+	// XXX: what about private L2? TLB?
+  int16_t coreid; 
 
-  void addLowerLevel(MemObj *obj);
-	void addUpperLevel(MemObj *obj);
+  void addLowerLevel(MemObj *obj); // [sizhuo] add lower mem obj (closer to mem)
+	void addUpperLevel(MemObj *obj); // [sizhuo] add upper mem obj (closer to proc)
 
 public:
   MemObj(const char *section, const char *sName);
@@ -82,6 +84,7 @@ public:
 	// [sizhuo] down: closer to memory, up: closer to core
 
   // DOWN
+	// [sizhuo] handle msg from upper level
 	
 	// [sizhuo] handle upgrade req from upper level
   virtual void req(MemRequest *req) = 0;
@@ -90,20 +93,24 @@ public:
 	// [sizhuo] handle evicted cache line from upper level
   virtual void disp(MemRequest *req) = 0;
 
+	// [sizhuo] these three functions do real work
   virtual void doReq(MemRequest *req) = 0;
   virtual void doSetStateAck(MemRequest *req) = 0;
   virtual void doDisp(MemRequest *req) = 0;
 
   // UP
+	// [sizhuo] handle msg from lower level
 	
 	// [sizhuo] handle upgrade resp from lower level
   virtual void reqAck(MemRequest *req) = 0;
 	// [sizhuo] handle downgrade req from lower level
   virtual void setState(MemRequest *req) = 0;
 
+	// [sizhuo] these two functions do real work
   virtual void doReqAck(MemRequest *req) = 0;
   virtual void doSetState(MemRequest *req) = 0;
 
+	// [sizhuo] mem obj is currently handling addr
 	virtual bool isBusy(AddrType addr) const = 0;
   
   // Print stats

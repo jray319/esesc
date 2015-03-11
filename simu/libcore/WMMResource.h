@@ -38,6 +38,10 @@ private:
   const TimeDelta_t LSDelay; // [sizhuo] store to load forwarding delay
   int32_t freeEntries;
 
+protected:
+  void cacheDispatched(DInst *dinst);
+  typedef CallbackMember1<WMMFULoad, DInst *, &WMMFULoad::cacheDispatched> cacheDispatchedCB;
+
 public:
 	WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t lsdelay, TimeDelta_t l, GMemorySystem *ms, int32_t size, int32_t id);
 
@@ -52,6 +56,10 @@ public:
 class WMMFUStore : public WMMLSResource {
 private:
   int32_t freeEntries;
+
+protected:
+  void cacheDispatched(DInst *dinst);
+  typedef CallbackMember1<WMMFUStore, DInst *, &WMMFUStore::cacheDispatched> cacheDispatchedCB;
 
 public:
 	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, GMemorySystem *ms, int32_t size, int32_t id);

@@ -77,6 +77,7 @@ enum MsgAction {
 
 // }}}
 
+// [sizhuo] MRouter is a (logical) router for one mem obj
 class MRouter {
 private:
 protected:
@@ -101,29 +102,45 @@ public:
   MRouter(MemObj *obj);
   virtual ~MRouter();
 
+	// [sizhuo] find creator of mreq among up_node[], return the index in up_node[] array
+	// if not found, return -1 (i.e. mreq is created by node not in up_node
   int16_t getCreatorPort(const MemRequest *mreq) const;
 
   void fillRouteTables();
   void addUpNode(MemObj *upm);
   void addDownNode(MemObj *upm);
 
+	// [sizhuo] schedule upgrade req to lower level
+	// Pos version req to down_node[pos], other version req to down_node[0]
   void scheduleReqPos(     uint32_t pos, MemRequest *mreq    , TimeDelta_t lat=0);
   void scheduleReq(                      MemRequest *mreq    , TimeDelta_t lat=0);
 
+	// [sizhuo] schedule upgrade resp to upper level
+	// Pos version resp to up_node[pos]
+	// other versions find the home node of original req to resp
   void scheduleReqAck(                   MemRequest *mreq    , TimeDelta_t lat=0);
   void scheduleReqAckAbs(                MemRequest *mreq    , Time_t w);
   void scheduleReqAckPos(  uint32_t pos, MemRequest *mreq    , TimeDelta_t lat=0);
 
+	// [sizhuo] schedule downgrade req to upper_node[pos]
   void scheduleSetStatePos(uint32_t pos, MemRequest *mreq    , TimeDelta_t lat=0);
+	// [sizhuo] schedule downgrade resp to lower level
+	// pos version resp to down_node[pos], other version to down_node[0]
   void scheduleSetStateAck(              MemRequest *mreq    , TimeDelta_t lat=0);
   void scheduleSetStateAckPos(uint32_t pos, MemRequest *mreq    , TimeDelta_t lat=0);
 
+	// [sizhuo] schedule eviction (voluntary downgrade resp) to lower level
+	// pos version resp to down_node[pos], other version to down_node[0]
   void scheduleDispPos(    uint32_t pos, MemRequest *mreq    , TimeDelta_t lat=0);
   void scheduleDisp(                     MemRequest *mreq    , TimeDelta_t lat=0);
+	// [sizhuo] starts a new eviction resp to down_node[0]
 	void sendDisp(AddrType addr, bool doStats, TimeDelta_t lat=0);
 
+	// [sizhuo] starts (downgrade) req to all upper nodes other than home node of mreq
   int32_t sendSetStateOthers(                 MemRequest *mreq, MsgAction ma, TimeDelta_t lat=0);
+	// [sizhuo] starts (downgrade) req to upper_node[pos]
   int32_t sendSetStateOthersPos(uint32_t pos, MemRequest *mreq, MsgAction ma, TimeDelta_t lat=0);
+	// [sizhuo] starts (downgrade) req to all upper nodes
   int32_t sendSetStateAll(MemRequest *mreq, MsgAction ma, TimeDelta_t lat=0);
 
   TimeDelta_t ffread(AddrType addr);
@@ -131,6 +148,7 @@ public:
   TimeDelta_t ffreadPos(uint32_t pos, AddrType addr);
   TimeDelta_t ffwritePos(uint32_t pos, AddrType addr);
 
+	// [sizhuo] is down_node[pos] busy with addr now
   bool isBusyPos(uint32_t pos, AddrType addr) const;
 
   bool isTopLevel() const { return up_node.empty(); }

@@ -247,12 +247,16 @@ void WMMProcessor::retire_lock_check()
   }
 
   if (last_state == state && active) {
-    I(0);
-    MSG("WARNING: Lock detected in P(%d)", getId());
+    //I(0); [sizhuo] we have error msg
+    //MSG("WARNING: Lock detected in P(%d)", getId());
     if (!rROB.empty()) {
+			rROB.top()->dump("rROB top");
 //      replay(rROB.top());
     }
     if (!ROB.empty()) {
+			char str[100];
+			sprintf(str, "Lock in P(%d), ROB top", getId());
+			ROB.top()->dump(str);
 //      ROB.top()->markExecuted();
 //      replay(ROB.top());
     }

@@ -104,6 +104,7 @@ void MemRequest::setStateAckDone(TimeDelta_t lat)
   I(orig->pendingSetStateAck>0);
   orig->pendingSetStateAck--;
   if (orig->pendingSetStateAck<=0) {
+		// [sizhuo] orig req has done all set state, can proceed
     if(orig->mt == mt_req) {
       orig->redoReqCB.schedule(lat);
     }else if (orig->mt == mt_reqAck) {
