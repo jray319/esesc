@@ -147,7 +147,7 @@ void DepWindow::preSelect(DInst *dinst) {
   IS(dinst->setWakeUpTime(0));
   dinst->markIssued();
   I(dinst->getCluster());
-  //dinst->clearRATEntry(); 
+  //dinst->clearRATEntry(); // [sizhuo] we should not touch rename table
 
   // [sizhuo] schedule the resource of dinst to call select()
   // actually it finally let this DepWindow to call select()

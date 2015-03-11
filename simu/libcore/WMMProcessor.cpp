@@ -12,12 +12,14 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
   , IFID(i, this, gm)
   , pipeQ(i)
 	, lsq(i)
+  , retire_lock_checkCB(this)
   , clusterManager(gm, this)
   , avgFetchWidth("P(%d)_avgFetchWidth",i)
 {
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
 	spaceInInstQueue = InstQueueSize;
 	busy = false;
+	lockCheckEnabled = false;
 }
 
 WMMProcessor::~WMMProcessor() {}
@@ -45,8 +47,8 @@ void WMMProcessor::fetch(FlowID fid) {
 }
 
 StallCause WMMProcessor::addInst(DInst *dinst) {
-	// [sizhuo] blocking atomic core, only accept new inst when ROB & rROB are empty
-	if(!ROB.empty() || !rROB.empty()) {
+	// [sizhuo] rob size limit
+	if((ROB.size() + rROB.size()) >= MaxROBSize) {
 		return SmallROBStall;
 	}
 
@@ -63,22 +65,35 @@ StallCause WMMProcessor::addInst(DInst *dinst) {
   if (sc != NoStall)
     return sc;
 	// [sizhuo] now canIssue returns NoStall, this has incur side effects in func unit
-	// we issue this inst to both ROB & cluster
+	// we must issue this inst to both ROB & cluster
 
   const Instruction *inst = dinst->getInst();
 
 	// [sizhuo] stats of inst type
   nInst[inst->getOpcode()]->inc(dinst->getStatsFlag());
 
-	// [sizhuo] issue to ROB & cluster, no need to track dependency
+	// [sizhuo] issue to ROB & cluster
 	ROB.push(dinst);
 
+	// [sizhuo] dependency of src regs of dinst
+	I(RAT[0] == 0); // [sizhuo] read R0 should not cause dependency
+	if( !dinst->isSrc2Ready() ) {
+		dinst->dump("WARNING: rename stage src2 dependency already set");
+	}
+	if( RAT[inst->getSrc1()] ) {
+		RAT[inst->getSrc1()]->addSrc1(dinst);
+	}
+	if( RAT[inst->getSrc2()] ) {
+		RAT[inst->getSrc2()]->addSrc2(dinst);
+	}
+  dinst->setRAT1Entry(&RAT[inst->getDst1()]);
+  dinst->setRAT2Entry(&RAT[inst->getDst2()]);
+
+	// [sizhuo] issue to cluster
   I(dinst->getCluster() != 0); // Resource::schedule must set the resource field
   dinst->getCluster()->addInst(dinst);
 
 	// [sizhuo] write rename table
-  dinst->setRAT1Entry(&RAT[inst->getDst1()]);
-  dinst->setRAT2Entry(&RAT[inst->getDst2()]);
   RAT[inst->getDst1()] = dinst;
   RAT[inst->getDst2()] = dinst;
 
@@ -140,6 +155,12 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 	// fetch
   fetch(fid);
 	if(!busy) return false;
+
+	// [sizhuo] schedule deadlock check
+	if(!lockCheckEnabled) {
+		lockCheckEnabled = true;
+		retire_lock_checkCB.scheduleAbs(globalClock + 100000);
+	}
 
 	// [sizhuo] stats
 	bool getStatsFlag = false; // [sizhuo] stats flag
@@ -204,4 +225,40 @@ bool WMMProcessor::isReplayRecovering() {
 
 Time_t WMMProcessor::getReplayID() {
 	return 0;
+}
+
+void WMMProcessor::retire_lock_check()
+  // Detect simulator locks and flush the pipeline 
+{
+  RetireState state;
+  if (active) {
+    state.committed = nCommitted.getDouble();
+  }else{
+    state.committed = 0;
+  }
+  if (!rROB.empty()) {
+    state.r_dinst    = rROB.top();
+    state.r_dinst_ID = rROB.top()->getID();
+  }
+  
+  if (!ROB.empty()) {
+    state.dinst    = ROB.top();
+    state.dinst_ID = ROB.top()->getID();
+  }
+
+  if (last_state == state && active) {
+    I(0);
+    MSG("WARNING: Lock detected in P(%d)", getId());
+    if (!rROB.empty()) {
+//      replay(rROB.top());
+    }
+    if (!ROB.empty()) {
+//      ROB.top()->markExecuted();
+//      replay(ROB.top());
+    }
+  }
+
+  last_state = state;
+
+  retire_lock_checkCB.scheduleAbs(globalClock + 100000);
 }
