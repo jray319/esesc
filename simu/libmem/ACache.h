@@ -18,6 +18,9 @@ protected:
 	const TimeDelta_t goUpDelay;
 	const TimeDelta_t goDownDelay;
 
+	const bool isL1;
+	const bool isLLC;
+
 public:
 	ACache(MemorySystem *gms, const char *descr_section, const char *name = NULL);
 	virtual ~ACache();

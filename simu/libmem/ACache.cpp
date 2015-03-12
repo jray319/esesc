@@ -17,6 +17,8 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 	, dataDelay (SescConf->getInt(section,"dataDelay"))
 	, goUpDelay (SescConf->getInt(section,"goUpDelay"))
 	, goDownDelay (SescConf->getInt(section,"goDownDelay"))
+	, isL1 (SescConf->getBool(section, "isL1"))
+	, isLLC (SescConf->getBool(section, "isLLC"))
 {
 	// [sizhuo] check delay
   SescConf->isGT(section, "tagDelay" ,0);
@@ -24,12 +26,16 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
   SescConf->isGT(section, "goUpDelay",0);
   SescConf->isGT(section, "goDownDelay",0);
 
-	// [sizhuo] add lower level component
+	// [sizhuo] check LLC & L1 params
+	SescConf->isBool(section, "isLLC");
+	SescConf->isBool(section, "isL1");
+
+	// [sizhuo] create & add lower level component
   MemObj *lower_level = gms->declareMemoryObj(section, "lowerLevel");
   if(lower_level) {
     addLowerLevel(lower_level);
 	} else {
-		// [sizhuo] cache must have lower level
+		// [sizhuo] cache must have a valid lower level
 		SescConf->notCorrect();
 	}
 }
@@ -77,19 +83,24 @@ void ACache::disp(MemRequest *mreq)
 }
 
 void ACache::doReq(MemRequest *mreq) {
-	//mreq->dump("doReq");
+	ID(mreq->dump("doReq"));
 	// [sizhuo] forward req to lower level, wait ReqAck and complete req at doReqAck
 	router->scheduleReq(mreq, tagDelay + goDownDelay);
 }
 
 void ACache::doReqAck(MemRequest *mreq) {
-	//mreq->dump("doReqAck");
+	ID(mreq->dump("doReqAck"));
 
 	if(mreq->isHomeNode()) {
 		// [sizhuo] this is home node, end the msg
+		I(isL1); // [sizhuo] must be L1$
 		mreq->ack(dataDelay + goUpDelay);
 		return;
 	} 
+
+	// [sizhuo] this cache cannot be L1$
+	I(!isL1);
+	if(isL1) MSG("ERROR: req ack reaches L1$ but not home node");
 
 	if(mreq->isRetrying()) {
 		// [sizhuo] second time handling req ack
@@ -108,6 +119,7 @@ void ACache::doReqAck(MemRequest *mreq) {
 		mreq->setRetrying();
 	} else {
 		I(!mreq->hasPendingSetStateAck());
+		I(!mreq->isRetrying());
 		// [sizhuo] no broadcast is made, just resp
 		router->scheduleReqAck(mreq, goUpDelay);
 	}
@@ -115,7 +127,7 @@ void ACache::doReqAck(MemRequest *mreq) {
 
 void ACache::doSetState(MemRequest *mreq) {
   I(!mreq->isHomeNode()); // [sizhuo] home node should be at lower level
-	//mreq->dump("doSetState");
+	ID(mreq->dump("doSetState"));
 	
 	if(mreq->isRetrying()) {
 		// [sizhuo] second time handling set state req
@@ -135,6 +147,7 @@ void ACache::doSetState(MemRequest *mreq) {
 		mreq->setRetrying();
 	} else {
 		I(!mreq->hasPendingSetStateAck());
+		I(!mreq->isRetrying());
 		// [sizhuo] no broadcast is made, just resp
 		mreq->convert2SetStateAck(ma_setInvalid);
 		router->scheduleSetStateAck(mreq, goDownDelay);
@@ -144,7 +157,7 @@ void ACache::doSetState(MemRequest *mreq) {
 void ACache::doSetStateAck(MemRequest *mreq) {
 	I(mreq->isHomeNode()); // [sizhuo] we must be at home node now
 	GMSG(!mreq->isHomeNode(), "ERROR: SetStateAck arrives non-home node!");
-	//mreq->dump("doSetStateAck");
+	ID(mreq->dump("doSetStateAck"));
 
 	// [sizhuo] we can end this msg, setStateAckDone() may be called
 	// depending on the type original msg that generates this ack
@@ -160,10 +173,12 @@ void ACache::doSetStateAck(MemRequest *mreq) {
 	} else {
 		I(0);
 		MSG("Unknown set state orig msg");
+		mreq->ack();
 	}
 }
 
 void ACache::doDisp(MemRequest *mreq) {
+	ID(mreq->dump("doDisp"));
 	mreq->ack();
 }
 

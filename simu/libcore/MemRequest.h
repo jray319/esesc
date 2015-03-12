@@ -375,13 +375,25 @@ protected:
   void addPendingSetStateAck(MemRequest *mreq);
   bool hasPendingSetStateAck() const { return pendingSetStateAck>0; }
 
+	/*****************************************************************/
 	// [sizhuo] here are functions added
 	const MemRequest *getSetStateAckOrig() const { return setStateAckOrig; }
+private:
+	bool debug;
+public:
+#ifdef DEBUG
+	void setDebug() { debug = true; }
+	void clearDebug() { debug = false; }
+	bool isDebug() { return debug; }
+#endif
 	void dump(const char* str) const {
 #ifdef DEBUG
-		MSG("%s: mem msg %lu, home %s, creator %s, current %s\n", str, id, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName());
+		if(debug) {
+			MSG("%s: mem msg %lu, home %s, creator %s, current %s\n", str, id, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName());
+		}
 #endif
 	}
+	/*****************************************************************/
 };
 
 class MemRequestHashFunc {

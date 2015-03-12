@@ -152,6 +152,8 @@ void GMemorySystem::buildMemorySystem() {
   const char *def_block = SescConf->getCharPtr("", "cpusimu", coreId);
 
   IL1 = declareMemoryObj(def_block, "IL1");
+	// [sizhuo] we wll fail assertion when fill route table if we set IL1 to NICE cache
+	// because NICE cache doesn't add lower level devices
   IL1->getRouter()->fillRouteTables();
 	IL1->setCoreID(coreId);
 

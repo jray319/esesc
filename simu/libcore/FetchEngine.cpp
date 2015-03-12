@@ -113,6 +113,8 @@ FetchEngine::FetchEngine(FlowID id
   if (enableICache) {
     // If icache is enabled, do not overchage delay (go to memory cache)
     IL1HitDelay = 0;
+		// [sizhuo] show config msg
+		MSG("Core %d: I cache enabled", id);
   }else{
     const char *iL1Section = SescConf->getCharPtr("cpusimu","IL1", id);
     if (iL1Section) {
@@ -120,13 +122,17 @@ FetchEngine::FetchEngine(FlowID id
       char *end = strchr(sec, ' ');
       if (end)
         *end=0; // Get only the first word
+
       // Must be the i-cache
-      SescConf->isInList(sec,"deviceType","icache");
+			// [sizhuo] I$ can be nicecache because we are not simulating it 
+      SescConf->isInList(sec,"deviceType","icache", "nicecache");
 
       IL1HitDelay = SescConf->getInt(sec,"hitDelay");
     }else{
       IL1HitDelay = 1; // 1 cycle if impossible to find the information required
     }
+		// [sizhuo] show config msg
+		MSG("Core %d: I cache disabled, hit delay %d", id, IL1HitDelay);
   }
 }
 

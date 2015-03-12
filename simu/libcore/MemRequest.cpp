@@ -62,6 +62,10 @@ MemRequest::MemRequest()
   ,startSetStateCB(this)
   ,startSetStateAckCB(this)
   ,startDispCB(this)
+
+#ifdef DEBUG // [sizhuo] add debug bit
+	, debug(false)
+#endif
 {
 }
 /*  */
@@ -142,6 +146,8 @@ MemRequest *MemRequest::create(MemObj *mobj, AddrType addr, bool doStats, Callba
 #ifdef DEBUG
   static uint64_t current_id = 0;
   r->id          = current_id++;
+	// [sizhuo] auto set debug bit for first msg, otherwise reset debug bit
+	r->debug = r->id == 0;
 #endif
 #ifdef DEBUG_CALLPATH
   r->prevMemObj  = 0;

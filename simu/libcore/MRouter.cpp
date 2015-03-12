@@ -88,7 +88,13 @@ void MRouter::fillRouteTables()
   I(up_map.size() == 0);
   //MSG("Fill router is %s",self_mobj->getName());
 
-  I(down_node.size()>=1);
+	// [sizhuo] we output msg if no down node
+  //I(down_node.size()>=1);
+	if(down_node.size() < 1) {
+		MSG("WARNING: %s has no down nodes", self_mobj->getName());
+	}
+	////////
+
   for (size_t i = 0; i < down_node.size(); i++){
     down_node[i]->getRouter()->updateRouteTables(self_mobj, self_mobj);
   }
@@ -320,6 +326,10 @@ int32_t MRouter::sendSetStateOthers(MemRequest *mreq, MsgAction ma, TimeDelta_t 
       continue;
 
     MemRequest *breq = MemRequest::createSetState(self_mobj, mreq->getCreator(), ma, addr, doStats);
+#ifdef DEBUG
+		// [sizhuo] inherit debug bit
+		if (mreq->isDebug()) breq->setDebug();
+#endif
     breq->addPendingSetStateAck(mreq);
 
     breq->startSetState(up_node[i], lat);
@@ -340,6 +350,10 @@ int32_t MRouter::sendSetStateOthersPos(uint32_t pos, MemRequest *mreq, MsgAction
   AddrType addr = mreq->getAddr();
 
   MemRequest *breq = MemRequest::createSetState(self_mobj, mreq->getCreator(), ma, addr, doStats);
+#ifdef DEBUG
+		// [sizhuo] inherit debug bit
+		if (mreq->isDebug()) breq->setDebug();
+#endif
   breq->addPendingSetStateAck(mreq);
 
   breq->startSetState(up_node[pos], lat);
@@ -361,6 +375,10 @@ int32_t MRouter::sendSetStateAll(MemRequest *mreq, MsgAction ma, TimeDelta_t lat
   int32_t conta = 0;
   for(size_t i=0;i<up_node.size();i++) {
     MemRequest *breq = MemRequest::createSetState(self_mobj, mreq->getCreator(), ma, addr, doStats);
+#ifdef DEBUG
+		// [sizhuo] inherit debug bit
+		if (mreq->isDebug()) breq->setDebug();
+#endif
     breq->addPendingSetStateAck(mreq);
 
     breq->startSetState(up_node[i], lat);

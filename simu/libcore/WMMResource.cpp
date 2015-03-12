@@ -203,7 +203,7 @@ void WMMFUStore::cacheDispatched(DInst *dinst) {
 	sprintf(dumpStr, "Core %d issue store", gproc->getId());
 	dinst->dump(dumpStr);
 	*/
-  MemRequest::sendReqWrite(DL1, dinst, dinst->getAddr(), executedCB::create(this,dinst));
+	MemRequest::sendReqWrite(DL1, dinst, dinst->getAddr(), executedCB::create(this,dinst));
   //executedCB::scheduleAbs(gen->nextSlot(dinst->getStatsFlag())+lat, this, dinst);
 }
 
