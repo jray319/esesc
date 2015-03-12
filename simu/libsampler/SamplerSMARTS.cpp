@@ -121,6 +121,10 @@ void SamplerSMARTS::queue(uint32_t insn, uint64_t pc, uint64_t addr, FlowID fid,
   nextMode(ROTATE, fid);
   if (lastMode == EmuTiming) { // timing is going to be over
     if (getTime()>=maxnsTime || totalnInst>=nInstMax) {
+			// [sizhuo] print msg about time/inst overflow
+			MSG("Time/Inst exceeds limits: time %lu ns, inst %lu", getTime(), totalnInst);
+			////
+
       markDone();
       pthread_mutex_unlock (&mode_lock);
       return;
