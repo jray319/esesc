@@ -99,8 +99,13 @@ private:
   MsgType      mt;
   MsgAction    ma;
 
-  MemObj       *creatorObj; // [sizhuo] mem obj to create this msg
-  MemObj       *homeMemObj; // Starting home node
+	// [sizhuo] mem obj to create this msg, its def depends on msg type
+	// mt_Req, mt_ReqAck: the L1$ issuing the initial req, the same as homeMemObj
+	// mt_SetState: creator of req that spawns this req
+	// mt_SetStateAck: the cache sending this msg
+	// mt_Disp: ???
+  MemObj       *creatorObj;
+  MemObj       *homeMemObj; // Starting home node // [sizhuo] mem obj to end this msg
   MemObj       *currMemObj; // [sizhuo] current mem obj
 
 	// [sizhuo] backup of mem obj & action when we adjust req
@@ -311,7 +316,7 @@ protected:
   bool isMMU() const {return ma == ma_MMU; }
   bool isVPCWriteUpdate() const {return ma == ma_VPCWU; }
 
-	// [sizhuo] do ack 
+	// [sizhuo] end this msg
   void ack() {
     if(cb)
       cb->call();
@@ -369,6 +374,14 @@ protected:
 
   void addPendingSetStateAck(MemRequest *mreq);
   bool hasPendingSetStateAck() const { return pendingSetStateAck>0; }
+
+	// [sizhuo] here are functions added
+	const MemRequest *getSetStateAckOrig() const { return setStateAckOrig; }
+	void dump(const char* str) const {
+#ifdef DEBUG
+		MSG("%s: mem msg %lu, home %s, creator %s, current %s\n", str, id, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName());
+#endif
+	}
 };
 
 class MemRequestHashFunc {

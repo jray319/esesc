@@ -28,7 +28,9 @@ Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 #include "SescConf.h"
 
-#include "CCache.h"
+//#include "CCache.h"
+#include "ACache.h" // [sizhuo] use ACache
+
 #include "NICECache.h"
 #include "SL0Cache.h"
 #include "VPC.h"
@@ -69,7 +71,8 @@ MemObj *MemorySystem::buildMemoryObj(const char *device_type, const char *dev_se
   std::string mystr("");
   // You may insert here the further specializations you may need
   if (!strcasecmp(device_type, "cache") || !strcasecmp(device_type, "icache")) {
-    mdev = new CCache(this, dev_section, dev_name);
+		// [sizhuo] use ACache
+    mdev = new ACache(this, dev_section, dev_name); //CCache(this, dev_section, dev_name);
     devtype = 0;
   } else if (!strcasecmp(device_type, "nicecache")) {
     mdev = new NICECache(this, dev_section, dev_name);

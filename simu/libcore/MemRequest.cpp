@@ -112,10 +112,16 @@ void MemRequest::setStateAckDone(TimeDelta_t lat)
     }else if (orig->mt == mt_setState) {
       //I(orig->setStateAckOrig==0);
       //orig->ack();
+
+			// [sizhuo] redo set state, don't automatically convert to set state ack
+			/*
       orig->convert2SetStateAck(orig->ma);
 			I(orig->currMemObj == orig->creatorObj);
 			orig->startSetStateAck();
-      //orig->setStateAckDone(); No recursive/dep chains for the moment
+			*/
+			orig->redoSetStateCB.schedule(lat);
+      
+			//orig->setStateAckDone(); No recursive/dep chains for the moment
     }else{
       I(0);
     }

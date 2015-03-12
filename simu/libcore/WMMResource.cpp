@@ -198,9 +198,11 @@ void WMMFUStore::cacheDispatched(DInst *dinst) {
 		return;
 	}
 	// [sizhuo] cache available, send write req
+	/*
 	char dumpStr[100];
 	sprintf(dumpStr, "Core %d issue store", gproc->getId());
 	dinst->dump(dumpStr);
+	*/
   MemRequest::sendReqWrite(DL1, dinst, dinst->getAddr(), executedCB::create(this,dinst));
   //executedCB::scheduleAbs(gen->nextSlot(dinst->getStatsFlag())+lat, this, dinst);
 }
@@ -209,9 +211,11 @@ void WMMFUStore::executed(DInst *dinst) {
 	// TODO: wake up inst with addr dependency on dinst via store set
 	//
 	// [sizhuo] debug
+	/*
 	char dumpStr[100];
 	sprintf(dumpStr, "Core %d finish store", gproc->getId());
 	dinst->dump(dumpStr);
+	*/
 	/////
 	
   dinst->markExecuted();
