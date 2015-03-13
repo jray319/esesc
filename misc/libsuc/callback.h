@@ -1012,7 +1012,10 @@ typename CallbackMember0<ClassType,memberPtr>::poolType
   CallbackMember0<ClassType,memberPtr>::cbPool(32, "CBM0");
 
 // STATIC SECTION
-
+// [sizhuo] XXX: StaticCallbackMemberX can only schedule 1 in flight callback
+// be careful when using it. Use CallbackMemberX instead if not sure.
+// XXX: the good point of StaticCallbackMemberX is that it won't be destroyed after call()
+// while CallbackMemberX will be destroyed in call()
 
 template<class ClassType, class Parameter1, class Parameter2, void (ClassType::*memberPtr) (Parameter1, Parameter2)>
 class StaticCallbackMember2

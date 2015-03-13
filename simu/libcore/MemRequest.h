@@ -389,7 +389,7 @@ public:
 	void dump(const char* str) const {
 #ifdef DEBUG
 		if(debug) {
-			MSG("%s: mem msg %lu, home %s, creator %s, current %s\n", str, id, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName());
+			MSG("%s: mem msg %lu, home %s, creator %s, current %s", str, id, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName());
 		}
 #endif
 	}
