@@ -66,6 +66,8 @@ MemRequest::MemRequest()
 #ifdef DEBUG // [sizhuo] add debug bit
 	, debug(false)
 #endif
+	, pos(None) // [sizhuo] add req position
+	, inport(0) // [sizhuo] add cache inport
 {
 }
 /*  */
@@ -160,6 +162,11 @@ MemRequest *MemRequest::create(MemObj *mobj, AddrType addr, bool doStats, Callba
 	r->doStats  = doStats;
   r->pendingSetStateAck = 0;
   r->setStateAckOrig    = 0;
+
+	// [sizhuo] init postion to None
+	r->pos = None;
+	// [sizhuo] init inport to 0
+	r->inport = 0;
 
   return r;
 }

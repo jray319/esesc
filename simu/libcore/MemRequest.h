@@ -47,6 +47,9 @@
 //#define DEBUG_CALLPATH 1
 #endif
 
+// [sizhuo] we need CacheInport pointer in MemRequest class
+class CacheInport;
+
 class MemRequest {
 private:
 	// [sizhuo] go to next mem obj
@@ -393,6 +396,17 @@ public:
 		}
 #endif
 	}
+	// [sizhuo] position of the req
+	// help req to know its condition in MemObj::doReq/doReqAck...
+	// because these functions may be called multiple times
+	typedef enum {
+		None,
+		Inport,
+		MSHR
+	} MemReqPos;
+	MemReqPos pos;
+	// [sizhuo] current inport of the msg
+	CacheInport *inport;
 	/*****************************************************************/
 };
 

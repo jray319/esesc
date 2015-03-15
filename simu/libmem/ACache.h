@@ -15,8 +15,8 @@
 class ACache : public MemObj {
 private:
 	// [sizhuo] input ports 
-	CacheInport *reqFromUpPort; // [sizhuo] upgrade req
-	CacheInport *respFromUpPort; // [sizhuo] downgrade resp
+	CacheInport **reqFromUpPort; // [sizhuo] upgrade req
+	CacheInport **respFromUpPort; // [sizhuo] downgrade resp
 	CacheInport *fromDownPort; // [sizhuo] downgrade req & upgrade resp
 	// [sizhuo] XXX: upper node for L1$ is considered as LSU here
 	// but router->upper_node is empty
@@ -24,6 +24,8 @@ private:
 protected:
 	const TimeDelta_t tagDelay;
 	const TimeDelta_t dataDelay;
+	const TimeDelta_t goUpDelay;
+	const TimeDelta_t goDownDelay;
 
 	const bool isL1;
 	const bool isLLC;
@@ -32,7 +34,7 @@ protected:
 
 public:
 	ACache(MemorySystem *gms, const char *descr_section, const char *name = NULL);
-	virtual ~ACache();
+	virtual ~ACache() {}
 
 	// Entry points to schedule that may schedule a do
 	// [sizhuo] these functions are called only once for each arriving msg

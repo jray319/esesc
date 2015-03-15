@@ -1,16 +1,7 @@
 #include "CacheInport.h"
 #include <algorithm>
 
-void CacheInport::setup(const TimeDelta_t lat, const char* name) {
-	// [sizhuo] at least 1 cycle delay, cut off combinational path
-	delay = lat;
-	I(delay >= 1);
-	// [sizhuo] fully piplined port
-	enqPort = PortGeneric::create(name, 1, 1);
-	I(enqPort);
-}
-
-void CacheInport::doFirstMsg() {
+void FIFOCacheInport::doFirstMsg() {
 	// [sizhuo] msgQ cannot be empty
 	I(!msgQ.empty());
 	if(msgQ.empty()) {
@@ -18,35 +9,37 @@ void CacheInport::doFirstMsg() {
 		return;
 	}
 	// [sizhuo] get the first msg and call handler
-	StaticCallbackBase *msg = msgQ.front();
-	msg->call();
+	Msg msg = msgQ.front();
+	(msg.cb)->call();
 }
 
-void CacheInport::enqMsgQ(StaticCallbackBase *msg) {
+void FIFOCacheInport::enqMsgQ(Msg msg) {
 	bool initEmpty = msgQ.empty();
 	msgQ.push(msg); // [sizhuo] enq
+	(msg.mreq)->inport = this; // [sizhuo] record inport into mreq
 	// [sizhuo] if msgQ is initially empty, we must try to process this new msg
 	if(initEmpty)	{
-		msg->call();
+		(msg.cb)->call();
 	}
 }
 
-void CacheInport::enqNewMsg(StaticCallbackBase *msg, bool statsFlag) {
+void FIFOCacheInport::enqNewMsg(StaticCallbackBase *cb, MemRequest *mreq, bool statsFlag) {
 	// [sizhuo] contend for enq port
 	Time_t when = enqPort->nextSlot(statsFlag); 
 	I(when >= globalClock);
-	// [sizhuo] scheule real enq after delay
-	enqMsgQCB::scheduleAbs(delay + when, this, msg);
+	// [sizhuo] scheule enq
+	enqMsgQCB::scheduleAbs(when, this, Msg(cb, mreq));
 }
 
-void CacheInport::deqDoneMsg() {
+void FIFOCacheInport::deqDoneMsg() {
 	I(!msgQ.empty());
 	if(msgQ.empty()) {
 		MSG("WARNING: ACache inport try to pop msg when msgQ is empty");
 		return;
 	}
-	// [sizhuo] pop processed msg
-	msgQ.pop();
+	Msg msg = msgQ.front();
+	(msg.mreq)->inport = 0; // [sizhuo] clear inport field
+	msgQ.pop(); // [sizhuo] pop processed msg
 	// [sizhuo] if msgQ not empty, we should try to process next msg at next cycle
 	if(!msgQ.empty()) {
 		doFirstMsgCB::schedule(1, this);
