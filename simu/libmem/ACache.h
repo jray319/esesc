@@ -7,9 +7,10 @@
 #include "GStats.h"
 #include "MemObj.h"
 #include "MemorySystem.h"
-#include "MSHR.h"
 #include "Snippets.h"
 #include "CacheInport.h"
+#include "CacheArray.h"
+#include "HierMSHR.h"
 
 // [sizhuo] cache with store atomicity ("A" -- atomic)
 class ACache : public MemObj {
@@ -20,6 +21,10 @@ private:
 	CacheInport *fromDownPort; // [sizhuo] downgrade req & upgrade resp
 	// [sizhuo] XXX: upper node for L1$ is considered as LSU here
 	// but router->upper_node is empty
+
+	CacheArray *cache; // [sizhuo] cache (tag) array
+
+	HierMSHR *mshr; // [sizhuo] MSHR
 
 protected:
 	const TimeDelta_t tagDelay;
@@ -34,7 +39,7 @@ protected:
 
 public:
 	ACache(MemorySystem *gms, const char *descr_section, const char *name = NULL);
-	virtual ~ACache() {}
+	virtual ~ACache();
 
 	// Entry points to schedule that may schedule a do
 	// [sizhuo] these functions are called only once for each arriving msg

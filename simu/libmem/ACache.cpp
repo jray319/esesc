@@ -17,6 +17,8 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 	, reqFromUpPort(0)
 	, respFromUpPort(0)
 	, fromDownPort(0)
+	, cache(0)
+	, mshr(0)
 	, tagDelay  (SescConf->getInt(section, "tagDelay"))
 	, dataDelay (SescConf->getInt(section, "dataDelay"))
 	, goUpDelay (SescConf->getInt(section, "goUpDelay"))
@@ -61,7 +63,21 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 	I(fromDownPort);
 	delete []portName;
 
-	MSG("end construct ACache %s", name);
+	// [sizhuo] create cache tag array
+	uint32_t cacheSize = SescConf->getInt(section, "Size");
+	uint32_t lineSize = SescConf->getInt(section, "Bsize");
+	uint32_t setAssoc = SescConf->getInt(section, "Assoc");
+	cache = new CacheArray(cacheSize, lineSize, setAssoc);
+	I(cache);
+	ID(MSG("%s creates cache array: size %x, lineSize %x, assoc %x", name, cacheSize, lineSize, setAssoc));
+
+	// [sizhuo] create MSHR
+  const char* mshrSection = SescConf->getCharPtr(section,"MSHR");
+	uint32_t mshrBankSize = SescConf->getInt(mshrSection, "nSubEntries");
+	uint32_t mshrBankNum = SescConf->getInt(mshrSection, "size") / mshrBankSize;
+	mshr = new HierMSHR(mshrBankNum, mshrBankSize, cache);
+	I(mshr);
+	ID(MSG("%s creates MSHR: bankNum %d, bankSize %d", name, mshrBankNum, mshrBankSize));
 
 	// [sizhuo] create & add lower level component
   MemObj *lower_level = gms->declareMemoryObj(section, "lowerLevel");
@@ -71,6 +87,26 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 		// [sizhuo] cache must have a valid lower level
 		SescConf->notCorrect();
 	}
+}
+
+ACache::~ACache() {
+	if(reqFromUpPort) {
+		for(int i = 0; i < upNodeNum; i++) {
+			if(reqFromUpPort[i]) delete reqFromUpPort[i];
+		}
+		delete[]reqFromUpPort;
+	}
+	if(respFromUpPort) {
+		for(int i = 0; i < upNodeNum; i++) {
+			if(respFromUpPort[i]) delete respFromUpPort[i];
+		}
+		delete[]respFromUpPort;
+	}
+	if(fromDownPort) {
+		delete fromDownPort;
+	}
+	if(cache) delete cache;
+	if(mshr) delete mshr;
 }
 
 void ACache::req(MemRequest *mreq) {

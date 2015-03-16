@@ -323,6 +323,16 @@ def run_parsec3(name, size, core_num, thread_num = 0, comment = ""):
 	print(shell_cmd)
 	os.system(shell_cmd)
 
+	# special work to save result for bodytrack
+	if name == 'bodytrack':
+		shell_cmd = (
+				'mv ' +
+				parsec3_param[name][size].split()[0] +
+				'/*.bmp .'
+				)
+		print(shell_cmd)
+		os.system(shell_cmd)
+
 	# remove input files & exe
 	remove_here(all_inputs)
 	os.remove(name)

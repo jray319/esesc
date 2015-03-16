@@ -1,43 +1,39 @@
 #include "HierMSHR.h"
 #include "CacheInport.h"
+#include "Snippets.h"
 #include <algorithm>
 
-/*
-MSHRBank::MSHRBank(int sz, int assoc)
+// MSHRBank class
+MSHRBank::MSHRBank(int sz, CacheArray *c)
 	: size(sz)
 	, nFreeSize(sz)
-	, cacheAssoc(assoc)
-	, enryPool(sz, "MSHR bank entry pool")
-	, pendSetStateQ(0)
-	, pendReqQ(0)
+	, cache(c)
+	, entryPool(sz, "MSHR bank entry pool")
+	, pendDownReqQ(0)
+	, pendUpReqQ(0)
 	, callQ(0)
 {
 	I(sz > 0);
-	entries = new Entry[sz];
-	I(entries);
+	I(c);
 
-	pendSetStateQ = new std::queue<MemRequest*>;
-	I(pendSetStateQ);
+	pendDownReqQ = new std::queue<MemRequest*>;
+	I(pendDownReqQ);
 
-	pendReqQ = new std::queue<MemRequest*>;
-	I(pendReqQ);
+	pendUpReqQ = new std::queue<MemRequest*>;
+	I(pendUpReqQ);
 
 	callQ = new std::queue<MemRequest*>;
 	I(callQ);
 }
 
 MSHRBank::~MSHRBank() {
-	if(entries) {
-		delete[]entries;
-		entreis = 0;
+	if(pendDownReqQ) {
+		delete pendDownReqQ;
+		pendDownReqQ = 0;
 	}
-	if(pendSetStateQ) {
-		delete pendSetStateQ;
-		pendSetStateQ = 0;
-	}
-	if(pendReqQ) {
-		delete pendReqQ;
-		pendReqQ = 0;
+	if(pendUpReqQ) {
+		delete pendUpReqQ;
+		pendUpReqQ = 0;
 	}
 	if(callQ) {
 		delete callQ;
@@ -45,10 +41,10 @@ MSHRBank::~MSHRBank() {
 	}
 }
 
-bool addDownReq(MemRequest *mreq) {
+bool MSHRBank::addDownReq(MemRequest *mreq) {
 	AddrType addr = mreq->getAddr();
-	AddrType lineAddr = ; // TODO: use func from CacheArray
-	AddrType index = ; // TODO: use func form CacheArray
+	AddrType lineAddr = cache->getLineAddr(addr);
+	AddrType index = cache->getIndex(lineAddr);
 	bool success = false; // [sizhuo] return value, whether insert success
 
 	// search entry with same line addr in MSHR
@@ -65,10 +61,6 @@ bool addDownReq(MemRequest *mreq) {
 			en->downgradeReq = mreq;
 			// [sizhuo] dec free entry num
 			nFreeSize--;
-			// [sizhuo] insert to mreq -> entry table
-			// mreq can't be in this table
-			I(mreq2Entry.find(mreq) == mreq2EntryMap.end());
-			mreq2Entry.insert(std::make_pair<MemRequest*, Entry*>(mreq, en));
 			// [sizhuo] insert to line addr -> entry table
 			line2Entry.insert(std::make_pair<AddrType, Entry*>(lineAddr, en));
 			// [sizhuo] increase index -> entry num table
@@ -87,7 +79,7 @@ bool addDownReq(MemRequest *mreq) {
 		// 2. no existing upgrade req or it is in Wait state
 		if(en->downgradeReq == 0 && (en->upgradeReq == 0 || en->upReqState == Wait)) {
 			success = true; // [sizhuo] mark success
-			// [sizhuo] change entry, but no need to change invert tables or free size
+			// [sizhuo] change entry, but no need to change free size or invert table
 			en->downgradeReq = mreq;
 		}
 	}
@@ -96,56 +88,42 @@ bool addDownReq(MemRequest *mreq) {
 		// [sizhuo] insert to MSHR success
 		mreq->pos = MemRequest::MSHR; // [sizhuo] change mreq position
 		mreq->inport->deqDoneMsg(); // [sizhuo] deq req from inport
-		mreq->inport = 0; // [sizhuo] clear inport field
-		(mreq->redoSetStateCB).schdule(1); // [sizhuo] re-handle req next cycle
+		(mreq->redoSetStateCB).schedule(1); // [sizhuo] re-handle req next cycle
 	} else {
 		// [sizhuo] fail to insert to MSHR, re-enq to pend Q
-		pendDownReqQ.push(mreq);
+		pendDownReqQ->push(mreq);
 	}
 	return success;
 }
 
-bool addUpReq(MemRequest *mreq) {
+bool MSHRBank::addUpReq(MemRequest *mreq) {
 	AddrType addr = mreq->getAddr();
-	AddrType lineAddr = ; // TODO: use func from CacheArray
-	AddrType index = ; // TODO: use func form CacheArray
+	AddrType lineAddr = cache->getLineAddr(addr);
+	AddrType index = cache->getIndex(lineAddr);
 	bool success = false; // [sizhuo] return value, whether insert success
 
 	// [sizhuo] we must have free entry in order to insert upgrade req
 	if(nFreeSize > 0) {
-		// [sizhuo] we cannot have existing entry on the same cache line
-		Line2EntryMap::iterator sameLineIter = line2Entry.find(lineAddr);
-		if(sameLineIter == line2Entry.end()) {
-			// [sizhuo] we must have at least 1 free cache line in the cache set
-			Index2NumMap::iterator idxIter = index2Num.find(index);
-			int occLineNum = 0; // [sizhuo] number of occupied lines in the set
-			if(idxIter != index2Num.end()) {
-				occLineNum = idxIter->second;
-			}
-			// [sizhuo] number of occumpied lines must be less than associativity
-			if(occLineNum < cacheAssoc) {
-				success = true; // [sizhuo] mark success
-				// [sizhuo] set up new entry
-				Entry *en = entryPool.out();
-				I(en);
-				en->clear();
-				en->upgradeReq = mreq;
-				en->upReqState = Req;
-				// [sizhuo] dec free entry num
-				nFreeSize--;
-				// [sizhuo] insert to mreq -> entry table
-				// mreq can't be in this table
-				I(mreq2Entry.find(mreq) == mreq2EntryMap.end());
-				mreq2Entry.insert(std::make_pair<MemRequest*, Entry*>(mreq, en));
-				// [sizhuo] insert to line addr -> entry table
-				line2Entry.insert(std::make_pair<AddrType, Entry*>(lineAddr, en));
-				// [sizhuo] increase index -> entry num table
-				if(idxIter == index2Num.end()) {
-					index2Num.insert(std::make_pair<AddrType, int>(index, 1));
-				} else {
-					idxIter->second++;
-				}
-			}
+		// [sizhuo] we cannot have existing entry in the same cache set
+		Index2NumMap::iterator idxIter = index2Num.find(index);
+		if(idxIter == index2Num.end()) {
+			success = true; // [sizhuo] mark success
+			// [sizhuo] set up new entry
+			Entry *en = entryPool.out();
+			I(en);
+			en->clear();
+			en->upgradeReq = mreq;
+			en->upReqState = Req;
+			// [sizhuo] dec free entry num
+			nFreeSize--;
+			// [sizhuo] insert to line addr -> entry table
+			I(line2Entry.find(lineAddr) == line2Entry.end());
+			line2Entry.insert(std::make_pair<AddrType, Entry*>(lineAddr, en));
+			// [sizhuo] insert to index -> entry num table
+			index2Num.insert(std::make_pair<AddrType, int>(index, 1));
+		} else {
+			// [sizhuo] we can't have 0 in index2Num
+			I(idxIter->second > 0);
 		}
 	}
 
@@ -153,16 +131,15 @@ bool addUpReq(MemRequest *mreq) {
 		// [sizhuo] insert to MSHR success
 		mreq->pos = MemRequest::MSHR; // [sizhuo] change mreq position
 		mreq->inport->deqDoneMsg(); // [sizhuo] deq req from inport
-		mreq->inport = 0; // [sizhuo] clear inport field
 		(mreq->redoReqCB).schedule(1); // [sizhuo] re-handle req next cycle
 	} else {
 		// [sizhuo] fail to insert to MSHR, re-enq to pend Q
-		pendUpReqQ.push(mreq);
+		pendUpReqQ->push(mreq);
 	}
 	return success;
 }
 
-void processPendDownReq() {
+void MSHRBank::processPendDownReq() {
 	I(callQ->empty());
 	// [sizhuo] exchange callQ & pendDownReqQ, now pendQ is empty
 	std::swap(callQ, pendDownReqQ);
@@ -175,7 +152,7 @@ void processPendDownReq() {
 	I(callQ->empty());
 }
 
-void processPendAll() {
+void MSHRBank::processPendAll() {
 	// [sizhuo] first process downgrade req
 	processPendDownReq();
 
@@ -196,9 +173,154 @@ void processPendAll() {
 	}
 	// [sizhuo] flush remaining req in callQ to pendQ
 	while(!callQ->empty()) {
-		pendUpReqQ.push(callQ->front());
+		pendUpReqQ->push(callQ->front());
 		callQ->pop();
 	}
 	I(callQ->empty());
 }
-*/
+
+void MSHRBank::retireDownReq(const MemRequest *mreq) {
+	AddrType addr = mreq->getAddr();
+	AddrType lineAddr = cache->getLineAddr(addr);
+	AddrType index = cache->getIndex(lineAddr);
+
+	// [sizhuo] search corresponding entry, must exist
+	Line2EntryMap::iterator lineIter = line2Entry.find(lineAddr);
+	I(lineIter != line2Entry.end());
+	Entry *en = lineIter->second;
+	I(en->downgradeReq == mreq);
+
+	if(en->upgradeReq) {
+		// [sizhuo] upgrade req pending at same cache line
+		I(en->upReqState == Wait);
+		en->downgradeReq = 0; // [sizhuo] clear downgrade req
+		// [sizhuo] no need to change any invert table or free size
+		// because upgrade req still exists
+		// We only need to invoke pending downgrade req (actually uneccessary)
+		processPendDownReq();
+	} else {
+		// [sizhuo] no upgrade req pending, we can recycle whole entry
+		en->clear();
+		entryPool.in(en);
+		// increase free size
+		nFreeSize++;
+		// [sizhuo] remove from line addr -> entry table
+		line2Entry.erase(lineIter);
+		// [sizhuo] decrease index -> req num table item
+		Index2NumMap::iterator idxIter = index2Num.find(index);
+		I(idxIter != index2Num.end() && idxIter->second >= 1);
+		if(idxIter->second > 1) {
+			idxIter->second--;
+		} else {
+			index2Num.erase(idxIter);
+		}
+		// [sizhuo] process all pending req
+		processPendAll();
+	}
+}
+
+void MSHRBank::upReqToWait(const MemRequest *mreq) {
+	AddrType addr = mreq->getAddr();
+	AddrType lineAddr = cache->getLineAddr(addr);
+
+	// [sizhuo] search corresponding entry, must exist
+	Line2EntryMap::iterator lineIter = line2Entry.find(lineAddr);
+	I(lineIter != line2Entry.end());
+	Entry *en = lineIter->second;
+	I(en->upgradeReq == mreq);
+	
+	// [sizhuo] change state, no need to change free size or invert table
+	I(en->upReqState == Req);
+	en->upReqState = Wait;
+
+	// [sizhuo] invoke pending downgrade req
+	processPendDownReq();
+}
+
+void MSHRBank::upReqToAck(const MemRequest *mreq) {
+	AddrType addr = mreq->getAddr();
+	AddrType lineAddr = cache->getLineAddr(addr);
+
+	// [sizhuo] search corresponding entry, must exist
+	Line2EntryMap::iterator lineIter = line2Entry.find(lineAddr);
+	I(lineIter != line2Entry.end());
+	Entry *en = lineIter->second;
+	I(en->upgradeReq == mreq);
+	
+	// [sizhuo] state can be Req if cache hit
+	I(en->upReqState == Wait || en->upReqState == Req); 
+	// [sizhuo] downgrade req to same cache line must not exist
+	I(en->downgradeReq == 0);
+
+	// [sizhuo] change state, no need to change free size or invert table
+	en->upReqState = Ack;
+
+	// [sizhuo] no need to invoke pending req
+}
+
+void MSHRBank::retireUpReq(const MemRequest *mreq) {
+	AddrType addr = mreq->getAddr();
+	AddrType lineAddr = cache->getLineAddr(addr);
+	AddrType index = cache->getIndex(lineAddr);
+
+	// [sizhuo] search corresponding entry, must exist
+	Line2EntryMap::iterator lineIter = line2Entry.find(lineAddr);
+	I(lineIter != line2Entry.end());
+	Entry *en = lineIter->second;
+	I(en->upgradeReq == mreq);
+	
+	// [sizhuo] we can recycle this entry
+	I(en->upReqState == Wait);
+	I(en->downgradeReq == 0);
+	en->clear();
+	entryPool.in(en);
+	// [sizhuo] increase free size
+	nFreeSize++;
+	// [sizhuo] remove from line -> entry table
+	line2Entry.erase(lineIter);
+	// [sizhuo] decrement index -> req num table item
+	Index2NumMap::iterator idxIter = index2Num.find(index);
+	I(idxIter != index2Num.end() && idxIter->second >= 1);
+	if(idxIter->second > 1) {
+		idxIter->second--;
+	} else {
+		index2Num.erase(idxIter);
+	}
+
+	// [sizhuo] invoke all pending req
+	processPendAll();
+}
+
+// HierMSHR class
+HierMSHR::HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c)
+	: bankNum(bkNum)
+	, bankMask(bkNum - 1)
+	, bankSize(bkSize)
+	, cache(c)
+	, bank(0)
+{
+	// [sizhuo] bank num must be power of 2
+	I((0x01L << log2i(bankNum)) == bankNum);
+	// [sizhuo] bank num & size must > 0
+	I(bankNum > 0);
+	I(bankSize > 0);
+	I(bankSize > bankNum); // [sizhuo] prevent reverse num & size in creation
+
+	// [sizhuo] create banks
+	bank = new MSHRBank*[bankNum];
+	I(bank);
+	for(uint32_t i = 0; i < bkNum; i++) {
+		bank[i] = 0;
+		bank[i] = new MSHRBank(bankSize, c);
+		I(bank[i]);
+	}
+}
+
+HierMSHR::~HierMSHR() {
+	if(bank) {
+		for(uint32_t i = 0; i < bankNum; i++) {
+			if(bank[i]) delete[]bank[i];
+		}
+		delete[]bank;
+	}
+}
