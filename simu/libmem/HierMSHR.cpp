@@ -84,11 +84,8 @@ bool MSHRBank::addDownReq(MemRequest *mreq) {
 		}
 	}
 
-	if(success) {
-		// [sizhuo] insert to MSHR success
-		(mreq->redoSetStateCB).schedule(1); // [sizhuo] re-handle req next cycle
-	} else {
-		// [sizhuo] fail to insert to MSHR, re-enq to pend Q
+	if(!success) {
+		// [sizhuo] fail to insert to MSHR, enq to pend Q
 		pendDownReqQ->push(mreq);
 	}
 	return success;
@@ -125,11 +122,8 @@ bool MSHRBank::addUpReq(MemRequest *mreq) {
 		}
 	}
 
-	if(success) {
-		// [sizhuo] insert to MSHR success
-		(mreq->redoReqCB).schedule(1); // [sizhuo] re-handle req next cycle
-	} else {
-		// [sizhuo] fail to insert to MSHR, re-enq to pend Q
+	if(!success) {
+		// [sizhuo] fail to insert to MSHR, enq to pend Q
 		pendUpReqQ->push(mreq);
 	}
 	return success;
@@ -143,7 +137,11 @@ void MSHRBank::processPendDownReq() {
 	while(!callQ->empty()) {
 		MemRequest *mreq = callQ->front();
 		callQ->pop();
-		addDownReq(mreq);
+		bool success = addDownReq(mreq);
+		if(success) { 
+			// [sizhuo] retry success, call redoSetState immediately to change state
+			(mreq->redoSetStateCB).call();
+		}
 	}
 	I(callQ->empty());
 }
@@ -165,7 +163,11 @@ void MSHRBank::processPendAll() {
 	while(!callQ->empty() && nFreeSize > 0) {
 		MemRequest *mreq = callQ->front();
 		callQ->pop();
-		addUpReq(mreq);
+		bool success = addUpReq(mreq);
+		if(success) {
+			// [sizhuo] retry success, call redoReq immediately to change state
+			(mreq->redoReqCB).call();
+		}
 	}
 	// [sizhuo] flush remaining req in callQ to pendQ
 	while(!callQ->empty()) {
@@ -266,7 +268,7 @@ void MSHRBank::retireUpReq(const MemRequest *mreq) {
 	I(en->upgradeReq == mreq);
 	
 	// [sizhuo] we can recycle this entry
-	I(en->upReqState == Wait);
+	I(en->upReqState == Ack);
 	I(en->downgradeReq == 0);
 	en->clear();
 	entryPool.in(en);

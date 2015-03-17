@@ -96,16 +96,18 @@ public:
 	~MSHRBank();
 
 	// [sizhuo] add downgrade req to MSHR
-	// if success: the handler of req is called next cycleyy
-	// if fail: req is enq to pendDownReqQ, and will automatically retry next time
+	// if success: req is added to MSHR, return true
+	// if fail: req is enq to pendDownReqQ for retrying
+	// and will call mreq->doReq immediately when succeed next time
 	bool addDownReq(MemRequest *mreq);
 
 	// [sizhuo] callback to retire downgrade req from MSHR
 	typedef CallbackMember1<MSHRBank, const MemRequest*, &MSHRBank::retireDownReq> retireDownReqCB;
 
 	// [sizhuo] add upgrade req to MSHR
-	// if success: the handler of req is called next cycleyy
-	// if fail: req is enq to pendUpReqQ, and will automatically retry next time
+	// if success: req is added to MSHR, return true
+	// if fail: req is enq to pendUpReqQ for retrying
+	// and will call mreq->doReq immediately when succeed next time
 	bool addUpReq(MemRequest *mreq);
 
 	// [sizhuo] callback to change upgrade req to Wait state

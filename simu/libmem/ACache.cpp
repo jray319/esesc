@@ -186,33 +186,62 @@ void ACache::disp(MemRequest *mreq) {
 void ACache::doReq(MemRequest *mreq) {
 	ID(mreq->dump("doReq"));
 
-	if(!mreq->isRetrying()) {
-		// [sizhuo] new req from inport, need to replace a cache line
-
-		// [sizhuo] process msg success, deq it & set pos
-		mreq->inport->deqDoneMsg();	
-		mreq->pos = MemRequest::MSHR;
-
-		// [sizhuo] send invalidation to upper level
-		int nmsg = router->invalidateAll(mreq->getAddr() << 1, mreq, tagDelay + goUpDelay);
-		if(nmsg > 0) {
-			I(mreq->hasPendingSetStateAck());
-			// [sizhuo] wait for downgrade resp
-			mreq->setRetrying();
-			return;
-		} // [sizhuo] else we proceed to send disp resp to lower level
-
-		// [sizhuo] in current setting, we must be in L1 cache
-		I(isL1);
+	if(mreq->pos == MemRequest::Inport) {
+		if(!mreq->isRetrying()) {
+			// [sizhuo] new req from inport, try to add it to MSHR
+			bool success = mshr->addUpReq(mreq);
+			if(success) {
+				// [sizhuo] add success, deq inport & set pos
+				mreq->inport->deqDoneMsg();
+				mreq->pos = MemRequest::MSHR;
+				// [sizhuo] we proceed to handle this req next cycle
+				(mreq->redoReqCB).schedule(1);
+			} else {
+				// [sizhuo] add fail, wait retry success
+				mreq->setRetrying();
+			}
+		} else {
+			// [sizhuo] retry to add MSHR success
+			// deq inport & set pos & clear retry bit
+			mreq->clearRetrying();
+			mreq->inport->deqDoneMsg();
+			mreq->pos = MemRequest::MSHR;
+			// [sizhuo] we proceed to handle this req next cycle
+			(mreq->redoReqCB).schedule(1);
+		}
+	} else if(mreq->pos == MemRequest::MSHR) {
+		if(!mreq->isRetrying()) {
+			// [sizhuo] newly added to MSHR, try to replace a cache line
+			// set retry bit for disambiguation when handling this req next time
+			// [sizhuo] access tag & send invalidation to upper level
+			int nmsg = router->invalidateAll(mreq->getAddr() << 1, mreq, tagDelay + goUpDelay);
+			if(nmsg > 0) {
+				I(mreq->hasPendingSetStateAck());
+				// [sizhuo] wait for downgrade resp to wake me up
+				mreq->setRetrying();
+			} else {
+				I(isL1); // [sizhuo] we must be in L1$
+				I(!mreq->hasPendingSetStateAck());
+				// [sizhuo] we re-handle this req after tag read
+				mreq->setRetrying();
+				(mreq->redoReqCB).schedule(tagDelay);
+			}
+		} else {
+			// [sizhuo] invalidate upper level is done
+			I(!mreq->hasPendingSetStateAck());
+			mreq->clearRetrying(); // [sizhuo] clear retry bit
+			// [sizhuo] send disp resp to lower level after reading data
+			router->sendDisp(mreq->getAddr() << 1, mreq->getStatsFlag(), dataDelay + goDownDelay);
+			// [sizhuo] forward req to lower level 1 cycle later than sending disp
+			// set pos & notify MSHR that mreq goes down to lower level
+			mshr->upReqToWait(mreq, dataDelay + 1);
+			mreq->pos = MemRequest::Router;
+			router->scheduleReq(mreq, dataDelay + goDownDelay + 1);
+			// [sizhuo] we wait for reqAck to come back and completes this req in doReqAck()
+		}
+	} else {
+		I(0);
 	}
-
-	// [sizhuo] invalidate upper level is done, send disp resp to lower level 
-	mreq->clearRetrying(); // [sizhuo] clear retry bit
-	router->sendDisp(mreq->getAddr() << 1, mreq->getStatsFlag(), dataDelay + goDownDelay);
-	// [sizhuo] forward req to lower level 1 cycle later than sending disp
-	// set pos and then wait ReqAck to complete req at doReqAck
-	mreq->pos = MemRequest::Router;
-	router->scheduleReq(mreq, dataDelay + goDownDelay + 1);
 }
 
 void ACache::doReqAck(MemRequest *mreq) {
@@ -221,64 +250,115 @@ void ACache::doReqAck(MemRequest *mreq) {
 	if(mreq->isHomeNode()) {
 		// [sizhuo] this is home node, we can end the msg
 		I(isL1); // [sizhuo] must be L1$
-		// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
+		// [sizhuo] deq msg from inport & set pos
 		mreq->inport->deqDoneMsg();	
-		// [sizhuo] end this msg (no need to set pos)
-		mreq->ack(dataDelay + goUpDelay);
+		mreq->pos = MemRequest::MSHR;
+		// [sizhuo] immediately notify MSHR that ack comes back
+		// (prevent downgrade req to this cache line from being accepted)
+		mshr->upReqToAck(mreq);
+		// [sizhuo] end this msg & retire MSHR
+		mshr->retireUpReq(mreq, 0);
+		mreq->ack(goUpDelay);
 		return;
-	} 
+	}
 
 	// [sizhuo] this cache cannot be L1$
 	I(!isL1);
 	if(isL1) MSG("ERROR: req ack reaches L1$ but not home node");
 
-	if(!mreq->isRetrying()) {
-		// [sizhuo] first time handle req ack, deq inport & set pos
-		mreq->inport->deqDoneMsg();	
+	if(mreq->pos == MemRequest::Inport) {
+		// [sizhuo] new reqAck from inport, it has corresponding req in MSHR
+		// deq inport & set pos & notify MSHR that reqAck comes back
+		mreq->inport->deqDoneMsg();
 		mreq->pos = MemRequest::MSHR;
+		mshr->upReqToAck(mreq);
+		// [sizhuo] we proceed to handle this msg next cycle
+		(mreq->redoReqAckCB).schedule(1);
+	} else if(mreq->pos == MemRequest::MSHR) {
+		if(!mreq->isRetrying()) {
+			// [sizhuo] send downgrade req to upper level except for upgrade req home node
+			// we don't need to access tag, because tag is stored & tracked in MSHR
+			int32_t nmsg = router->sendSetStateOthers(mreq, ma_setInvalid, goUpDelay);
+			if(nmsg > 0) {
+				I(mreq->hasPendingSetStateAck());
+				// [sizhuo] need to wait for downgrade resp to try again
+				mreq->setRetrying();
+				return;
+			} else {
+				I(!mreq->hasPendingSetStateAck());
+				//mreq->setRetrying();
+				// [sizhuo] we proceed to send resp to upper level
+				// XXX: if we need to access tag, we must re-handle after tagDelay
+				// as what is done in doReq(), but now we can just proceed
+			}
+		}
 
-		// [sizhuo] broadcast to upper level except for the one with home node
-		int32_t nmsg = router->sendSetStateOthers(mreq, ma_setInvalid, tagDelay + goDownDelay);
-		if(nmsg > 0) {
-			I(mreq->hasPendingSetStateAck());
-			// [sizhuo] need to wait for downgrade resp to try again
-			mreq->setRetrying();
-			return;
-		} // [sizhuo] else we proceed to send resp to upper level
+		// [sizhuo] downgrade upper level is done
+		I(!mreq->hasPendingSetStateAck());
+		mreq->clearRetrying(); // [sizhuo] clear retry bit
+		// [sizhuo] resp to upper level & retire MSHR entry & set pos
+		mshr->retireUpReq(mreq, 0);
+		mreq->pos = MemRequest::Router;
+		router->scheduleReqAck(mreq, goUpDelay);
+	} else {
+		I(0);
 	}
-
-	// [sizhuo] downgrade upper level is done, send resp to upper level
-	I(!mreq->hasPendingSetStateAck());
-	mreq->clearRetrying(); // [sizhuo] clear retry bit
-	mreq->pos = MemRequest::Router; // [sizhuo] set pos
-	router->scheduleReqAck(mreq, tagDelay + goUpDelay);
 }
 
 void ACache::doSetState(MemRequest *mreq) {
   I(!mreq->isHomeNode()); // [sizhuo] home node should be at lower level
 	ID(mreq->dump("doSetState"));
 
-	if(!mreq->isRetrying()) {
-		// [sizhuo] first time handle set state req, deq inport & set pos
-		mreq->inport->deqDoneMsg();
-		mreq->pos = MemRequest::MSHR;
-
-		// [sizhuo] broadcast invalidation to upper level
-		int32_t nmsg = router->sendSetStateAll(mreq, mreq->getAction(), tagDelay + goDownDelay);
-		if(nmsg > 0) {
-			I(mreq->hasPendingSetStateAck());
-			// [sizhuo] need to wait for downgrade resp to try again
-			mreq->setRetrying();
-			return;
-		} // [sizhuo] else proceed to send resp
+	if(mreq->pos == MemRequest::Inport) {
+		if(!mreq->isRetrying()) {
+			// [sizhuo] new downgrade req from inport, try to add to MSHR
+			bool success = mshr->addDownReq(mreq);
+			if(success) {
+				// [sizhuo] add success, deq inport & set pos
+				mreq->inport->deqDoneMsg();
+				mreq->pos = MemRequest::MSHR;
+				// [sizhuo] we proceed to handle this req next cycle
+				(mreq->redoSetStateCB).schedule(1);
+			} else {
+				// [sizhuo] add fail, wait retry success
+				mreq->setRetrying();
+			}
+		} else {
+			// [sizhuo] retry to add MSHR success
+			// deq inport & set pos & clear retry bit
+			mreq->clearRetrying();
+			mreq->inport->deqDoneMsg();
+			mreq->pos = MemRequest::MSHR;
+			// [sizhuo] we proceed to handle this req next cycle
+			(mreq->redoSetStateCB).schedule(1);
+		}
+	} else if(mreq->pos == MemRequest::MSHR) {
+		if(!mreq->isRetrying()) {
+			// [sizhuo] send downgrade req to upper level
+			int32_t nmsg = router->sendSetStateAll(mreq, mreq->getAction(), tagDelay + goDownDelay);
+			if(nmsg > 0) {
+				I(mreq->hasPendingSetStateAck());
+				// [sizhuo] need to wait for downgrade resp to try again
+				mreq->setRetrying();
+			} else {
+				I(!mreq->hasPendingSetStateAck());
+				// [sizhuo] we rehandle this req after tag delay
+				mreq->setRetrying();
+				(mreq->redoSetStateCB).schedule(tagDelay);
+			}
+		} else {
+			// [sizhuo] downgrade is done
+			I(!mreq->hasPendingSetStateAck());
+			mreq->clearRetrying(); // [sizhuo] reset retry bit
+			// [sizhuo] resp to lower level & set pos & retire MSHR entry
+			mshr->retireDownReq(mreq, 0);
+			mreq->pos = MemRequest::Router;
+			mreq->convert2SetStateAck(ma_setInvalid);
+			router->scheduleSetStateAck(mreq, goDownDelay);
+		}
+	} else {
+		I(0);
 	}
-
-	// [sizhuo] broadcast is done, just resp & set pos
-	I(!mreq->hasPendingSetStateAck());
-	mreq->clearRetrying(); // [sizhuo] reset retry bit
-	mreq->convert2SetStateAck(ma_setInvalid);
-	mreq->pos = MemRequest::Router;
-	router->scheduleSetStateAck(mreq, tagDelay + goDownDelay);
 }
 
 void ACache::doSetStateAck(MemRequest *mreq) {
@@ -320,7 +400,7 @@ void ACache::doDisp(MemRequest *mreq) {
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 	// no need to set pos here
-	mreq->inport->deqDoneMsg();	
+	mreq->inport->deqDoneMsg();
 
 	mreq->ack();
 }
