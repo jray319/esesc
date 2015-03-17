@@ -400,7 +400,7 @@ public:
 	// help req to know its condition in MemObj::doReq/doReqAck...
 	// because these functions may be called multiple times
 	typedef enum {
-		None,
+		Router,
 		Inport,
 		MSHR
 	} MemReqPos;

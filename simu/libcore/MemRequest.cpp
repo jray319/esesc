@@ -66,7 +66,7 @@ MemRequest::MemRequest()
 #ifdef DEBUG // [sizhuo] add debug bit
 	, debug(false)
 #endif
-	, pos(None) // [sizhuo] add req position
+	, pos(Router) // [sizhuo] add req position
 	, inport(0) // [sizhuo] add cache inport
 {
 }
@@ -163,8 +163,8 @@ MemRequest *MemRequest::create(MemObj *mobj, AddrType addr, bool doStats, Callba
   r->pendingSetStateAck = 0;
   r->setStateAckOrig    = 0;
 
-	// [sizhuo] init postion to None
-	r->pos = None;
+	// [sizhuo] init postion to Router
+	r->pos = Router;
 	// [sizhuo] init inport to 0
 	r->inport = 0;
 

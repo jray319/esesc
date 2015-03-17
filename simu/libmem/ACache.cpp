@@ -123,29 +123,37 @@ void ACache::req(MemRequest *mreq) {
 	if(isL1) {
 		I(mreq->isHomeNode());
 		// [sizhuo] L1$ only has 1 upper node: LSU
-		// enq msg to inport & record inport
-		reqFromUpPort[0]->enqNewMsg(&(mreq->redoReqCB), mreq, mreq->getStatsFlag());
+		// enq msg to inport & record inport & set pos
+		mreq->pos = MemRequest::Inport;
+		mreq->inport = reqFromUpPort[0];
+		reqFromUpPort[0]->enqNewMsg(&(mreq->redoReqCB), mreq->getStatsFlag());
 	} else {
 		int portId = router->getCreatorPort(mreq);
 		I(portId < upNodeNum);
 		I(portId >= 0);
-		// [sizhuo] enq msg to inport & record inport
-		reqFromUpPort[portId]->enqNewMsg(&(mreq->redoReqCB), mreq, mreq->getStatsFlag());
+		// [sizhuo] enq msg to inport & record inport & set pos
+		mreq->pos = MemRequest::Inport;
+		mreq->inport = reqFromUpPort[portId];
+		reqFromUpPort[portId]->enqNewMsg(&(mreq->redoReqCB), mreq->getStatsFlag());
 	}
 }
 
 void ACache::reqAck(MemRequest *mreq) {
 	ID(mreq->dump("reqAck"));
 	I(!mreq->isRetrying());
-	// [sizhuo] enq msg to inport & record inport
-	fromDownPort->enqNewMsg(&(mreq->redoReqAckCB), mreq, mreq->getStatsFlag());
+	// [sizhuo] enq msg to inport & record inport & set pos
+	mreq->pos = MemRequest::Inport;
+	mreq->inport = fromDownPort;
+	fromDownPort->enqNewMsg(&(mreq->redoReqAckCB), mreq->getStatsFlag());
 }
 
 void ACache::setState(MemRequest *mreq) {
 	ID(mreq->dump("setState"));
 	I(!mreq->isRetrying());
-	// [sizhuo] enq msg to inport & record inport
-	fromDownPort->enqNewMsg(&(mreq->redoSetStateCB), mreq, mreq->getStatsFlag());
+	// [sizhuo] enq msg to inport & record inport & set pos
+	mreq->pos = MemRequest::Inport;
+	mreq->inport = fromDownPort;
+	fromDownPort->enqNewMsg(&(mreq->redoSetStateCB), mreq->getStatsFlag());
 }
 
 void ACache::setStateAck(MemRequest *mreq) {
@@ -156,8 +164,10 @@ void ACache::setStateAck(MemRequest *mreq) {
 	int portId = router->getCreatorPort(mreq);
 	I(portId < upNodeNum);
 	I(portId >= 0);
-	// [sizhuo] enq msg to inport & record inport
-	respFromUpPort[portId]->enqNewMsg(&(mreq->redoSetStateAckCB), mreq, mreq->getStatsFlag());
+	// [sizhuo] enq msg to inport & record inport & set pos
+	mreq->pos = MemRequest::Inport;
+	mreq->inport = respFromUpPort[portId];
+	respFromUpPort[portId]->enqNewMsg(&(mreq->redoSetStateAckCB), mreq->getStatsFlag());
 }
 
 void ACache::disp(MemRequest *mreq) {
@@ -167,8 +177,10 @@ void ACache::disp(MemRequest *mreq) {
 	int portId = router->getCreatorPort(mreq);
 	I(portId < upNodeNum);
 	I(portId >= 0);
-	// [sizhuo] enq msg to inport & record inport
-	respFromUpPort[portId]->enqNewMsg(&(mreq->redoDispCB), mreq, mreq->getStatsFlag());
+	// [sizhuo] enq msg to inport & record inport & set pos
+	mreq->pos = MemRequest::Inport;
+	mreq->inport = respFromUpPort[portId];
+	respFromUpPort[portId]->enqNewMsg(&(mreq->redoDispCB), mreq->getStatsFlag());
 }
 
 void ACache::doReq(MemRequest *mreq) {
@@ -176,6 +188,8 @@ void ACache::doReq(MemRequest *mreq) {
 	// [sizhuo] process msg success, deq it before router schedule
 	mreq->inport->deqDoneMsg();	
 	// [sizhuo] forward req to lower level, wait ReqAck and complete req at doReqAck
+	// and set pos to router
+	mreq->pos = MemRequest::Router;
 	router->scheduleReq(mreq, tagDelay + goDownDelay);
 }
 
@@ -187,7 +201,7 @@ void ACache::doReqAck(MemRequest *mreq) {
 		I(isL1); // [sizhuo] must be L1$
 		// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 		mreq->inport->deqDoneMsg();	
-		// [sizhuo] end this msg
+		// [sizhuo] end this msg (no need to set pos)
 		mreq->ack(dataDelay + goUpDelay);
 		return;
 	} 
@@ -199,7 +213,9 @@ void ACache::doReqAck(MemRequest *mreq) {
 	if(mreq->isRetrying()) {
 		// [sizhuo] second time handling req ack
 		// downgrade req has been done, resp to upper level
+		// and set pos to Router
 		mreq->clearRetrying();
+		mreq->pos = MemRequest::Router;
 		router->scheduleReqAck(mreq, goUpDelay);
 		// [sizhuo] don't deq msg from inport, already deq before
 		return;
@@ -214,12 +230,14 @@ void ACache::doReqAck(MemRequest *mreq) {
 
 	if(nmsg > 0) {
 		I(mreq->hasPendingSetStateAck());
-		// [sizhuo] need to wait for downgrade resp to handle req ack again
+		// [sizhuo] need to wait for downgrade resp to handle req ack again & set pos
+		mreq->pos = MemRequest::MSHR;
 		mreq->setRetrying();
 	} else {
 		I(!mreq->hasPendingSetStateAck());
 		I(!mreq->isRetrying());
-		// [sizhuo] no broadcast is made, just resp
+		// [sizhuo] no broadcast is made, just resp & set pos
+		mreq->pos = MemRequest::Router;
 		router->scheduleReqAck(mreq, tagDelay + goUpDelay);
 	}
 }
@@ -230,9 +248,10 @@ void ACache::doSetState(MemRequest *mreq) {
 
 	if(mreq->isRetrying()) {
 		// [sizhuo] second time handling set state req
-		// upper level already downgraded, just resp
+		// upper level already downgraded, just resp & set pos
 		mreq->clearRetrying();
 		mreq->convert2SetStateAck(ma_setInvalid);
+		mreq->pos = MemRequest::Router;
 		router->scheduleSetStateAck(mreq, goDownDelay);
 		// [sizhuo] don't deq msg from inport, already deq before
 		return;
@@ -247,13 +266,15 @@ void ACache::doSetState(MemRequest *mreq) {
 
 	if(nmsg > 0) {
 		I(mreq->hasPendingSetStateAck());
-		// [sizhuo] need to wait for downgrade resp to handle req ack again
+		// [sizhuo] need to wait for downgrade resp to handle req ack again & set pos
+		mreq->pos = MemRequest::MSHR;
 		mreq->setRetrying();
 	} else {
 		I(!mreq->hasPendingSetStateAck());
 		I(!mreq->isRetrying());
-		// [sizhuo] no broadcast is made, just resp
+		// [sizhuo] no broadcast is made, just resp & set pos
 		mreq->convert2SetStateAck(ma_setInvalid);
+		mreq->pos = MemRequest::Router;
 		router->scheduleSetStateAck(mreq, tagDelay + goDownDelay);
 	}
 }
@@ -270,6 +291,7 @@ void ACache::doSetStateAck(MemRequest *mreq) {
 
 	// [sizhuo] we can end this msg, setStateAckDone() may be called
 	// and invoke other handler in this cache (delay is 0 here)
+	// no need to set pos here
 	const MemRequest *orig = mreq->getSetStateAckOrig();
 	if(orig->isReqAck()) {
 		I(orig->isRetrying()); // [sizhuo] must be a second handle of ReqAck
@@ -289,6 +311,7 @@ void ACache::doDisp(MemRequest *mreq) {
 	ID(mreq->dump("doDisp"));
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
+	// no need to set pos here
 	mreq->inport->deqDoneMsg();	
 
 	mreq->ack();
