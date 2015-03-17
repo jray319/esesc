@@ -237,10 +237,12 @@ protected:
     mreq->ma         = ma_setValid; // For reads, MOES are valid states
 		m->req(mreq);
   }
-  static void sendReqWrite(MemObj *m, bool doStats, AddrType addr, CallbackBase *cb=0) { 
+	// [sizhuo] add debug bit
+  static void sendReqWrite(MemObj *m, bool doStats, AddrType addr, CallbackBase *cb=0, bool dbg = false) { 
     MemRequest *mreq = create(m,addr,doStats, cb);
     mreq->mt         = mt_req;
     mreq->ma         = ma_setDirty; // For writes, only MO are valid states
+		mreq->debug = dbg || mreq->debug; // [sizhuo] add debug bit
 		m->req(mreq);
   }
   static void sendReqWritePrefetch(MemObj *m, bool doStats, AddrType addr, CallbackBase *cb=0) { 
@@ -392,7 +394,7 @@ public:
 	void dump(const char* str) const {
 #ifdef DEBUG
 		if(debug) {
-			MSG("%s: mem msg %lu, home %s, creator %s, current %s", str, id, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName());
+			MSG("%s: %p, mem msg %lu, home %s, creator %s, current %s, addr %lx, pos %d, retry %d", str, this, id, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName(), addr, pos, retrying);
 		}
 #endif
 	}

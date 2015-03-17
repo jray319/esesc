@@ -42,6 +42,8 @@ MSHRBank::~MSHRBank() {
 }
 
 bool MSHRBank::addDownReq(MemRequest *mreq) {
+	ID(mreq->dump("MSHR addDownReq"));
+
 	AddrType addr = mreq->getAddr();
 	AddrType lineAddr = cache->getLineAddr(addr);
 	AddrType index = cache->getIndex(lineAddr);
@@ -70,7 +72,9 @@ bool MSHRBank::addDownReq(MemRequest *mreq) {
 			} else {
 				idxIter->second++;
 			}
-		} 
+		} else {
+			ID(GMSG(mreq->isDebug(), "addDownReq fail: nFreeSize = %d", nFreeSize));
+		}
 	} else {
 		// [sizhuo] there is existing entry on same cache line
 		Entry *en = sameLineIter->second;
@@ -81,6 +85,8 @@ bool MSHRBank::addDownReq(MemRequest *mreq) {
 			success = true; // [sizhuo] mark success
 			// [sizhuo] change entry, but no need to change free size or invert table
 			en->downgradeReq = mreq;
+		} else {
+			ID(GMSG(mreq->isDebug(), "addDownReq fail: en->downgradeReq = %p, en->upgradeReq = %p, en->upReqState = %d", en->downgradeReq, en->upgradeReq, en->upReqState));
 		}
 	}
 
@@ -92,6 +98,8 @@ bool MSHRBank::addDownReq(MemRequest *mreq) {
 }
 
 bool MSHRBank::addUpReq(MemRequest *mreq) {
+	ID(mreq->dump("MSHR addUpReq"));
+
 	AddrType addr = mreq->getAddr();
 	AddrType lineAddr = cache->getLineAddr(addr);
 	AddrType index = cache->getIndex(lineAddr);
@@ -119,7 +127,10 @@ bool MSHRBank::addUpReq(MemRequest *mreq) {
 		} else {
 			// [sizhuo] we can't have 0 in index2Num
 			I(idxIter->second > 0);
+			ID(GMSG(mreq->isDebug(), "addUpReq fail: index req num = %d", idxIter->second));
 		}
+	} else {
+		ID(GMSG(mreq->isDebug(), "addUpReq fail: nFreeSize = %d", nFreeSize));
 	}
 
 	if(!success) {
@@ -178,6 +189,8 @@ void MSHRBank::processPendAll() {
 }
 
 void MSHRBank::retireDownReq(const MemRequest *mreq) {
+	ID(mreq->dump("MSHR retireDownReq"));
+
 	AddrType addr = mreq->getAddr();
 	AddrType lineAddr = cache->getLineAddr(addr);
 	AddrType index = cache->getIndex(lineAddr);
@@ -195,7 +208,7 @@ void MSHRBank::retireDownReq(const MemRequest *mreq) {
 		// [sizhuo] no need to change any invert table or free size
 		// because upgrade req still exists
 		// We only need to invoke pending downgrade req (actually uneccessary)
-		processPendDownReq();
+		processPendDownReqCB::schedule(1, this);
 	} else {
 		// [sizhuo] no upgrade req pending, we can recycle whole entry
 		en->clear();
@@ -213,11 +226,13 @@ void MSHRBank::retireDownReq(const MemRequest *mreq) {
 			index2Num.erase(idxIter);
 		}
 		// [sizhuo] process all pending req
-		processPendAll();
+		processPendAllCB::schedule(1, this);
 	}
 }
 
 void MSHRBank::upReqToWait(const MemRequest *mreq) {
+	ID(mreq->dump("MSHR upReqToWait"));
+
 	AddrType addr = mreq->getAddr();
 	AddrType lineAddr = cache->getLineAddr(addr);
 
@@ -232,10 +247,12 @@ void MSHRBank::upReqToWait(const MemRequest *mreq) {
 	en->upReqState = Wait;
 
 	// [sizhuo] invoke pending downgrade req
-	processPendDownReq();
+	processPendDownReqCB::schedule(1, this);
 }
 
 void MSHRBank::upReqToAck(const MemRequest *mreq) {
+	ID(mreq->dump("MSHR upReqToAck"));
+
 	AddrType addr = mreq->getAddr();
 	AddrType lineAddr = cache->getLineAddr(addr);
 
@@ -257,6 +274,8 @@ void MSHRBank::upReqToAck(const MemRequest *mreq) {
 }
 
 void MSHRBank::retireUpReq(const MemRequest *mreq) {
+	ID(mreq->dump("MSHR retireUpReq"));
+
 	AddrType addr = mreq->getAddr();
 	AddrType lineAddr = cache->getLineAddr(addr);
 	AddrType index = cache->getIndex(lineAddr);
@@ -286,7 +305,7 @@ void MSHRBank::retireUpReq(const MemRequest *mreq) {
 	}
 
 	// [sizhuo] invoke all pending req
-	processPendAll();
+	processPendAllCB::schedule(1, this);
 }
 
 // HierMSHR class

@@ -79,6 +79,8 @@ private:
 	// by calling addUp/DownReq()
 	void processPendDownReq(); // only SetState 
 	void processPendAll(); // SetState + Req
+	typedef CallbackMember0<MSHRBank, &MSHRBank::processPendDownReq> processPendDownReqCB;
+	typedef CallbackMember0<MSHRBank, &MSHRBank::processPendAll> processPendAllCB;
 
 	// [sizhuo] retire downgrade req from MSHR
 	// may unmark occupied bit in cache array, and invoke pending req
