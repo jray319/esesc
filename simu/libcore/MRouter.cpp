@@ -389,6 +389,32 @@ int32_t MRouter::sendSetStateAll(MemRequest *mreq, MsgAction ma, TimeDelta_t lat
 }
 /* }}} */
 
+// [sizhuo] newly added for cache replacement
+int32_t MRouter::invalidateAll(AddrType addr, MemRequest *mreq, TimeDelta_t lat)
+{
+  if(up_node.empty())
+    return 0; // top node?
+
+  bool doStats  = mreq->getStatsFlag();
+
+  I(mreq->isReq());
+  int32_t conta = 0;
+  for(size_t i=0;i<up_node.size();i++) {
+    MemRequest *breq = MemRequest::createSetState(self_mobj, mreq->getCreator(), ma_setInvalid, addr, doStats);
+#ifdef DEBUG
+		// [sizhuo] inherit debug bit
+		if (mreq->isDebug()) breq->setDebug();
+#endif
+    breq->addPendingSetStateAck(mreq);
+
+    breq->startSetState(up_node[i], lat);
+    conta++;
+  }
+
+  return conta;
+}
+///////
+
 TimeDelta_t MRouter::ffread(AddrType addr)
   /* propagate the read to the lower level {{{1 */
 {

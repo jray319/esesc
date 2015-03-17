@@ -143,6 +143,12 @@ public:
 	// [sizhuo] starts (downgrade) req to all upper nodes
   int32_t sendSetStateAll(MemRequest *mreq, MsgAction ma, TimeDelta_t lat=0);
 
+	// Added by Sizhuo
+	// [sizhuo] starts (downgrade) req to all upper nodes with specific addr
+	// but let setState req all linked to mreq (by addPendingSetStateAck())
+  int32_t invalidateAll(AddrType addr, MemRequest *mreq, TimeDelta_t lat=0);
+	/////////
+
   TimeDelta_t ffread(AddrType addr);
   TimeDelta_t ffwrite(AddrType addr);
   TimeDelta_t ffreadPos(uint32_t pos, AddrType addr);

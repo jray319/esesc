@@ -86,8 +86,6 @@ bool MSHRBank::addDownReq(MemRequest *mreq) {
 
 	if(success) {
 		// [sizhuo] insert to MSHR success
-		mreq->pos = MemRequest::MSHR; // [sizhuo] change mreq position
-		mreq->inport->deqDoneMsg(); // [sizhuo] deq req from inport
 		(mreq->redoSetStateCB).schedule(1); // [sizhuo] re-handle req next cycle
 	} else {
 		// [sizhuo] fail to insert to MSHR, re-enq to pend Q
@@ -129,8 +127,6 @@ bool MSHRBank::addUpReq(MemRequest *mreq) {
 
 	if(success) {
 		// [sizhuo] insert to MSHR success
-		mreq->pos = MemRequest::MSHR; // [sizhuo] change mreq position
-		mreq->inport->deqDoneMsg(); // [sizhuo] deq req from inport
 		(mreq->redoReqCB).schedule(1); // [sizhuo] re-handle req next cycle
 	} else {
 		// [sizhuo] fail to insert to MSHR, re-enq to pend Q

@@ -82,17 +82,13 @@ private:
 
 	// [sizhuo] retire downgrade req from MSHR
 	// may unmark occupied bit in cache array, and invoke pending req
-	// XXX: req it self won't change, and inport won't deq this msg
 	void retireDownReq(const MemRequest *mreq);
 
 	// [sizhuo] upgrade req goes to lower level
 	// and invoke pending downgrade req
-	// XXX: req it self won't change, and inport won't deq this msg
 	void upReqToWait(const MemRequest *mreq);
 
 	// [sizhuo] retire upgrade req from MSHR
-	// unmark occupied bit in cache array, and invoke pending req
-	// XXX: req it self won't change, and inport won't deq this msg
 	void retireUpReq(const MemRequest *mreq);
 
 public:
@@ -100,25 +96,22 @@ public:
 	~MSHRBank();
 
 	// [sizhuo] add downgrade req to MSHR
-	// if success: (1) req is added to MSHR (2) req pos is set to MSHR 
-	// (3) call inport to deq this msg (4) req will be handled next cycle
-	// otherwise: req is enq to pendDownReqQ, and req itself is not changed
+	// if success: the handler of req is called next cycleyy
+	// if fail: req is enq to pendDownReqQ, and will automatically retry next time
 	bool addDownReq(MemRequest *mreq);
 
 	// [sizhuo] callback to retire downgrade req from MSHR
 	typedef CallbackMember1<MSHRBank, const MemRequest*, &MSHRBank::retireDownReq> retireDownReqCB;
 
 	// [sizhuo] add upgrade req to MSHR
-	// if success: (1) req is added to MSHR (2) req pos is set to MSHR 
-	// (3) call inport to deq this msg (4) req will be handled next cycle
-	// otherwise: req is enq to pendDownReqQ
+	// if success: the handler of req is called next cycleyy
+	// if fail: req is enq to pendUpReqQ, and will automatically retry next time
 	bool addUpReq(MemRequest *mreq);
 
 	// [sizhuo] callback to change upgrade req to Wait state
 	typedef CallbackMember1<MSHRBank, const MemRequest*, &MSHRBank::upReqToWait> upReqToWaitCB;
 
 	// [sizhuo] change upgrade req to Ack state
-	// XXX: req it self won't change, and inport won't deq this msg
 	void upReqToAck(const MemRequest *mreq);
 	
 	// [sizhuo] callback to retire upgrade req from MSHR
