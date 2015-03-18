@@ -1,4 +1,3 @@
-
 #include "nanassert.h"
 
 #include "SescConf.h"
