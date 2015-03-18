@@ -75,7 +75,7 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
   const char* mshrSection = SescConf->getCharPtr(section,"MSHR");
 	uint32_t mshrBankSize = SescConf->getInt(mshrSection, "nSubEntries");
 	uint32_t mshrBankNum = SescConf->getInt(mshrSection, "size") / mshrBankSize;
-	mshr = new HierMSHR(mshrBankNum, mshrBankSize, cache);
+	mshr = new HierMSHR(mshrBankNum, mshrBankSize, cache, name);
 	I(mshr);
 	ID(MSG("%s creates MSHR: bankNum %d, bankSize %d", name, mshrBankNum, mshrBankSize));
 
@@ -110,6 +110,7 @@ ACache::~ACache() {
 }
 
 void ACache::req(MemRequest *mreq) {
+	I(mreq);
 	ID(mreq->dump("req"));
 
   // predicated ARM instructions can be with zero address
@@ -126,6 +127,7 @@ void ACache::req(MemRequest *mreq) {
 		// enq msg to inport & record inport & set pos
 		mreq->pos = MemRequest::Inport;
 		mreq->inport = reqFromUpPort[0];
+		I(mreq->inport);
 		reqFromUpPort[0]->enqNewMsg(&(mreq->redoReqCB), mreq->getStatsFlag());
 	} else {
 		int portId = router->getCreatorPort(mreq);
@@ -134,29 +136,35 @@ void ACache::req(MemRequest *mreq) {
 		// [sizhuo] enq msg to inport & record inport & set pos
 		mreq->pos = MemRequest::Inport;
 		mreq->inport = reqFromUpPort[portId];
+		I(mreq->inport);
 		reqFromUpPort[portId]->enqNewMsg(&(mreq->redoReqCB), mreq->getStatsFlag());
 	}
 }
 
 void ACache::reqAck(MemRequest *mreq) {
+	I(mreq);
 	ID(mreq->dump("reqAck"));
 	I(!mreq->isRetrying());
 	// [sizhuo] enq msg to inport & record inport & set pos
 	mreq->pos = MemRequest::Inport;
 	mreq->inport = fromDownPort;
+	I(mreq->inport);
 	fromDownPort->enqNewMsg(&(mreq->redoReqAckCB), mreq->getStatsFlag());
 }
 
 void ACache::setState(MemRequest *mreq) {
+	I(mreq);
 	ID(mreq->dump("setState"));
 	I(!mreq->isRetrying());
 	// [sizhuo] enq msg to inport & record inport & set pos
 	mreq->pos = MemRequest::Inport;
 	mreq->inport = fromDownPort;
+	I(mreq->inport);
 	fromDownPort->enqNewMsg(&(mreq->redoSetStateCB), mreq->getStatsFlag());
 }
 
 void ACache::setStateAck(MemRequest *mreq) {
+	I(mreq);
 	ID(mreq->dump("setStateAck"));
 	I(!mreq->isRetrying());
 	I(!isL1);
@@ -167,10 +175,12 @@ void ACache::setStateAck(MemRequest *mreq) {
 	// [sizhuo] enq msg to inport & record inport & set pos
 	mreq->pos = MemRequest::Inport;
 	mreq->inport = respFromUpPort[portId];
+	I(mreq->inport);
 	respFromUpPort[portId]->enqNewMsg(&(mreq->redoSetStateAckCB), mreq->getStatsFlag());
 }
 
 void ACache::disp(MemRequest *mreq) {
+	I(mreq);
 	ID(mreq->dump("disp"));
 	I(!mreq->isRetrying());
 	// [sizhuo] enq new msg to inport
@@ -180,18 +190,21 @@ void ACache::disp(MemRequest *mreq) {
 	// [sizhuo] enq msg to inport & record inport & set pos
 	mreq->pos = MemRequest::Inport;
 	mreq->inport = respFromUpPort[portId];
+	I(mreq->inport);
 	respFromUpPort[portId]->enqNewMsg(&(mreq->redoDispCB), mreq->getStatsFlag());
 }
 
 void ACache::doReq(MemRequest *mreq) {
+	I(mreq);
 	ID(mreq->dump("doReq"));
 
 	if(mreq->pos == MemRequest::Inport) {
 		if(!mreq->isRetrying()) {
 			// [sizhuo] new req from inport, try to add it to MSHR
-			bool success = mshr->addUpReq(mreq);
+			bool success = mshr->addUpReq(cache->getLineAddr(mreq->getAddr()), &(mreq->redoReqCB), mreq);
 			if(success) {
 				// [sizhuo] add success, deq inport & set pos
+				I(mreq->inport);
 				mreq->inport->deqDoneMsg();
 				mreq->inport = 0;
 				mreq->pos = MemRequest::MSHR;
@@ -205,6 +218,7 @@ void ACache::doReq(MemRequest *mreq) {
 			// [sizhuo] retry to add MSHR success
 			// deq inport & set pos & clear retry bit
 			mreq->clearRetrying();
+			I(mreq->inport);
 			mreq->inport->deqDoneMsg();
 			mreq->inport = 0;
 			mreq->pos = MemRequest::MSHR;
@@ -213,12 +227,20 @@ void ACache::doReq(MemRequest *mreq) {
 		}
 	} else if(mreq->pos == MemRequest::MSHR) {
 		I(mreq->inport == 0);
-		/*
+		// [sizhuo] the caline line in the same index to be replaced
+		// XXX: if we replace random address not in same index we may have problem
+		// because another active req in the same MSHR may be operating on it
+		const AddrType lineAddr = cache->getLineAddr(mreq->getAddr());
+		const AddrType repLineAddr = ((cache->getTag(lineAddr) + 1) << cache->log2Sets) | cache->getIndex(lineAddr);
+		const AddrType repByteAddr = repLineAddr << cache->log2LineSize;
+		I(cache->getLineAddr(repByteAddr) == repLineAddr);
+		I(repLineAddr != lineAddr);
+		I(cache->getIndex(repLineAddr) == cache->getIndex(lineAddr));
+
 		if(!mreq->isRetrying()) {
 			// [sizhuo] newly added to MSHR, try to replace a cache line
-			// set retry bit for disambiguation when handling this req next time
-			// [sizhuo] access tag & send invalidation to upper level
-			int nmsg = router->invalidateAll(mreq->getAddr() << 1, mreq, tagDelay + goUpDelay);
+			// access tag & send invalidation to upper level
+			int nmsg = router->invalidateAll(repByteAddr, mreq, tagDelay + goUpDelay);
 			if(nmsg > 0) {
 				I(mreq->hasPendingSetStateAck());
 				// [sizhuo] wait for downgrade resp to wake me up
@@ -235,40 +257,43 @@ void ACache::doReq(MemRequest *mreq) {
 			I(!mreq->hasPendingSetStateAck());
 			mreq->clearRetrying(); // [sizhuo] clear retry bit
 			// [sizhuo] send disp resp to lower level after reading data
-			router->sendDisp(mreq->getAddr() << 1, mreq->getStatsFlag(), dataDelay + goDownDelay);
+			router->sendDisp(repByteAddr, mreq->getStatsFlag(), dataDelay + goDownDelay);
 			// [sizhuo] forward req to lower level 1 cycle later than sending disp
 			// set pos & notify MSHR that mreq goes down to lower level
-			mshr->upReqToWait(mreq, dataDelay + 1);
+			mshr->upReqToWait(lineAddr, dataDelay + 1);
 			mreq->pos = MemRequest::Router;
 			router->scheduleReq(mreq, dataDelay + goDownDelay + 1);
 			// [sizhuo] we wait for reqAck to come back and completes this req in doReqAck()
 		}
-		*/
+		/*
 		I(!mreq->hasPendingSetStateAck());
 		I(!mreq->isRetrying());
-		mshr->upReqToWait(mreq, dataDelay + 1);
+		mshr->upReqToWait(cache->getLineAddr(mreq->getAddr()), 0);
 		mreq->pos = MemRequest::Router;
-		router->scheduleReq(mreq, dataDelay + goDownDelay + 1);
+		router->scheduleReq(mreq, goDownDelay);
+		*/
 	} else {
 		I(0);
 	}
 }
 
 void ACache::doReqAck(MemRequest *mreq) {
+	I(mreq);
 	ID(mreq->dump("doReqAck"));
 
 	if(mreq->isHomeNode()) {
 		// [sizhuo] this is home node, we can end the msg
 		I(isL1); // [sizhuo] must be L1$
 		// [sizhuo] deq msg from inport & set pos
+		I(mreq->inport);
 		mreq->inport->deqDoneMsg();	
 		mreq->inport = 0;
 		mreq->pos = MemRequest::MSHR;
 		// [sizhuo] immediately notify MSHR that ack comes back
 		// (prevent downgrade req to this cache line from being accepted)
-		mshr->upReqToAck(mreq);
+		mshr->upReqToAck(cache->getLineAddr(mreq->getAddr()));
 		// [sizhuo] end this msg & retire MSHR
-		mshr->retireUpReq(mreq, 0);
+		mshr->retireUpReq(cache->getLineAddr(mreq->getAddr()), 0);
 		mreq->ack(goUpDelay);
 		return;
 	}
@@ -280,10 +305,11 @@ void ACache::doReqAck(MemRequest *mreq) {
 	if(mreq->pos == MemRequest::Inport) {
 		// [sizhuo] new reqAck from inport, it has corresponding req in MSHR
 		// deq inport & set pos & notify MSHR that reqAck comes back
+		I(mreq->inport);
 		mreq->inport->deqDoneMsg();
 		mreq->inport = 0;
 		mreq->pos = MemRequest::MSHR;
-		mshr->upReqToAck(mreq);
+		mshr->upReqToAck(cache->getLineAddr(mreq->getAddr()));
 		// [sizhuo] we proceed to handle this msg next cycle
 		(mreq->redoReqAckCB).schedule(1);
 	} else if(mreq->pos == MemRequest::MSHR) {
@@ -310,7 +336,7 @@ void ACache::doReqAck(MemRequest *mreq) {
 		I(!mreq->hasPendingSetStateAck());
 		mreq->clearRetrying(); // [sizhuo] clear retry bit
 		// [sizhuo] resp to upper level & retire MSHR entry & set pos
-		mshr->retireUpReq(mreq, 0);
+		mshr->retireUpReq(cache->getLineAddr(mreq->getAddr()), 0);
 		mreq->pos = MemRequest::Router;
 		router->scheduleReqAck(mreq, goUpDelay);
 	} else {
@@ -319,15 +345,17 @@ void ACache::doReqAck(MemRequest *mreq) {
 }
 
 void ACache::doSetState(MemRequest *mreq) {
+	I(mreq);
   I(!mreq->isHomeNode()); // [sizhuo] home node should be at lower level
 	ID(mreq->dump("doSetState"));
 
 	if(mreq->pos == MemRequest::Inport) {
 		if(!mreq->isRetrying()) {
 			// [sizhuo] new downgrade req from inport, try to add to MSHR
-			bool success = mshr->addDownReq(mreq);
+			bool success = mshr->addDownReq(cache->getLineAddr(mreq->getAddr()), &(mreq->redoSetStateCB), mreq);
 			if(success) {
 				// [sizhuo] add success, deq inport & set pos
+				I(mreq->inport);
 				mreq->inport->deqDoneMsg();
 				mreq->inport = 0;
 				mreq->pos = MemRequest::MSHR;
@@ -341,6 +369,7 @@ void ACache::doSetState(MemRequest *mreq) {
 			// [sizhuo] retry to add MSHR success
 			// deq inport & set pos & clear retry bit
 			mreq->clearRetrying();
+			I(mreq->inport);
 			mreq->inport->deqDoneMsg();
 			mreq->inport = 0;
 			mreq->pos = MemRequest::MSHR;
@@ -367,7 +396,7 @@ void ACache::doSetState(MemRequest *mreq) {
 			I(!mreq->hasPendingSetStateAck());
 			mreq->clearRetrying(); // [sizhuo] reset retry bit
 			// [sizhuo] resp to lower level & set pos & retire MSHR entry
-			mshr->retireDownReq(mreq, 0);
+			mshr->retireDownReq(cache->getLineAddr(mreq->getAddr()), 0);
 			mreq->pos = MemRequest::Router;
 			mreq->convert2SetStateAck(ma_setInvalid);
 			router->scheduleSetStateAck(mreq, goDownDelay);
@@ -378,6 +407,7 @@ void ACache::doSetState(MemRequest *mreq) {
 }
 
 void ACache::doSetStateAck(MemRequest *mreq) {
+	I(mreq);
 	I(mreq->isHomeNode()); // [sizhuo] we must be at home node now
 	GMSG(!mreq->isHomeNode(), "ERROR: SetStateAck arrives non-home node!");
 	ID(mreq->dump("doSetStateAck"));
@@ -386,7 +416,9 @@ void ACache::doSetStateAck(MemRequest *mreq) {
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 	// no need to set pos
+	I(mreq->inport);
 	mreq->inport->deqDoneMsg();	
+	mreq->inport = 0;
 
 	// [sizhuo] we can end this msg, setStateAckDone() may be called
 	// and invoke other handler in this cache (delay is 0 here)
@@ -412,11 +444,14 @@ void ACache::doSetStateAck(MemRequest *mreq) {
 }
 
 void ACache::doDisp(MemRequest *mreq) {
+	I(mreq);
 	ID(mreq->dump("doDisp"));
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 	// no need to set pos here
+	I(mreq->inport);
 	mreq->inport->deqDoneMsg();
+	mreq->inport = 0;
 
 	mreq->ack();
 }

@@ -231,10 +231,12 @@ protected:
     mreq->ma         = ma_setValid; // For reads, MOES are valid states
     return mreq;
   }
-  static void sendReqRead(MemObj *m, bool doStats, AddrType addr, CallbackBase *cb=0) { 
+	// [sizhuo] add debug bit
+  static void sendReqRead(MemObj *m, bool doStats, AddrType addr, CallbackBase *cb=0, bool dbg = false) { 
     MemRequest *mreq = create(m,addr, doStats, cb);
     mreq->mt         = mt_req;
     mreq->ma         = ma_setValid; // For reads, MOES are valid states
+		mreq->debug = dbg || mreq->debug; // [sizhuo] add debug bit
 		m->req(mreq);
   }
 	// [sizhuo] add debug bit
@@ -245,10 +247,12 @@ protected:
 		mreq->debug = dbg || mreq->debug; // [sizhuo] add debug bit
 		m->req(mreq);
   }
-  static void sendReqWritePrefetch(MemObj *m, bool doStats, AddrType addr, CallbackBase *cb=0) { 
+	// [sizhuo] add debug bit
+  static void sendReqWritePrefetch(MemObj *m, bool doStats, AddrType addr, CallbackBase *cb=0, bool dbg = false) { 
     MemRequest *mreq = create(m,addr,doStats, cb);
     mreq->mt         = mt_req;
     mreq->ma         = ma_setDirty; 
+		mreq->debug = dbg || mreq->debug; // [sizhuo] add debug bit
 		m->req(mreq);
   }
 
@@ -389,7 +393,7 @@ public:
 #ifdef DEBUG
 	void setDebug() { debug = true; }
 	void clearDebug() { debug = false; }
-	bool isDebug() { return debug; }
+	bool isDebug() const { return debug; }
 #endif
 	void dump(const char* str) const {
 #ifdef DEBUG

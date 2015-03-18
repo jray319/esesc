@@ -10,6 +10,201 @@
 #include "MemRequest.h"
 #include "CacheArray.h"
 
+// [sizhuo] base class of 1 bank of MSHR
+class MSHRBank {
+protected:
+	// [sizhuo] upgrade req state
+	typedef enum {
+		Req, // [sizhuo] try to send req to lower level
+		Wait, // [sizhuo] waiting for upgrade resp from lower level
+		Ack // [sizhuo] try to send resp to upper level
+	} UpReqState;
+
+public:
+	MSHRBank() {}
+	virtual ~MSHRBank() {}
+
+	// [sizhuo] add downgrade req to MSHR
+	// if success: req is added to MSHR, return true
+	// if fail: req is enq to pendDownReqQ for retrying
+	// and will call mreq->doReq immediately when succeed next time
+	virtual bool addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) = 0;
+	// [sizhuo] retire downgrade req from MSHR
+	virtual void retireDownReq(AddrType lineAddr) = 0;
+
+	// [sizhuo] callback to retire downgrade req from MSHR
+	typedef CallbackMember1<MSHRBank, AddrType, &MSHRBank::retireDownReq> retireDownReqCB;
+
+	// [sizhuo] add upgrade req to MSHR
+	// if success: req is added to MSHR, return true
+	// if fail: req is enq to pendUpReqQ for retrying
+	// and will call mreq->doReq immediately when succeed next time
+	virtual bool addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) = 0;
+	// [sizhuo] upgrade req goes to lower level
+	// and invoke pending downgrade req
+	virtual void upReqToWait(AddrType lineAddr) = 0;
+	// [sizhuo] change upgrade req to Ack state
+	virtual void upReqToAck(AddrType lineAddr) = 0;
+	// [sizhuo] retire upgrade req from MSHR
+	virtual void retireUpReq(AddrType lineAddr) = 0;
+	
+	// [sizhuo] callback to change upgrade req to Wait state
+	typedef CallbackMember1<MSHRBank, AddrType, &MSHRBank::upReqToWait> upReqToWaitCB;
+	// [sizhuo] callback to retire upgrade req from MSHR
+	typedef CallbackMember1<MSHRBank, AddrType, &MSHRBank::retireUpReq> retireUpReqCB;
+};
+
+class HierMSHR;
+
+// [sizhuo] blocking MSHR
+class BlockMSHRBank : public MSHRBank {
+private:
+	const int bankID;
+	const char *name;
+	const CacheArray *cache; // [sizhuo] pointer to cache array
+
+	// [sizhuo] upgrade req entry
+	class UpReqEntry {
+	public:
+		bool valid;
+		AddrType lineAddr;
+		UpReqState state;
+		const MemRequest *mreq;
+
+		UpReqEntry() : valid(false), lineAddr(0), state(Req) , mreq(0) {}
+		void clear() {
+			valid = false;
+			lineAddr = 0;
+			state = Req;
+			mreq = 0;
+		}
+	};
+	UpReqEntry upReq;
+
+	// [sizhuo] downgrade req entry
+	class DownReqEntry {
+	public:
+		bool valid;
+		AddrType lineAddr;
+		const MemRequest *mreq;
+
+		DownReqEntry() : valid(false), lineAddr(0), mreq(0) {}
+		void clear() {
+			valid = false;
+			lineAddr = 0;
+			mreq = 0;
+		}
+	};
+	DownReqEntry downReq;
+
+	// [sizhuo] pending req
+	class PendReq {
+	public:
+		AddrType lineAddr;
+		StaticCallbackBase *cb;
+		const MemRequest *mreq;
+		PendReq() : lineAddr(0), cb(0), mreq(0) {}
+		PendReq(AddrType lineA, StaticCallbackBase *c, const MemRequest *r) 
+			: lineAddr(lineA)
+			, cb(c)
+			, mreq(r)
+			{}
+	};
+
+	typedef std::queue<PendReq> PendQ;
+
+	// [sizhuo] FIFO of pending dowgrade req (SetState) that try to be inserted to MSHR
+	// a SetState msg is pending because 
+	// 1. MSHR downReq entry is occupied
+	// 2. MSHR contains upgrade req to same cache line in Req/Ack state
+	PendQ *pendDownReqQ;
+
+	// [sizhuo] FIFO of pending upgrade req that try to be inserted to MSHR
+	// a Req msg is pending because 
+	// 1. MSHR upReq entry is occupied
+	// 2. MSHR contains downgrade/upgrade req to the same cache set
+	PendQ *pendUpReqQ;
+
+	// [sizhuo] when MSHR changes, we may invoke all pending msg
+	// but pending Q may also be enqueued during this process
+	// so we first move pending Q to callQ, and invoke all msg in callQ
+	PendQ *callQ;
+
+	// [sizhuo] virtual functions
+	////////
+
+	// [sizhuo] when MSHR entry state changes, we process pending msg
+	// by calling addUp/DownReq()
+	void processPendDownReq(); // only SetState 
+	void processPendAll(); // SetState + Req
+	//typedef CallbackMember0<BlockMSHRBank, &BlockMSHRBank::processPendDownReq> processPendDownReqCB;
+	//typedef CallbackMember0<BlockMSHRBank, &BlockMSHRBank::processPendAll> processPendAllCB;
+
+public:
+	BlockMSHRBank(int id, HierMSHR *m, CacheArray *c, const char *str);
+	virtual ~BlockMSHRBank();
+
+	// [sizhuo] virtual functions
+	virtual bool addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq);
+	virtual void retireDownReq(AddrType lineAddr);
+
+	virtual bool addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq);
+	virtual void upReqToWait(AddrType lineAddr);
+	virtual void upReqToAck(AddrType lineAddr);
+	virtual void retireUpReq(AddrType lineAddr);
+	////////
+};
+
+// [sizhuo] banked MSHR, each bank is fully associative 
+// bank is mapped by cache index
+class HierMSHR {
+private:
+	const uint32_t bankNum; // [sizhuo] number of banks
+	const uint32_t bankMask;
+//	const int bankSize; // [sizhuo] number of entries in one bank
+	char *name;
+
+	CacheArray *cache; // [sizhuo] cache array
+
+	MSHRBank **bank; // [sizhuo] bank array
+
+	// [sizhuo] get bank id of req
+	inline uint32_t getBank(AddrType lineAddr) {
+		return lineAddr & bankMask;
+	}
+
+public:
+	HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c, const char *str);
+	~HierMSHR();
+
+	const char *getName() const { return name; }
+
+	// [sizhuo] the functions provided are almost the same as MSHRBank
+	// we simply add latency param to some functions, instead of using callback
+	
+	bool addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) {
+		return bank[getBank(lineAddr)]->addDownReq(lineAddr, cb, mreq);
+	}
+	void retireDownReq(AddrType lineAddr, TimeDelta_t lat) {
+		MSHRBank::retireDownReqCB::schedule(lat, bank[getBank(lineAddr)], lineAddr);
+	}
+
+	bool addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) {
+		return bank[getBank(lineAddr)]->addUpReq(lineAddr, cb, mreq);
+	}
+	void upReqToWait(AddrType lineAddr, TimeDelta_t lat) {
+		MSHRBank::upReqToWaitCB::schedule(lat, bank[getBank(lineAddr)], lineAddr);
+	}
+	void upReqToAck(AddrType lineAddr) {
+		bank[getBank(lineAddr)]->upReqToAck(lineAddr);
+	}
+	void retireUpReq(AddrType lineAddr, TimeDelta_t lat) {
+		MSHRBank::retireUpReqCB::schedule(lat, bank[getBank(lineAddr)], lineAddr);
+	}
+};
+
+
+#if 0
 // [sizhuo] one bank of MSHR (fully associative)
 // but only allow at most 1 upgrade req per cache set
 // i.e. upgrade req is added only when no up/down req in same cache set
@@ -82,89 +277,12 @@ private:
 	typedef CallbackMember0<MSHRBank, &MSHRBank::processPendDownReq> processPendDownReqCB;
 	typedef CallbackMember0<MSHRBank, &MSHRBank::processPendAll> processPendAllCB;
 
-	// [sizhuo] retire downgrade req from MSHR
-	// may unmark occupied bit in cache array, and invoke pending req
-	void retireDownReq(const MemRequest *mreq);
-
-	// [sizhuo] upgrade req goes to lower level
-	// and invoke pending downgrade req
-	void upReqToWait(const MemRequest *mreq);
-
-	// [sizhuo] retire upgrade req from MSHR
-	void retireUpReq(const MemRequest *mreq);
-
 public:
 	MSHRBank(int sz, CacheArray *c);
 	~MSHRBank();
 
-	// [sizhuo] add downgrade req to MSHR
-	// if success: req is added to MSHR, return true
-	// if fail: req is enq to pendDownReqQ for retrying
-	// and will call mreq->doReq immediately when succeed next time
-	bool addDownReq(MemRequest *mreq);
-
-	// [sizhuo] callback to retire downgrade req from MSHR
-	typedef CallbackMember1<MSHRBank, const MemRequest*, &MSHRBank::retireDownReq> retireDownReqCB;
-
-	// [sizhuo] add upgrade req to MSHR
-	// if success: req is added to MSHR, return true
-	// if fail: req is enq to pendUpReqQ for retrying
-	// and will call mreq->doReq immediately when succeed next time
-	bool addUpReq(MemRequest *mreq);
-
-	// [sizhuo] callback to change upgrade req to Wait state
-	typedef CallbackMember1<MSHRBank, const MemRequest*, &MSHRBank::upReqToWait> upReqToWaitCB;
-
-	// [sizhuo] change upgrade req to Ack state
-	void upReqToAck(const MemRequest *mreq);
-	
-	// [sizhuo] callback to retire upgrade req from MSHR
-	typedef CallbackMember1<MSHRBank, const MemRequest*, &MSHRBank::retireUpReq> retireUpReqCB;
 };
+#endif
 
-// [sizhuo] banked MSHR, each bank is fully associative 
-// bank is mapped by cache index
-class HierMSHR {
-private:
-	const uint32_t bankNum; // [sizhuo] number of banks
-	const uint32_t bankMask;
-	const int bankSize; // [sizhuo] number of entries in one bank
-
-	CacheArray *cache; // [sizhuo] cache array
-
-	MSHRBank **bank; // [sizhuo] bank array
-
-	// [sizhuo] get bank id of req
-	uint32_t getBank(const MemRequest *mreq) { 
-		return (cache->getLineAddr(mreq->getAddr())) & bankMask;
-	}
-
-public:
-	HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c);
-	~HierMSHR();
-
-	// [sizhuo] the functions provided are almost the same as MSHRBank
-	// we simply add latency param to some functions, instead of using callback
-	
-	bool addDownReq(MemRequest *mreq) {
-		return bank[getBank(mreq)]->addDownReq(mreq);
-	}
-	void retireDownReq(const MemRequest *mreq, TimeDelta_t lat) {
-		MSHRBank::retireDownReqCB::schedule(lat, bank[getBank(mreq)], mreq);
-	}
-
-	bool addUpReq(MemRequest *mreq) {
-		return bank[getBank(mreq)]->addUpReq(mreq);
-	}
-	void upReqToWait(const MemRequest *mreq, TimeDelta_t lat) {
-		MSHRBank::upReqToWaitCB::schedule(lat, bank[getBank(mreq)], mreq);
-	}
-	void upReqToAck(const MemRequest *mreq) {
-		bank[getBank(mreq)]->upReqToAck(mreq);
-	}
-	void retireUpReq(const MemRequest *mreq, TimeDelta_t lat) {
-		MSHRBank::retireUpReqCB::schedule(lat, bank[getBank(mreq)], mreq);
-	}
-};
 
 #endif

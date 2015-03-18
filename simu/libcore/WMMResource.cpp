@@ -205,7 +205,7 @@ void WMMFUStore::cacheDispatched(DInst *dinst) {
 	*/
 
 	// [sizhuo] debug
-	bool debug = gproc->getId() == 0 && dinst->getID() == 4208482 || gproc->getId() == 2 && dinst->getID() == 4208580;
+	bool debug = false;
 	MemRequest::sendReqWrite(DL1, dinst, dinst->getAddr(), executedCB::create(this,dinst), debug);
   //executedCB::scheduleAbs(gen->nextSlot(dinst->getStatsFlag())+lat, this, dinst);
 }

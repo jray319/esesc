@@ -3,7 +3,7 @@
 
 // [sizhuo] base class for all cache arrays
 class CacheArray {
-protected:
+public:
   const uint32_t  size; // [sizhuo] cache size in byte
   const uint32_t  lineSize; // [sizhuo] cache line size in byte
   const uint32_t  assoc; // [sizhuo] set associativity
@@ -16,7 +16,6 @@ protected:
   const uint32_t  maskSets; // [sizhuo] mask for index calculation
   const uint32_t  log2Sets;
 
-public:
 	CacheArray(const uint32_t sz, const uint32_t lineSz, const uint32_t a)
 		: size(sz)
 		, lineSize(lineSz)
@@ -39,13 +38,16 @@ public:
 	}
 
 	~CacheArray() {}
-		
+
 	// [sizhuo] functions to get line addr & index
 	AddrType getLineAddr (AddrType byteAddr) const {
 		return byteAddr >> log2LineSize;
 	}
 	AddrType getIndex (AddrType lineAddr) const {
 		return lineAddr & maskSets;
+	}
+	AddrType getTag (AddrType lineAddr) const {
+		return lineAddr >> log2Sets;
 	}
 };
 
