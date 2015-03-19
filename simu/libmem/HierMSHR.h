@@ -21,6 +21,12 @@ protected:
 		Ack // [sizhuo] try to send resp to upper level
 	} UpReqState;
 
+	// [sizhuo] downgrade req state
+	typedef enum {
+		Inactive,
+		Active
+	} DownReqState;
+
 public:
 	MSHRBank() {}
 	virtual ~MSHRBank() {}

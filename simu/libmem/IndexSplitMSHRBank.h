@@ -1,5 +1,5 @@
-#ifndef INDEX_MSHR_BANK_H
-#define INDEX_MSHR_BANK_H
+#ifndef INDEX_SPLIT_MSHR_BANK_H
+#define INDEX_SPLIT_MSHR_BANK_H
 
 #include "HierMSHR.h"
 #include "pool.h"
