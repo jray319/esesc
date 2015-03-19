@@ -9,6 +9,7 @@
 #include "GStats.h"
 #include "MemRequest.h"
 #include "CacheArray.h"
+#include "CacheInport.h"
 
 // [sizhuo] base class of 1 bank of MSHR
 class MSHRBank {
@@ -31,20 +32,20 @@ public:
 	MSHRBank() {}
 	virtual ~MSHRBank() {}
 
-	// [sizhuo] add downgrade req to MSHR
-	// if success: req is added to MSHR, and is READY FOR PROCESS, schedule callback next cycle
-	// if fail: req will be retried, and will schedule callback at the next cycle of success
-	virtual void addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) = 0;
+	// [sizhuo] add downgrade req to MSHR, and get it READY FOR PROCESS
+	// when req is inserted to MSHR, inport is dequeued
+	// when req is ready for process, callback cb will be scheduled 
+	virtual void addDownReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *inport, const MemRequest *mreq) = 0;
 	// [sizhuo] retire downgrade req from MSHR, invoke pending req
 	virtual void retireDownReq(AddrType lineAddr) = 0;
 
 	// [sizhuo] callback to retire downgrade req from MSHR
 	typedef CallbackMember1<MSHRBank, AddrType, &MSHRBank::retireDownReq> retireDownReqCB;
 
-	// [sizhuo] add upgrade req to MSHR
-	// if success: req is added to MSHR, and is READY FOR PROCESS, schedule callback next cycle
-	// if fail: req will be retried, and will schedule callback at the next cycle of success
-	virtual void addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) = 0;
+	// [sizhuo] add upgrade req to MSHR, and get it READY FOR PROCESS
+	// when req is inserted to MSHR, inport is dequeued
+	// when req is ready for process, callback cb will be scheduled 
+	virtual void addUpReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *inport, const MemRequest *mreq) = 0;
 	// [sizhuo] upgrade req goes to lower level, invoke pending req
 	virtual void upReqToWait(AddrType lineAddr) = 0;
 	// [sizhuo] change upgrade req to Ack state
@@ -85,15 +86,15 @@ public:
 	// [sizhuo] the functions provided are almost the same as MSHRBank
 	// we simply add latency param to some functions, instead of using callback
 	
-	void addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) {
-		bank[getBank(lineAddr)]->addDownReq(lineAddr, cb, mreq);
+	void addDownReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *port, const MemRequest *mreq) {
+		bank[getBank(lineAddr)]->addDownReq(lineAddr, cb, port, mreq);
 	}
 	void retireDownReq(AddrType lineAddr, TimeDelta_t lat) {
 		MSHRBank::retireDownReqCB::schedule(lat, bank[getBank(lineAddr)], lineAddr);
 	}
 
-	void addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) {
-		bank[getBank(lineAddr)]->addUpReq(lineAddr, cb, mreq);
+	void addUpReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *port, const MemRequest *mreq) {
+		bank[getBank(lineAddr)]->addUpReq(lineAddr, cb, port, mreq);
 	}
 	void upReqToWait(AddrType lineAddr, TimeDelta_t lat) {
 		MSHRBank::upReqToWaitCB::schedule(lat, bank[getBank(lineAddr)], lineAddr);
