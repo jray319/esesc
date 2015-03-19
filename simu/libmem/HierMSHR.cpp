@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "BlockMSHRBank.h"
+#include "IndexSplitMSHRBank.h"
 
 // HierMSHR class
 HierMSHR::HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c, const char *str)
@@ -25,15 +26,14 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c, const char *str)
 	name = new char[strlen(str) + 20];
 	I(name);
 	sprintf(name, "%s_MSHR", str);
-	ID(MSG(name));
 
 	// [sizhuo] create banks
 	bank = new MSHRBank*[bankNum];
 	I(bank);
 	for(uint32_t i = 0; i < bkNum; i++) {
 		bank[i] = 0;
-		bank[i] = new BlockMSHRBank(i, c, name);
-		//bank[i] = new IndexMSHRBank(i, bankSize, c, name);
+		//bank[i] = new BlockMSHRBank(i, c, name);
+		bank[i] = new IndexSplitMSHRBank(i, bankSize / 2, bankSize / 2, c, name);
 		I(bank[i]);
 	}
 }
