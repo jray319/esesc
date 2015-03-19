@@ -1,6 +1,18 @@
 #ifndef CACHE_ARRAY_H
 #define CACHE_ARRAY_H
 
+// [sizhuo] MESI coherence cache line base class
+class CacheLine {
+public:
+	typedef enum {I, S, E, M} MESI;
+	MESI state; // [sizhuo] MESI state of this cache line
+	MESI *dir; // [sizhuo] directory for cache line in upper level
+	AddrType lineAddr;
+	MemRequest *upReq; // [sizhuo] upgrade req operating on this line
+	MemRequest *downReq; // [sizhuo] downgrade req operating on this line
+	CacheLine() : state(I), dir(0), lineAddr(0), upReq(0), downReq(0) {}
+};
+
 // [sizhuo] base class for all cache arrays
 class CacheArray {
 public:

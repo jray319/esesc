@@ -50,7 +50,7 @@ IndexSplitMSHRBank::~IndexSplitMSHRBank() {
 	}
 }
 
-bool IndexSplitMSHRBank::addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) {
+void IndexSplitMSHRBank::addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) {
 	I(cb);
 	I(mreq);
 	ID(GMSG(mreq->isDebug(), "%s_bank(%d) addDownReq:", name, bankID));
@@ -110,16 +110,16 @@ bool IndexSplitMSHRBank::addDownReq(AddrType lineAddr, StaticCallbackBase *cb, c
 		// [sizhuo] insert to invert table
 		I(line2DownReq.find(lineAddr) == line2DownReq.end());
 		line2DownReq.insert(std::make_pair<AddrType, DownReqEntry*>(lineAddr, en));
+		// [sizhuo] call handler next cycle
+		cb->schedule(1);
 	} else {
 		I(pendDownReqQ);
 		// [sizhuo] fail to insert to MSHR, enq to pend Q
 		pendDownReqQ->push(PendReq(lineAddr, cb, mreq));
 	}
-
-	return success;
 }
 
-bool IndexSplitMSHRBank::addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) {
+void IndexSplitMSHRBank::addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) {
 	I(cb);
 	I(mreq);
 	ID(GMSG(mreq->isDebug(), "%s_bank(%d) addUpReq:", name, bankID));
@@ -175,13 +175,13 @@ bool IndexSplitMSHRBank::addUpReq(AddrType lineAddr, StaticCallbackBase *cb, con
 		// [sizhuo] insert to invert table
 		I(index2UpReq.find(index) == index2UpReq.end());
 		index2UpReq.insert(std::make_pair<AddrType, UpReqEntry*>(index, en));
+		// [sizhuo] call handler next cycle
+		cb->schedule(1);
 	} else {
 		I(pendUpReqQ);
 		// [sizhuo] fail to insert to MSHR, enq to pend Q
 		pendUpReqQ->push(PendReq(lineAddr, cb, mreq));
 	}
-
-	return success;
 }
 
 void IndexSplitMSHRBank::processPendDownReq() {
@@ -201,12 +201,7 @@ void IndexSplitMSHRBank::processPendDownReq() {
 	while(!callQ->empty() && freeDownReqNum > 0) {
 		PendReq r = callQ->front();
 		callQ->pop();
-		bool success = addDownReq(r.lineAddr, r.cb, r.mreq);
-		if(success) {
-			// [sizhuo] retry success, call redoSetState immediately to change state
-			I(r.cb == &((r.mreq)->redoSetStateCB));
-			(r.cb)->call();
-		}
+		addDownReq(r.lineAddr, r.cb, r.mreq);
 	}
 	// [sizhuo] flush remaining req in callQ to pendQ
 	while(!callQ->empty()) {
@@ -236,12 +231,7 @@ void IndexSplitMSHRBank::processPendAll() {
 	while(!callQ->empty() && freeUpReqNum > 0) {
 		PendReq r = callQ->front();
 		callQ->pop();
-		bool success = addUpReq(r.lineAddr, r.cb, r.mreq);
-		if(success) {
-			// [sizhuo] retry success, call redoReq immediately to change state
-			I(r.cb == &((r.mreq)->redoReqCB));
-			(r.cb)->call();
-		}
+		addUpReq(r.lineAddr, r.cb, r.mreq);
 	}
 	// [sizhuo] flush remaining req in callQ to pendQ
 	while(!callQ->empty()) {

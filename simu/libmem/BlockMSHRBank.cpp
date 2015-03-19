@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <string.h>
 
+#if 0
 // MSHRBank class
 BlockMSHRBank::BlockMSHRBank(int id, CacheArray *c, const char *str)
 	: bankID(id)
@@ -204,4 +205,4 @@ void BlockMSHRBank::retireUpReq(AddrType lineAddr) {
 	upReq.clear();
 	processPendAll();
 }
-
+#endif

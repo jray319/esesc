@@ -89,10 +89,10 @@ public:
 	virtual ~IndexSplitMSHRBank();
 
 	// [sizhuo] virtual functions
-	virtual bool addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq);
+	virtual void addDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq);
 	virtual void retireDownReq(AddrType lineAddr);
 
-	virtual bool addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq);
+	virtual void addUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq);
 	virtual void upReqToWait(AddrType lineAddr);
 	virtual void upReqToAck(AddrType lineAddr);
 	virtual void retireUpReq(AddrType lineAddr);

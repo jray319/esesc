@@ -199,32 +199,24 @@ void ACache::doReq(MemRequest *mreq) {
 
 	if(mreq->pos == MemRequest::Inport) {
 		if(!mreq->isRetrying()) {
-			// [sizhuo] new req from inport, try to add it to MSHR
-			bool success = mshr->addUpReq(cache->getLineAddr(mreq->getAddr()), &(mreq->redoReqCB), mreq);
-			if(success) {
-				// [sizhuo] add success, deq inport & set pos
-				I(mreq->inport);
-				mreq->inport->deqDoneMsg();
-				mreq->inport = 0;
-				mreq->pos = MemRequest::MSHR;
-				// [sizhuo] we proceed to handle this req next cycle
-				(mreq->redoReqCB).schedule(1);
-			} else {
-				// [sizhuo] add fail, wait retry success
-				mreq->setRetrying();
-			}
-		} else {
-			// [sizhuo] retry to add MSHR success
-			// deq inport & set pos & clear retry bit
-			mreq->clearRetrying();
-			I(mreq->inport);
-			mreq->inport->deqDoneMsg();
-			mreq->inport = 0;
-			mreq->pos = MemRequest::MSHR;
-			// [sizhuo] we proceed to handle this req next cycle
-			(mreq->redoReqCB).schedule(1);
+			// [sizhuo] new req from inport, add it to MSHR
+			mshr->addUpReq(cache->getLineAddr(mreq->getAddr()), &(mreq->redoReqCB), mreq);
+			// [sizhuo] wait until add success
+			mreq->setRetrying();
+			return;
 		}
-	} else if(mreq->pos == MemRequest::MSHR) {
+		// [sizhuo] add MSHR success
+		// deq inport & set pos & clear retry bit
+		I(mreq->isRetrying());
+		mreq->clearRetrying();
+		I(mreq->inport);
+		mreq->inport->deqDoneMsg();
+		mreq->inport = 0;
+		mreq->pos = MemRequest::MSHR;
+		// [sizhuo] we proceed to handle this req
+	}
+	
+	if(mreq->pos == MemRequest::MSHR) {
 		I(mreq->inport == 0);
 		// [sizhuo] the caline line in the same index to be replaced
 		// XXX: if we replace random address not in same index we may have problem
@@ -264,13 +256,6 @@ void ACache::doReq(MemRequest *mreq) {
 			router->scheduleReq(mreq, dataDelay + goDownDelay);
 			// [sizhuo] we wait for reqAck to come back and completes this req in doReqAck()
 		}
-		/*
-		I(!mreq->hasPendingSetStateAck());
-		I(!mreq->isRetrying());
-		mshr->upReqToWait(cache->getLineAddr(mreq->getAddr()), 0);
-		mreq->pos = MemRequest::Router;
-		router->scheduleReq(mreq, goDownDelay);
-		*/
 	} else {
 		I(0);
 	}
@@ -348,32 +333,24 @@ void ACache::doSetState(MemRequest *mreq) {
 
 	if(mreq->pos == MemRequest::Inport) {
 		if(!mreq->isRetrying()) {
-			// [sizhuo] new downgrade req from inport, try to add to MSHR
-			bool success = mshr->addDownReq(cache->getLineAddr(mreq->getAddr()), &(mreq->redoSetStateCB), mreq);
-			if(success) {
-				// [sizhuo] add success, deq inport & set pos
-				I(mreq->inport);
-				mreq->inport->deqDoneMsg();
-				mreq->inport = 0;
-				mreq->pos = MemRequest::MSHR;
-				// [sizhuo] we proceed to handle this req next cycle
-				(mreq->redoSetStateCB).schedule(1);
-			} else {
-				// [sizhuo] add fail, wait retry success
-				mreq->setRetrying();
-			}
-		} else {
-			// [sizhuo] retry to add MSHR success
-			// deq inport & set pos & clear retry bit
-			mreq->clearRetrying();
-			I(mreq->inport);
-			mreq->inport->deqDoneMsg();
-			mreq->inport = 0;
-			mreq->pos = MemRequest::MSHR;
-			// [sizhuo] we proceed to handle this req next cycle
-			(mreq->redoSetStateCB).schedule(1);
+			// [sizhuo] new downgrade req from inport, add to MSHR
+			mshr->addDownReq(cache->getLineAddr(mreq->getAddr()), &(mreq->redoSetStateCB), mreq);
+			// [sizhuo] wait until add success
+			mreq->setRetrying();
+			return;
 		}
-	} else if(mreq->pos == MemRequest::MSHR) {
+		// [sizhuo] add MSHR success
+		// deq inport & set pos & clear retry bit
+		I(mreq->isRetrying());
+		mreq->clearRetrying();
+		I(mreq->inport);
+		mreq->inport->deqDoneMsg();
+		mreq->inport = 0;
+		mreq->pos = MemRequest::MSHR;
+		// [sizhuo] we proceed to handle this req
+	}
+	
+	if(mreq->pos == MemRequest::MSHR) {
 		I(mreq->inport == 0);
 		if(!mreq->isRetrying()) {
 			// [sizhuo] send downgrade req to upper level

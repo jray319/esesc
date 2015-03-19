@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <string.h>
 
-#include "BlockMSHRBank.h"
+//#include "BlockMSHRBank.h"
 #include "IndexSplitMSHRBank.h"
 
 // HierMSHR class

@@ -3,6 +3,7 @@
 
 #include "HierMSHR.h"
 
+#if 0
 // [sizhuo] blocking MSHR
 class BlockMSHRBank : public MSHRBank {
 private:
@@ -101,5 +102,6 @@ public:
 	virtual void retireUpReq(AddrType lineAddr);
 	////////
 };
+#endif
 
 #endif
