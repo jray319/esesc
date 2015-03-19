@@ -23,6 +23,8 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	I(upSize > 0);
 	I(downSize > 0);
 
+	MSG("%s_bank(%d): maxUpReqNum %d, maxDownReqNum %d", name, bankID, maxUpReqNum, maxDownReqNum);
+
 	pendDownReqQ = new PendQ;
 	I(pendDownReqQ);
 

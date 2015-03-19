@@ -257,11 +257,11 @@ void ACache::doReq(MemRequest *mreq) {
 			mreq->clearRetrying(); // [sizhuo] clear retry bit
 			// [sizhuo] send disp resp to lower level after reading data
 			router->sendDisp(repByteAddr, mreq->getStatsFlag(), dataDelay + goDownDelay);
-			// [sizhuo] forward req to lower level 1 cycle later than sending disp
+			// [sizhuo] forward req to lower level at the same time
 			// set pos & notify MSHR that mreq goes down to lower level
-			mshr->upReqToWait(lineAddr, dataDelay + 1);
+			mshr->upReqToWait(lineAddr, dataDelay);
 			mreq->pos = MemRequest::Router;
-			router->scheduleReq(mreq, dataDelay + goDownDelay + 1);
+			router->scheduleReq(mreq, dataDelay + goDownDelay);
 			// [sizhuo] we wait for reqAck to come back and completes this req in doReqAck()
 		}
 		/*
@@ -291,9 +291,9 @@ void ACache::doReqAck(MemRequest *mreq) {
 		// [sizhuo] immediately notify MSHR that ack comes back
 		// (prevent downgrade req to this cache line from being accepted)
 		mshr->upReqToAck(cache->getLineAddr(mreq->getAddr()));
-		// [sizhuo] end this msg & retire MSHR
-		mshr->retireUpReq(cache->getLineAddr(mreq->getAddr()), 0);
-		mreq->ack(goUpDelay);
+		// [sizhuo] end this msg after data read & retire MSHR
+		mshr->retireUpReq(cache->getLineAddr(mreq->getAddr()), dataDelay);
+		mreq->ack(dataDelay + goUpDelay);
 		return;
 	}
 
@@ -315,29 +315,27 @@ void ACache::doReqAck(MemRequest *mreq) {
 		I(mreq->inport == 0);
 		if(!mreq->isRetrying()) {
 			// [sizhuo] send downgrade req to upper level except for upgrade req home node
-			// we don't need to access tag, because tag is stored & tracked in MSHR
-			int32_t nmsg = router->sendSetStateOthers(mreq, ma_setInvalid, goUpDelay);
+			// for simplicity, we access tag again to send downgrade req
+			int32_t nmsg = router->sendSetStateOthers(mreq, ma_setInvalid, tagDelay + goUpDelay);
 			if(nmsg > 0) {
 				I(mreq->hasPendingSetStateAck());
 				// [sizhuo] need to wait for downgrade resp to try again
 				mreq->setRetrying();
-				return;
 			} else {
 				I(!mreq->hasPendingSetStateAck());
-				//mreq->setRetrying();
-				// [sizhuo] we proceed to send resp to upper level
-				// XXX: if we need to access tag, we must re-handle after tagDelay
-				// as what is done in doReq(), but now we can just proceed
+				// [sizhuo] no downgrade req sent, re-handle after tag read
+				mreq->setRetrying();
+				(mreq->redoReqAckCB).schedule(tagDelay);
 			}
+		} else {
+			// [sizhuo] downgrade upper level is done
+			I(!mreq->hasPendingSetStateAck());
+			mreq->clearRetrying(); // [sizhuo] clear retry bit
+			// [sizhuo] resp to upper level after data read & retire MSHR entry & set pos
+			mshr->retireUpReq(cache->getLineAddr(mreq->getAddr()), dataDelay);
+			mreq->pos = MemRequest::Router;
+			router->scheduleReqAck(mreq, dataDelay + goUpDelay);
 		}
-
-		// [sizhuo] downgrade upper level is done
-		I(!mreq->hasPendingSetStateAck());
-		mreq->clearRetrying(); // [sizhuo] clear retry bit
-		// [sizhuo] resp to upper level & retire MSHR entry & set pos
-		mshr->retireUpReq(cache->getLineAddr(mreq->getAddr()), 0);
-		mreq->pos = MemRequest::Router;
-		router->scheduleReqAck(mreq, goUpDelay);
 	} else {
 		I(0);
 	}
@@ -379,7 +377,7 @@ void ACache::doSetState(MemRequest *mreq) {
 		I(mreq->inport == 0);
 		if(!mreq->isRetrying()) {
 			// [sizhuo] send downgrade req to upper level
-			int32_t nmsg = router->sendSetStateAll(mreq, mreq->getAction(), tagDelay + goDownDelay);
+			int32_t nmsg = router->sendSetStateAll(mreq, mreq->getAction(), tagDelay + goUpDelay);
 			if(nmsg > 0) {
 				I(mreq->hasPendingSetStateAck());
 				// [sizhuo] need to wait for downgrade resp to try again
@@ -394,11 +392,11 @@ void ACache::doSetState(MemRequest *mreq) {
 			// [sizhuo] downgrade is done
 			I(!mreq->hasPendingSetStateAck());
 			mreq->clearRetrying(); // [sizhuo] reset retry bit
-			// [sizhuo] resp to lower level & set pos & retire MSHR entry
-			mshr->retireDownReq(cache->getLineAddr(mreq->getAddr()), 0);
+			// [sizhuo] resp to lower level after data read & set pos & retire MSHR entry
+			mshr->retireDownReq(cache->getLineAddr(mreq->getAddr()), dataDelay);
 			mreq->pos = MemRequest::Router;
 			mreq->convert2SetStateAck(ma_setInvalid);
-			router->scheduleSetStateAck(mreq, goDownDelay);
+			router->scheduleSetStateAck(mreq, dataDelay + goDownDelay);
 		}
 	} else {
 		I(0);

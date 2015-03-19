@@ -33,7 +33,7 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c, const char *str)
 	for(uint32_t i = 0; i < bkNum; i++) {
 		bank[i] = 0;
 		//bank[i] = new BlockMSHRBank(i, c, name);
-		bank[i] = new IndexSplitMSHRBank(i, bankSize / 2, bankSize / 2, c, name);
+		bank[i] = new IndexSplitMSHRBank(i, (bankSize * 3) / 4, bankSize / 4, c, name);
 		I(bank[i]);
 	}
 }
