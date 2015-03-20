@@ -350,6 +350,8 @@ void ACache::doReq(MemRequest *mreq) {
 					I(!isL1);
 					// [sizhuo] not L1 home node, change directory
 					int portId = router->getCreatorPort(mreq);
+					I(portId < upNodeNum);
+					I(portId >= 0);
 					mreq->line->dir[portId] = CacheLine::upgradeState(reqAct);
 					// [sizhuo] retire from MSHR & release occupation on cache line
 					mreq->line->upReq = 0;
@@ -433,10 +435,13 @@ void ACache::doReqAck(MemRequest *mreq) {
 		// [sizhuo] downgrade upper level is done OR not needed
 		I(!mreq->hasPendingSetStateAck());
 		mreq->clearRetrying(); // [sizhuo] clear retry bit
-		// [sizhuo] change cache line state & directory
+		// [sizhuo] change cache line state
 		I(mreq->line);
 		mreq->line->state = CacheLine::upgradeState(reqAckAct);
+		// [sizhuo] change directory
 		int portId = router->getCreatorPort(mreq);
+		I(portId < upNodeNum);
+		I(portId >= 0);
 		mreq->line->dir[portId] = CacheLine::upgradeState(reqAckAct);
 		// [sizhuo] release occupation on cache line & retire from MSHR
 		mreq->line->upReq = 0;
@@ -455,10 +460,13 @@ void ACache::doSetState(MemRequest *mreq) {
   I(!mreq->isHomeNode()); // [sizhuo] home node should be at lower level
 	ID(mreq->dump("doSetState"));
 
+	const AddrType lineAddr = cache->getLineAddr(mreq->getAddr());
+	const MsgAction reqAct = mreq->getAction();
+
 	if(mreq->pos == MemRequest::Inport) {
 		if(!mreq->isRetrying()) {
 			// [sizhuo] new downgrade req from inport, add to MSHR
-			mshr->addDownReq(cache->getLineAddr(mreq->getAddr()), &(mreq->redoSetStateCB), mreq->inport, mreq);
+			mshr->addDownReq(lineAddr, &(mreq->redoSetStateCB), mreq->inport, mreq);
 			// [sizhuo] wait until add success
 			mreq->setRetrying();
 			return;
@@ -476,26 +484,65 @@ void ACache::doSetState(MemRequest *mreq) {
 	if(mreq->pos == MemRequest::MSHR) {
 		I(mreq->inport == 0);
 		if(!mreq->isRetrying()) {
-			// [sizhuo] send downgrade req to upper level
-			int32_t nmsg = router->sendSetStateAll(mreq, mreq->getAction(), tagDelay + goUpDelay);
-			if(nmsg > 0) {
-				I(mreq->hasPendingSetStateAck());
-				// [sizhuo] need to wait for downgrade resp to try again
-				mreq->setRetrying();
+			// [sizhuo] access tag to occuppy the cache line
+			I(mreq->line == 0);
+			mreq->line = cache->downReqOccupyLine(lineAddr, mreq);
+			if(mreq->line == 0) {
+				// [sizhuo] requested line is invalid, just resp after tag read
+				mshr->retireDownReq(lineAddr, tagDelay);
+				mreq->pos = MemRequest::Router;
+				mreq->convert2SetStateAck(ma_setInvalid);
+				router->scheduleSetStateAck(mreq, tagDelay + goDownDelay);
 			} else {
-				I(!mreq->hasPendingSetStateAck());
-				// [sizhuo] we rehandle this req after tag delay
-				mreq->setRetrying();
-				(mreq->redoSetStateCB).schedule(tagDelay);
+				if(CacheLine::compatibleDownReq(mreq->line->state, reqAct)) {
+					// [sizhuo] state & req are compatible, must be S & setShared
+					I(mreq->line->state == CacheLine::S);
+					I(reqAct == ma_setShared);
+					// [sizhuo] relese occupation on cache line
+					mreq->line->downReq = 0;
+					mreq->line = 0;
+					// [sizhuo] retire MSHR & send resp after tag delay
+					mshr->retireDownReq(lineAddr, tagDelay);
+					mreq->pos = MemRequest::Router;
+					mreq->convert2SetStateAck(ma_setShared);
+					router->scheduleSetStateAck(mreq, tagDelay + goDownDelay);
+				} else {
+					// [sizhuo] we need to do downgrade, first downgrade upper level
+					if(isL1) {
+						// [sizhuo] no upper level, re-handle after tag read
+						mreq->setRetrying();
+						(mreq->redoSetStateCB).schedule(tagDelay);
+					} else {
+						// [sizhuo] forward downgrade req to upper level
+						int32_t nmsg = router->sendSetStateAll(mreq, mreq->getAction(), tagDelay + goUpDelay);
+						if(nmsg > 0) {
+							I(mreq->hasPendingSetStateAck());
+							// [sizhuo] need to wait for downgrade resp to try again
+							mreq->setRetrying();
+						} else {
+							I(!mreq->hasPendingSetStateAck());
+							// [sizhuo] we rehandle this req after tag delay
+							mreq->setRetrying();
+							(mreq->redoSetStateCB).schedule(tagDelay);
+						}
+					}
+				}
 			}
 		} else {
-			// [sizhuo] downgrade is done
+			// [sizhuo] downgrade upper level is done
 			I(!mreq->hasPendingSetStateAck());
 			mreq->clearRetrying(); // [sizhuo] reset retry bit
+			// [sizhuo] change cache line state
+			I(mreq->line);
+			I(mreq->line->state != CacheLine::I);
+			mreq->line->state = CacheLine::downgradeState(reqAct);
+			// [sizhuo] release cache line occupation
+			mreq->line->downReq = 0;
+			mreq->line = 0;
 			// [sizhuo] resp to lower level after data read & set pos & retire MSHR entry
-			mshr->retireDownReq(cache->getLineAddr(mreq->getAddr()), dataDelay);
+			mshr->retireDownReq(lineAddr, dataDelay);
 			mreq->pos = MemRequest::Router;
-			mreq->convert2SetStateAck(ma_setInvalid);
+			mreq->convert2SetStateAck(reqAct); // [sizhuo] use the original action
 			router->scheduleSetStateAck(mreq, dataDelay + goDownDelay);
 		}
 	} else {
@@ -508,14 +555,24 @@ void ACache::doSetStateAck(MemRequest *mreq) {
 	I(mreq->isHomeNode()); // [sizhuo] we must be at home node now
 	GMSG(!mreq->isHomeNode(), "ERROR: SetStateAck arrives non-home node!");
 	ID(mreq->dump("doSetStateAck"));
-
 	I(!isL1);
+
+	const AddrType lineAddr = cache->getLineAddr(mreq->getAddr());
+	const MsgAction ackAct = mreq->getAction();
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 	// no need to set pos
 	I(mreq->inport);
 	mreq->inport->deqDoneMsg();	
 	mreq->inport = 0;
+
+	// [sizhuo] search cache to change directory
+	CacheLine *line = cache->downRespFindLine(lineAddr);
+	I(line);
+	int portId = router->getCreatorPort(mreq);
+	I(portId < upNodeNum);
+	I(portId >= 0);
+	line->dir[portId] = CacheLine::downgradeState(ackAct);
 
 	// [sizhuo] we can end this msg, setStateAckDone() may be called
 	// and invoke other handler in this cache (delay is 0 here)
@@ -543,6 +600,17 @@ void ACache::doSetStateAck(MemRequest *mreq) {
 void ACache::doDisp(MemRequest *mreq) {
 	I(mreq);
 	ID(mreq->dump("doDisp"));
+
+	const AddrType lineAddr = cache->getLineAddr(mreq->getAddr());
+	I(mreq->getAction() == ma_setInvalid);
+
+	// [sizhuo] search cache to change directory
+	CacheLine *line = cache->downRespFindLine(lineAddr);
+	I(line);
+	int portId = router->getCreatorPort(mreq);
+	I(portId < upNodeNum);
+	I(portId >= 0);
+	line->dir[portId] = CacheLine::I;
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 	// no need to set pos here

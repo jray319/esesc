@@ -81,23 +81,17 @@ public:
 		}
 	}
 
-	// [sizhuo] type of the ack msg with current state & req action
-	static MsgAction ackAction(MESI mesi, MsgAction act) {
+	// [sizhuo] downgraded state
+	static MESI downgradeState(MsgAction act) {
 		switch(act) {
 			case ma_setInvalid:
-				return ma_setInvalid;
+				return I;
 			case ma_setShared:
-				return mesi == I ? ma_setInvalid : ma_setShared;
-			case ma_setValid:
-				return act;
-			case ma_setExclusive:
-				return act;
-			case ma_setDirty:
-				return act;
+				return S;
 			default:
 				I(0);
 				MSG("ERROR: Unknown msg action %d", act);
-				return act;
+				return I;
 		}
 	}
 };
@@ -151,11 +145,16 @@ public:
 		return lineAddr >> log2Sets;
 	}
 
+	// [sizhuo] find a valid cache line (MES) matching address
 	virtual CacheLine *downReqOccupyLine(AddrType lineAddr, const MemRequest *mreq) = 0;
+	// [sizhuo] find a cache line to serve the upgrade req, update LRU states
+	// if cache miss, use LRU to return the replaced line.
 	virtual CacheLine *upReqOccupyLine(AddrType lineAddr, const MemRequest *mreq) = 0;
 	// [sizhuo] find cache line: this must be called before mreq is recycled
-	// and is only called by up req/reqAck
+	// and is only called by up reqAck
 	virtual CacheLine *upReqFindLine(AddrType lineAddr, const MemRequest *mreq) = 0;
+	// [sizhuo] find a cache line for downgrade resp (setStateAck & disp)
+	virtual CacheLine *downRespFindLine(AddrType lineAddr) = 0;
 };
 
 class LRUCacheArray : public CacheArray {
@@ -171,6 +170,7 @@ public:
 	virtual CacheLine *downReqOccupyLine(AddrType lineAddr, const MemRequest *mreq);
 	virtual CacheLine *upReqOccupyLine(AddrType lineAddr, const MemRequest *mreq);
 	virtual CacheLine *upReqFindLine(AddrType lineAddr, const MemRequest *mreq);
+	virtual CacheLine *downRespFindLine(AddrType lineAddr);
 };
 
 #endif

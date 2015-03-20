@@ -37,17 +37,12 @@ CacheLine* LRUCacheArray::downReqOccupyLine(AddrType lineAddr, const MemRequest 
 	for(CacheSet::iterator iter = tags[index].begin(); iter != tags[index].end(); iter++) {
 		if((*iter)->lineAddr == lineAddr && (*iter)->state != CacheLine::I) {
 			line = *iter;
-			break;
+			I(line->downReq == 0);
+			line->downReq = mreq;
+			return line;
 		}
 	}
-
-	if(line == 0) {
-		return 0;
-	} else {
-		I(line->downReq == 0);
-		line->downReq = mreq;
-		return line;
-	}
+	return 0;
 }
 
 CacheLine* LRUCacheArray::upReqOccupyLine(AddrType lineAddr, const MemRequest *mreq) {
@@ -114,7 +109,24 @@ CacheLine* LRUCacheArray::upReqFindLine(AddrType lineAddr, const MemRequest *mre
 		}
 	}
 	// [sizhuo] fail to find a line, error
-	MSG("ERROR: fail to find the line %lx", lineAddr);
+	MSG("ERROR: upReqFindLine fail to find the line %lx", lineAddr);
+	int i = 0;
+	for(CacheSet::iterator iter = tags[index].begin(); iter != tags[index].end(); iter++, i++) {
+		MSG("tags[%lx][%d]: state %d, lineAddr %lx, upReq %p, downReq %p", index, i, (*iter)->state, (*iter)->lineAddr, (*iter)->upReq, (*iter)->downReq);
+	}	
+	return 0;
+}
+
+CacheLine* LRUCacheArray::downRespFindLine(AddrType lineAddr) {
+	const AddrType index = getIndex(lineAddr);
+
+	for(CacheSet::iterator iter = tags[index].begin(); iter != tags[index].end(); iter++) {
+		if((*iter)->lineAddr == lineAddr && (*iter)->state != CacheLine::I) {
+			return (*iter);
+		}
+	}
+	// [sizhuo] fail to find a line, error
+	MSG("ERROR: downRespFindLine fail to find the line %lx", lineAddr);
 	int i = 0;
 	for(CacheSet::iterator iter = tags[index].begin(); iter != tags[index].end(); iter++, i++) {
 		MSG("tags[%lx][%d]: state %d, lineAddr %lx, upReq %p, downReq %p", index, i, (*iter)->state, (*iter)->lineAddr, (*iter)->upReq, (*iter)->downReq);
