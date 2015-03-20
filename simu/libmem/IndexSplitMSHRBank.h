@@ -7,11 +7,15 @@
 // [sizhuo] MSHR bank allows parallelism when req is to different cache set
 // Up & Down req are stored in split MSHR entry arrays
 //
-// For upgrade req, it is issued only when no existing req on same cache set
-// and total number of req on same cache set is less than associativity
+// For upgrade req, it is issued only when 
+// 1. no existing up req on same cache set
+// 2. number of up+down req on same cache set < associativity
 // 
-// For downgrade req, it is issued when no existing upgrade req 
-// on same cache line and at Req/Ack state.
+// For downgrade req, it is issued when 
+// 1. no existing down req to same cache line
+// 2. no existing up req at Req state to same cache SET
+// (because we don't know which cache line up req is replacing)
+// 3. no existing up req at Ack state to sace cache line
 class IndexSplitMSHRBank : public MSHRBank {
 private:
 	const int bankID;

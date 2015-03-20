@@ -113,6 +113,12 @@ CacheLine* LRUCacheArray::upReqFindLine(AddrType lineAddr, const MemRequest *mre
 	int i = 0;
 	for(CacheSet::iterator iter = tags[index].begin(); iter != tags[index].end(); iter++, i++) {
 		MSG("tags[%lx][%d]: state %d, lineAddr %lx, upReq %p, downReq %p", index, i, (*iter)->state, (*iter)->lineAddr, (*iter)->upReq, (*iter)->downReq);
+		if((*iter)->upReq) {
+			(*iter)->upReq->dumpAlways();
+		}
+		if((*iter)->downReq) {
+			(*iter)->downReq->dumpAlways();
+		}
 	}	
 	return 0;
 }

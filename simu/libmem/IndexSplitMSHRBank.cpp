@@ -82,7 +82,8 @@ void IndexSplitMSHRBank::addDownReq(AddrType lineAddr, StaticCallbackBase *cb, C
 	// [sizhuo] we can insert when 
 	// 1. there is still free entry for downgrade req
 	// 2. no existing downgrade req operates on same cache line
-	// 3. no existing upgrade req operates on same cache line & in Req/Ack state
+	// 3. no existing upgrade req operates on same cache line in Ack state 
+	// 4. no existing upgrade req operates on same cache SET in Req state
 	if(freeDownReqNum > 0) {
 		// [sizhuo] we have free entry, then search same cache line downgrade req
 		Line2DownReqMap::iterator downIter = line2DownReq.find(lineAddr);
@@ -96,8 +97,9 @@ void IndexSplitMSHRBank::addDownReq(AddrType lineAddr, StaticCallbackBase *cb, C
 			} else {
 				UpReqEntry *upReq = upIter->second;
 				I(upReq);
-				if(upReq->lineAddr != lineAddr || upReq->state == Wait) {
-					// [sizhuo] no same line up req in Req/Ack state, insert success
+				if(upReq->state != Req && !(upReq->lineAddr == lineAddr && upReq->state == Ack)) {
+					// [sizhuo] no same line up req in Ack state 
+					// and no same set up req in Req state, insert success
 					success = true;
 					ID(mreq->dump("success"));
 				} else {

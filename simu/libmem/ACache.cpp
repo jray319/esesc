@@ -274,12 +274,16 @@ void ACache::doReq(MemRequest *mreq) {
 						(mreq->redoReqCB).schedule(tagDelay);
 					}
 				} else {
-					// [sizhuo] don't need replacement, but need to send req to lower level
+					// [sizhuo] replaced line is I. no need for replacement
+					// but need to send req to lower level
 					forwardReqDown(mreq, lineAddr, tagDelay);
 				}
 			} else {
+				// [sizhuo] occupied line is in same address (but maybe I), check permission
 				if(CacheLine::compatibleUpReq(mreq->line->state, mreq->getAction(), isLLC)) {
 					// [sizhuo] state is compatible with req, no need to go to lower level
+					// XXX: DON'T convert to ack now! 
+					// otherwise redoReqAck() will be invoked when downgrade resp all comes back
 					if(!isL1) {
 						// [sizhuo] non-L1$, downgrade upper level (other than the initiator)
 						const MsgAction downAct = reqAct == ma_setValid ? ma_setShared : ma_setInvalid;
@@ -325,6 +329,7 @@ void ACache::doReq(MemRequest *mreq) {
 					// [sizhuo] then forward req to lower level at the same time
 					forwardReqDown(mreq, lineAddr, dataDelay + goDownDelay);
 				} else {
+					// [sizhuo] TODO: for E state, downgrade resp from M should convert E to M
 					// [sizhuo] silently drop the line, directly go to lower level now
 					forwardReqDown(mreq, lineAddr, 0);
 				}
@@ -569,10 +574,19 @@ void ACache::doSetStateAck(MemRequest *mreq) {
 	// [sizhuo] search cache to change directory
 	CacheLine *line = cache->downRespFindLine(lineAddr);
 	I(line);
+	// [sizhuo] debug
+	if(line == 0) {
+		MSG("setStateAck fails to match cache line");
+		mreq->dumpAlways();
+		mreq->getSetStateAckOrig()->dumpAlways();
+	}
+	////
 	int portId = router->getCreatorPort(mreq);
 	I(portId < upNodeNum);
 	I(portId >= 0);
 	line->dir[portId] = CacheLine::downgradeState(ackAct);
+	// [sizhuo] TODO: if downgrade resp has data, and current cache line state is E
+	// we should convert E to M
 
 	// [sizhuo] we can end this msg, setStateAckDone() may be called
 	// and invoke other handler in this cache (delay is 0 here)
@@ -607,10 +621,19 @@ void ACache::doDisp(MemRequest *mreq) {
 	// [sizhuo] search cache to change directory
 	CacheLine *line = cache->downRespFindLine(lineAddr);
 	I(line);
+	// [sizhuo] debug
+	if(line == 0) {
+		MSG("setStateAck fails to match cache line");
+		mreq->dumpAlways();
+		mreq->getSetStateAckOrig()->dumpAlways();
+	}
+	////
 	int portId = router->getCreatorPort(mreq);
 	I(portId < upNodeNum);
 	I(portId >= 0);
 	line->dir[portId] = CacheLine::I;
+	// [sizhuo] TODO: if downgrade resp has data, and current cache line state is E
+	// we should convert E to M
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 	// no need to set pos here

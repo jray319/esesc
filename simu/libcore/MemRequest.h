@@ -399,9 +399,12 @@ public:
 	void dump(const char* str) const {
 #ifdef DEBUG
 		if(debug) {
-			MSG("%s: %p, mem msg %lu, home %s, creator %s, current %s, addr %lx, pos %d, retry %d", str, this, id, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName(), addr, pos, retrying);
+			MSG("%s: %p, mem msg %lu, action %d, type %d, home %s, creator %s, current %s, addr %lx, pos %d, retry %d", str, this, id, ma, mt, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName(), addr, pos, retrying);
 		}
 #endif
+	}
+	void dumpAlways() const {
+			MSG("%p, action %d, type %d, home %s, creator %s, current %s, addr %lx, pos %d, retry %d", this, ma, mt, homeMemObj->getName(), creatorObj->getName(), currMemObj->getName(), addr, pos, retrying);
 	}
 	// [sizhuo] position of the req
 	// help req to know its condition in MemObj::doReq/doReqAck...
