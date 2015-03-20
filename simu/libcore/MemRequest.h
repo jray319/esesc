@@ -49,6 +49,7 @@
 
 // [sizhuo] we need CacheInport pointer in MemRequest class
 class CacheInport;
+class CacheLine;
 
 class MemRequest {
 private:
@@ -413,6 +414,17 @@ public:
 	MemReqPos pos;
 	// [sizhuo] current inport of the msg
 	CacheInport *inport;
+
+	// [sizhuo] current cache line
+	CacheLine *line;
+
+	// [sizhuo] functions to check msg action
+	bool isUpgradeAction() {
+		return ma == ma_setValid || ma == ma_setExclusive || ma == ma_setDirty;
+	}
+	bool isDowngradeAction() {
+		return ma == ma_setShared || ma == ma_setInvalid;
+	}
 	/*****************************************************************/
 };
 

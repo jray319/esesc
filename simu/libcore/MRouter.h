@@ -64,6 +64,8 @@ class MemRequest;
 // O: Like shared, but the O is responsible to update memory. If O does
 // a write back, it can change to S
 //
+// [sizhuo] setInvalid, setShared -- downgrade req
+// setValid, setExclusive, setDirty -- upgrade req
 enum MsgAction {
 	ma_setInvalid,
 	ma_setValid,

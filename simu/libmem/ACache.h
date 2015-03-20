@@ -37,6 +37,10 @@ protected:
 
 	const int upNodeNum; // number of upper level of nodes
 
+private:
+	// [sizhuo] helper function: forward req to lower level
+	void forwardReqDown(MemRequest *mreq, AddrType lineAddr, TimeDelta_t lat);
+
 public:
 	ACache(MemorySystem *gms, const char *descr_section, const char *name = NULL);
 	virtual ~ACache();

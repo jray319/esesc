@@ -68,6 +68,7 @@ MemRequest::MemRequest()
 #endif
 	, pos(Router) // [sizhuo] add req position
 	, inport(0) // [sizhuo] add cache inport
+	, line(0)
 {
 }
 /*  */
@@ -167,6 +168,8 @@ MemRequest *MemRequest::create(MemObj *mobj, AddrType addr, bool doStats, Callba
 	r->pos = Router;
 	// [sizhuo] init inport to 0
 	r->inport = 0;
+	// [sizhuo] init line to 0
+	r->line = 0;
 
   return r;
 }

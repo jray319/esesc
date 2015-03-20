@@ -189,7 +189,7 @@ void IndexSplitMSHRBank::addUpReq(AddrType lineAddr, StaticCallbackBase *cb, Cac
 					ID(mreq->dump("success"));
 				} else {
 					I(numIter->second >= 1);
-					I(maxDownReqNum - freeDownReqNum >= cache->assoc);
+					I(maxDownReqNum - freeDownReqNum >= int(cache->assoc));
 					ID(mreq->dump("fail"));
 					ID(GMSG(mreq->isDebug(), "fail reason: %d req in cache set", numIter->second));
 				}
