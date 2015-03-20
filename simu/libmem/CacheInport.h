@@ -74,6 +74,8 @@ public:
 // msg gets handled immediately at enq time
 class UBWCacheInport : public CacheInport {
 public:
+	virtual void enqMsgQ(StaticCallbackBase *cb) {}
+public:
 	UBWCacheInport() {}
 	virtual ~UBWCacheInport() {}
 
