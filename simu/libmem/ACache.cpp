@@ -49,7 +49,12 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 	for(int i = 0; i < upNodeNum; i++) {
 		sprintf(portName, "%s_reqFromUpPort(%d)", name, i);
 		reqFromUpPort[i] = 0;
-		reqFromUpPort[i] = new FIFOCacheInport(portName);
+		if(isL1) {
+			// [sizhuo] L1 D$ can send req OOO, not in FIFO order
+			reqFromUpPort[i] = new UBWCacheInport;
+		} else {
+			reqFromUpPort[i] = new FIFOCacheInport(portName);
+		}
 		I(reqFromUpPort[i]);
 
 		sprintf(portName, "%s_respFromUpPort(%d)", name, i);

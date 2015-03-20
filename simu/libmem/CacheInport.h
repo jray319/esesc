@@ -70,5 +70,17 @@ public:
 	virtual void deqDoneMsg();
 };
 
+// [sizhuo] unlimited bandwidth inport
+// msg gets handled immediately at enq time
+class UBWCacheInport : public CacheInport {
+public:
+	UBWCacheInport() {}
+	virtual ~UBWCacheInport() {}
+
+	virtual void enqNewMsg(StaticCallbackBase *cb, bool statsFlag) {
+		cb->call();
+	}
+	virtual void deqDoneMsg() {}
+};
 
 #endif
