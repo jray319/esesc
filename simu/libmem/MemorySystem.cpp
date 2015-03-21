@@ -28,8 +28,9 @@ Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 #include "SescConf.h"
 
-//#include "CCache.h"
+#include "CCache.h"
 #include "ACache.h" // [sizhuo] use ACache
+#include "BCache.h" // [sizhuo] broadcast for debug
 
 #include "NICECache.h"
 #include "SL0Cache.h"
@@ -71,8 +72,7 @@ MemObj *MemorySystem::buildMemoryObj(const char *device_type, const char *dev_se
   std::string mystr("");
   // You may insert here the further specializations you may need
   if (!strcasecmp(device_type, "cache") || !strcasecmp(device_type, "icache")) {
-		// [sizhuo] use ACache
-    mdev = new ACache(this, dev_section, dev_name); //CCache(this, dev_section, dev_name);
+    mdev = new CCache(this, dev_section, dev_name);
     devtype = 0;
   } else if (!strcasecmp(device_type, "nicecache")) {
     mdev = new NICECache(this, dev_section, dev_name);
@@ -120,7 +120,15 @@ MemObj *MemorySystem::buildMemoryObj(const char *device_type, const char *dev_se
   }  else if (!strcasecmp(device_type, "memcontroller")) {
     mdev = new MemController(this, dev_section, dev_name);
     devtype = 13;
-  } else if (!strcasecmp(device_type, "void")) {
+  } else if (!strcasecmp(device_type, "acache")) {
+		// [sizhuo] ACache, real use
+		mdev = new ACache(this, dev_section, dev_name);
+		devtype = 14;
+  } else if (!strcasecmp(device_type, "bcache")) {
+		// [sizhuo] BCache for testing MSHR
+		mdev = new BCache(this, dev_section, dev_name);
+		devtype = 15;
+	}	else if (!strcasecmp(device_type, "void")) {
     return NULL;
   } else {
     // Check the lower level because it may have it

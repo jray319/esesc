@@ -70,17 +70,26 @@ public:
 	virtual void deqDoneMsg();
 };
 
-// [sizhuo] unlimited bandwidth inport
-// msg gets handled immediately at enq time
-class UBWCacheInport : public CacheInport {
+// [sizhuo] OOO inport: msg gets handled out of order 
+class OOOCacheInport : public CacheInport {
 public:
-	virtual void enqMsgQ(StaticCallbackBase *cb) {}
+	virtual void enqMsgQ(StaticCallbackBase *cb) {
+		cb->call();
+	}
+
 public:
-	UBWCacheInport() {}
-	virtual ~UBWCacheInport() {}
+	OOOCacheInport(const char* name) {
+		// [sizhuo] fully piplined port
+		enqPort = PortGeneric::create(name, 1, 1);
+		I(enqPort);
+	}
+	virtual ~OOOCacheInport() {}
 
 	virtual void enqNewMsg(StaticCallbackBase *cb, bool statsFlag) {
-		cb->call();
+		Time_t when = enqPort->nextSlot(statsFlag); 
+		I(when >= globalClock);
+		// [sizhuo] scheule enq
+		enqMsgQCB::scheduleAbs(when, this, cb);
 	}
 	virtual void deqDoneMsg() {}
 };

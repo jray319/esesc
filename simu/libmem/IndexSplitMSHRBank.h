@@ -42,8 +42,8 @@ private:
 	const int maxUpReqNum;
 	// [sizhuo] number of free entries for upgrade req
 	int freeUpReqNum;
-	// [sizhuo] 1 cache set at most has 1 upgrade req
-	// invert table: cache index -> upgrade req entry
+	// [sizhuo] 1 cache set at most has 1 ACTIVE upgrade req
+	// invert table: cache index -> ACTIVE upgrade req entry
 	typedef HASH_MAP<AddrType, UpReqEntry*> Index2UpReqMap;
 	Index2UpReqMap index2UpReq;
 
@@ -67,8 +67,8 @@ private:
 	const int maxDownReqNum;
 	// [sizhuo] number of free entries for downgrade req
 	int freeDownReqNum;
-	// [sizhuo] 1 cache line at most has 1 downgrade req 
-	// invert table: line addr -> downgrade req entry
+	// [sizhuo] 1 cache line at most has 1 ACTIVE downgrade req 
+	// invert table: line addr -> ACTIVE downgrade req entry
 	typedef HASH_MAP<AddrType, DownReqEntry*> Line2DownReqMap;
 	Line2DownReqMap line2DownReq;
 
@@ -77,21 +77,53 @@ private:
 	Index2ReqNumMap index2ReqNum;
 
 	// [sizhuo] add req consists of 2 phases: insert to MSHR & issue for handling
-	void insertUpReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq) { MSG("ERROR"); I(0); }
-	typedef CallbackMember3<IndexSplitMSHRBank, AddrType, StaticCallbackBase*, const MemRequest*, &IndexSplitMSHRBank::insertUpReq> insertUpReqCB;
+	// insert success when there is free entry, deq msg from inport, try issue next cycle
+	// if fail, msg is enq into pendInsertQ for retry
+	//
+	// The first input doWork: if true, do insert, 
+	// else consult contention port to schedule itself as callback
+	void insertUpReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *p, const MemRequest *mreq);
+	typedef CallbackMember4<IndexSplitMSHRBank, AddrType, StaticCallbackBase*, CacheInport*, const MemRequest*, &IndexSplitMSHRBank::insertUpReq> insertUpReqCB;
 
-	void insertDownReq(AddrType lineAddr, StaticCallbackBase *cb, const MemRequest *mreq){ MSG("ERROR"); I(0); }
-	typedef CallbackMember3<IndexSplitMSHRBank, AddrType, StaticCallbackBase*, const MemRequest*, &IndexSplitMSHRBank::insertDownReq> insertDownReqCB;
+	void insertDownReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *p, const MemRequest *mreq);
+	typedef CallbackMember4<IndexSplitMSHRBank, AddrType, StaticCallbackBase*, CacheInport*, const MemRequest*, &IndexSplitMSHRBank::insertDownReq> insertDownReqCB;
 
-	void issueUpReq(UpReqEntry *en, StaticCallbackBase *cb){ MSG("ERROR"); I(0); }
+	// [sizhuo] issue success when the conditions described at top is satisfied
+	// and will call handler next cycle
+	// if fail, msg is enq ino pendIssueQ for retry
+	//
+	// The first input doWork: if true, do insert, 
+	// else consult contention port to schedule itself as callback
+	void issueUpReq(UpReqEntry *en, StaticCallbackBase *cb);
 	typedef CallbackMember2<IndexSplitMSHRBank, UpReqEntry*, StaticCallbackBase*, &IndexSplitMSHRBank::issueUpReq> issueUpReqCB;
 		
-	void issueDownReq(DownReqEntry *en, StaticCallbackBase *cb){ MSG("ERROR"); I(0); }
+	void issueDownReq(DownReqEntry *en, StaticCallbackBase *cb);
 	typedef CallbackMember2<IndexSplitMSHRBank, DownReqEntry*, StaticCallbackBase*, &IndexSplitMSHRBank::issueDownReq> issueDownReqCB;
 
 	// [sizhuo] contention port for insert & issue
-	PortGeneric *insertPort;
-	PortGeneric *issuePort;
+	PortGeneric *insertDownPort;
+	PortGeneric *insertUpPort;
+	PortGeneric *issueDownPort;
+	PortGeneric *issueUpPort;
+
+	// [sizhuo] due to contention, we need function just to schedule issue
+	void scheduleIssueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
+		I(en);
+		I(en->mreq);
+		Time_t when = issueUpPort->nextSlot(en->mreq->getStatsFlag());
+		I(when >= globalClock);
+		issueUpReqCB::scheduleAbs(when, this, en, cb);
+	}
+	typedef CallbackMember2<IndexSplitMSHRBank, UpReqEntry*, StaticCallbackBase*, &IndexSplitMSHRBank::scheduleIssueUpReq> scheduleIssueUpReqCB;
+		
+	void scheduleIssueDownReq(DownReqEntry *en, StaticCallbackBase *cb) {
+		I(en);
+		I(en->mreq);
+		Time_t when = issueDownPort->nextSlot(en->mreq->getStatsFlag());
+		I(when >= globalClock);
+		issueDownReqCB::scheduleAbs(when, this, en, cb);
+	}
+	typedef CallbackMember2<IndexSplitMSHRBank, DownReqEntry*, StaticCallbackBase*, &IndexSplitMSHRBank::scheduleIssueDownReq> scheduleIssueDownReqCB;
 
 	// [sizhuo] pending insert req
 	class PendInsertReq {
@@ -114,7 +146,7 @@ private:
 	PendInsertQ *callInsertQ;
 
 	void processPendInsertDown(); // only SetState 
-	void processPendInsertAll(); // SetState + Req
+	void processPendInsertUp(); // SetState + Req
 
 	// [sizhuo] pending issue downgrade req
 	class PendIssueDownReq {
@@ -140,8 +172,8 @@ private:
 	PendIssueUpQ *pendIssueUpQ;
 	PendIssueUpQ *callIssueUpQ;
 
-	void processPendIssueDown() { MSG("ERROR"); I(0); }
-	void processPendIssueAll() { MSG("ERROR"); I(0); }
+	void processPendIssueDown();
+	void processPendIssueUp();
 
 public:
 	IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str);

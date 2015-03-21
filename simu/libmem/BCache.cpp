@@ -51,7 +51,7 @@ BCache::BCache(MemorySystem *gms, const char *section, const char *name)
 		reqFromUpPort[i] = 0;
 		if(isL1) {
 			// [sizhuo] L1 D$ can send req OOO, not in FIFO order
-			reqFromUpPort[i] = new UBWCacheInport;
+			reqFromUpPort[i] = new OOOCacheInport(portName);
 		} else {
 			reqFromUpPort[i] = new FIFOCacheInport(portName);
 		}
@@ -71,9 +71,9 @@ BCache::BCache(MemorySystem *gms, const char *section, const char *name)
 	uint32_t cacheSize = SescConf->getInt(section, "Size");
 	uint32_t lineSize = SescConf->getInt(section, "Bsize");
 	uint32_t setAssoc = SescConf->getInt(section, "Assoc");
-	cache = new CacheArray(cacheSize, lineSize, setAssoc);
+	cache = new LRUCacheArray(cacheSize, lineSize, setAssoc, upNodeNum);
 	I(cache);
-	ID(MSG("%s creates cache array: size %x, lineSize %x, assoc %x", name, cacheSize, lineSize, setAssoc));
+	MSG("BCache %s creates cache array: size %x, lineSize %x, assoc %x", name, cacheSize, lineSize, setAssoc);
 
 	// [sizhuo] create MSHR
   const char* mshrSection = SescConf->getCharPtr(section,"MSHR");
@@ -81,7 +81,6 @@ BCache::BCache(MemorySystem *gms, const char *section, const char *name)
 	uint32_t mshrBankNum = SescConf->getInt(mshrSection, "size") / mshrBankSize;
 	mshr = new HierMSHR(mshrBankNum, mshrBankSize, cache, name);
 	I(mshr);
-	ID(MSG("%s creates MSHR: bankNum %d, bankSize %d", name, mshrBankNum, mshrBankSize));
 
 	// [sizhuo] create & add lower level component
   MemObj *lower_level = gms->declareMemoryObj(section, "lowerLevel");
