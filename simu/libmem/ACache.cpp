@@ -319,10 +319,11 @@ void ACache::doReq(MemRequest *mreq) {
 
 			I(mreq->line);
 			if(mreq->line->lineAddr != lineAddr) {
+				const MESI oldState = mreq->line->state;
 				// [sizhuo] cache line is replaced, change its state
 				mreq->line->state = CacheLine::I;
 
-				if (mreq->line->state == CacheLine::M) {
+				if (oldState == CacheLine::M) {
 					// [sizhuo] we need to send disp msg to lower level together with data
 					const AddrType repLineAddr = mreq->line->lineAddr;
 					const AddrType repByteAddr = repLineAddr << cache->log2LineSize;

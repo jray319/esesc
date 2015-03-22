@@ -102,9 +102,11 @@ CacheLine* LRUCacheArray::upReqOccupyLine(AddrType lineAddr, const MemRequest *m
 CacheLine* LRUCacheArray::upReqFindLine(AddrType lineAddr, const MemRequest *mreq) {
 	const AddrType index = getIndex(lineAddr);
 	I(lineAddr == getLineAddr(mreq->getAddr()));
+	I(mreq->isReqAck());
 
+	// [sizhuo] when reqAck comes, cache line should not have down req
 	for(CacheSet::iterator iter = tags[index].begin(); iter != tags[index].end(); iter++) {
-		if((*iter)->lineAddr == lineAddr && (*iter)->upReq == mreq) {
+		if((*iter)->lineAddr == lineAddr && (*iter)->upReq == mreq && (*iter)->downReq == 0) {
 			return (*iter);
 		}
 	}
