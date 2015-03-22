@@ -9,7 +9,9 @@
 //
 // For upgrade req, it is issued only when 
 // 1. no existing up req on same cache set
-// 2. number of up+down req on same cache set < associativity
+// 2. number of down req on same cache set < associativity
+// (this ensures up req can always occupy a cache line)
+// (we only need down req, because up req num must be 0 now)
 // 
 // For downgrade req, it is issued when 
 // 1. no existing down req to same cache line
@@ -22,12 +24,53 @@ private:
 	char *name;
 	const CacheArray *cache; // [sizhuo] pointer to cache array
 
+	// [sizhuo] forward declare of entry types
+	class DownReqEntry;
+	class UpReqEntry;
+
+	// [sizhuo] pending issue downgrade req
+	class PendIssueDownReq {
+	public:
+		DownReqEntry *en;
+		StaticCallbackBase *cb;
+		PendIssueDownReq() : en(0), cb(0) {}
+		PendIssueDownReq(DownReqEntry *e, StaticCallbackBase *c) : en(e), cb(c) {}
+	};
+	typedef std::queue<PendIssueDownReq> PendIssueDownQ;
+	// [sizhuo] process pend down req blocked by certain active req
+	void processPendIssueDown(PendIssueDownQ& q);
+
+	// [sizhuo] pending issue upgrade req
+	class PendIssueUpReq {
+	public:
+		UpReqEntry *en;
+		StaticCallbackBase *cb;
+		PendIssueUpReq() : en(0), cb(0) {}
+		PendIssueUpReq(UpReqEntry *e, StaticCallbackBase *c) : en(e), cb(c) {}
+	};
+	typedef std::queue<PendIssueUpReq> PendIssueUpQ;
+	// [sizhuo] pending issue up req which is blocked by too many req in same cache set
+	PendIssueUpQ *pendIssueUpByReqNumQ;
+	// [sizhuo] callQ for fast process of pending req
+	PendIssueUpQ *callIssueUpQ;
+
+	// [sizhuo] process pend issue up req blocked by too many down req in same cache set
+	// when a down req with such index retires
+	void processPendIssueUpByReqNum(AddrType index);
+
+	// [sizhuo] process pend up req blocked by certain active req
+	void processPendIssueUp(PendIssueUpQ& q);
+
 	// [sizhuo] upgrade req entry
 	class UpReqEntry {
 	public:
 		AddrType lineAddr;
 		UpReqState state;
 		const MemRequest *mreq;
+
+		// [sizhuo] pending issue up/down req blocked by this req
+		PendIssueDownQ pendIssueDownQ;
+		PendIssueUpQ pendIssueUpQ;
 
 		UpReqEntry() : lineAddr(0), state(Sleep) , mreq(0) {}
 		void clear() {
@@ -54,6 +97,10 @@ private:
 		DownReqState state;
 		const MemRequest *mreq;
 
+		// [sizhuo] pending issue up/down req blocked by this req
+		PendIssueDownQ pendIssueDownQ;
+		PendIssueUpQ pendIssueUpQ;
+
 		DownReqEntry() : lineAddr(0), state(Inactive), mreq(0) {}
 		void clear() {
 			lineAddr = 0;
@@ -72,9 +119,9 @@ private:
 	typedef HASH_MAP<AddrType, DownReqEntry*> Line2DownReqMap;
 	Line2DownReqMap line2DownReq;
 
-	// [sizhuo] number of up+down req in same cache set: index -> req num
-	typedef HASH_MAP<AddrType, int> Index2ReqNumMap;
-	Index2ReqNumMap index2ReqNum;
+	// [sizhuo] number of down req in same cache set: index -> down req num
+	typedef HASH_MAP<AddrType, int> Index2DownNumMap;
+	Index2DownNumMap index2DownNum;
 
 	// [sizhuo] add req consists of 2 phases: insert to MSHR & issue for handling
 	// insert success when there is free entry, deq msg from inport, try issue next cycle
@@ -147,33 +194,6 @@ private:
 
 	void processPendInsertDown(); // only SetState 
 	void processPendInsertUp(); // SetState + Req
-
-	// [sizhuo] pending issue downgrade req
-	class PendIssueDownReq {
-	public:
-		DownReqEntry *en;
-		StaticCallbackBase *cb;
-		PendIssueDownReq() : en(0), cb(0) {}
-		PendIssueDownReq(DownReqEntry *e, StaticCallbackBase *c) : en(e), cb(c) {}
-	};
-	typedef std::queue<PendIssueDownReq> PendIssueDownQ;
-	PendIssueDownQ *pendIssueDownQ;
-	PendIssueDownQ *callIssueDownQ;
-
-	// [sizhuo] pending issue upgrade req
-	class PendIssueUpReq {
-	public:
-		UpReqEntry *en;
-		StaticCallbackBase *cb;
-		PendIssueUpReq() : en(0), cb(0) {}
-		PendIssueUpReq(UpReqEntry *e, StaticCallbackBase *c) : en(e), cb(c) {}
-	};
-	typedef std::queue<PendIssueUpReq> PendIssueUpQ;
-	PendIssueUpQ *pendIssueUpQ;
-	PendIssueUpQ *callIssueUpQ;
-
-	void processPendIssueDown();
-	void processPendIssueUp();
 
 public:
 	IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str);

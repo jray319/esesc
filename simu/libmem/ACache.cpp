@@ -319,7 +319,7 @@ void ACache::doReq(MemRequest *mreq) {
 
 			I(mreq->line);
 			if(mreq->line->lineAddr != lineAddr) {
-				const MESI oldState = mreq->line->state;
+				const CacheLine::MESI oldState = mreq->line->state;
 				// [sizhuo] cache line is replaced, change its state
 				mreq->line->state = CacheLine::I;
 
@@ -621,7 +621,6 @@ void ACache::doDisp(MemRequest *mreq) {
 	ID(mreq->dump("doDisp"));
 
 	const AddrType lineAddr = cache->getLineAddr(mreq->getAddr());
-	I(mreq->getAction() == ma_setInvalid);
 
 	// [sizhuo] search cache to change directory
 	CacheLine *line = cache->downRespFindLine(lineAddr);
@@ -636,8 +635,9 @@ void ACache::doDisp(MemRequest *mreq) {
 	I(portId < upNodeNum);
 	I(portId >= 0);
 	line->dir[portId] = CacheLine::I;
-	// [sizhuo] TODO: if downgrade resp has data, and current cache line state is E
-	// we should convert E to M
+	// [sizhuo] we only get disp for dirty block, change cache line state to M
+	I(line->state == CacheLine::M || line->state == CacheLine::E);
+	line->state = CacheLine::M;
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 	// no need to set pos here

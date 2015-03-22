@@ -8,6 +8,8 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	: bankID(id)
 	, name(0)
 	, cache(c)
+	, pendIssueUpByReqNumQ(0)
+	, callIssueUpQ(0)
 	, upReqPool(upSize, "IndexSplitMSHRBank_upReqPool")
 	, maxUpReqNum(upSize)
 	, freeUpReqNum(upSize)
@@ -21,10 +23,6 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	, pendInsertDownQ(0)
 	, pendInsertUpQ(0)
 	, callInsertQ(0)
-	, pendIssueDownQ(0)
-	, callIssueDownQ(0)
-	, pendIssueUpQ(0)
-	, callIssueUpQ(0)
 {
 	I(name);
 	I(cache);
@@ -44,14 +42,8 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	callInsertQ = new PendInsertQ;
 	I(callInsertQ);
 
-	pendIssueDownQ = new PendIssueDownQ;
-	I(pendIssueDownQ);
-
-	callIssueDownQ = new PendIssueDownQ;
-	I(callIssueDownQ);
-
-	pendIssueUpQ = new PendIssueUpQ;
-	I(pendIssueUpQ);
+	pendIssueUpByReqNumQ = new PendIssueUpQ;
+	I(pendIssueUpByReqNumQ);
 
 	callIssueUpQ = new PendIssueUpQ;
 	I(callIssueUpQ);
@@ -83,9 +75,7 @@ IndexSplitMSHRBank::~IndexSplitMSHRBank() {
 	if(pendInsertDownQ) delete pendInsertDownQ;
 	if(pendInsertUpQ) delete pendInsertUpQ;
 	if(callInsertQ) delete callInsertQ;
-	if(pendIssueDownQ) delete pendIssueDownQ;
-	if(callIssueDownQ) delete callIssueDownQ;
-	if(pendIssueUpQ) delete pendIssueUpQ;
+	if(pendIssueUpByReqNumQ) delete pendIssueUpByReqNumQ;
 	if(callIssueUpQ) delete callIssueUpQ;
 	if(name) delete[]name;
 }
@@ -119,6 +109,8 @@ void IndexSplitMSHRBank::insertDownReq(AddrType lineAddr, StaticCallbackBase *cb
 		en->lineAddr = lineAddr;
 		en->state = Inactive; // [sizhuo] start as Inactive
 		en->mreq = mreq;
+		I((en->pendIssueDownQ).empty());
+		I((en->pendIssueUpQ).empty());
 		// [sizhuo] deq msg from inport
 		inport->deqDoneMsg();
 		// [sizhuo] next cycle we schedule issue for contention
@@ -168,36 +160,39 @@ void IndexSplitMSHRBank::issueDownReq(DownReqEntry *en, StaticCallbackBase *cb) 
 				I(upReq->state == Req || (upReq->lineAddr == lineAddr && upReq->state == Ack));
 				ID(mreq->dump("fail"));
 				ID(GMSG(mreq->isDebug(), "fail reason: active up req (%lx, %d)", upReq->lineAddr, upReq->state));
+				// [sizhuo] fail, add to the pendQ of upIter
+				(upIter->second->pendIssueDownQ).push(PendIssueDownReq(en, cb));
 			}
 		}
 	} else {
+		I(downIter->second);
 		I(downIter->second->lineAddr == lineAddr);
 		I(downIter->second->state == Active);
 		ID(mreq->dump("fail"));
 		ID(GMSG(mreq->isDebug(), "fail reason: active down req (%lx, %d)", downIter->second->lineAddr, downIter->second->state));
+		// [sizhuo] fail, add to the pendQ of downIter
+		(downIter->second->pendIssueDownQ).push(PendIssueDownReq(en, cb));
 	}
 
 	if(success) {
 		// [sizhuo] success, change to active state
 		I(en->state == Inactive);
 		en->state = Active;
+		I((en->pendIssueDownQ).empty());
+		I((en->pendIssueUpQ).empty());
 		// [sizhuo] insert to invert table: line addr -> down req
 		I(line2DownReq.find(lineAddr) == line2DownReq.end());
 		line2DownReq.insert(std::make_pair<AddrType, DownReqEntry*>(lineAddr, en));
-		// [sizhuo] increase cache set req num
-		Index2ReqNumMap::iterator numIter = index2ReqNum.find(index);
-		if(numIter == index2ReqNum.end()) {
-			index2ReqNum.insert(std::make_pair<AddrType, int>(index, 1));
+		// [sizhuo] increase cache set down req num
+		Index2DownNumMap::iterator numIter = index2DownNum.find(index);
+		if(numIter == index2DownNum.end()) {
+			index2DownNum.insert(std::make_pair<AddrType, int>(index, 1));
 		} else {
 			I(numIter->second >= 1);
 			numIter->second++;
 		}
 		// [sizhuo] call handler next cycle
 		cb->schedule(1);
-	} else {
-		// [sizhuo] fail, enq to pend issue Q
-		I(pendIssueDownQ);
-		pendIssueDownQ->push(PendIssueDownReq(en, cb));
 	}
 }
 
@@ -315,6 +310,8 @@ void IndexSplitMSHRBank::insertUpReq(AddrType lineAddr, StaticCallbackBase *cb, 
 		en->lineAddr = lineAddr;
 		en->state = Sleep; // [sizhuo] start as sleep state
 		en->mreq = mreq;
+		I((en->pendIssueDownQ).empty());
+		I((en->pendIssueUpQ).empty());
 		// [sizhuo] deq msg from inport
 		inport->deqDoneMsg();
 		// [sizhuo] next cycle we schedule issue for contention
@@ -341,8 +338,7 @@ void IndexSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 	// [sizhuo] we can issue when
 	// 1. no existing up req in same cache set
 	// 2. no existing down req to same cache line
-	// 3. number of up+down req in same cache set < associativity
-	// TODO: we can just use number of down req
+	// 3. number of down req in same cache set < associativity
 
 	// [sizhuo] search for up req in same cache set
 	Index2UpReqMap::iterator upIter = index2UpReq.find(index);
@@ -350,10 +346,10 @@ void IndexSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 		// [sizhuo] no up req with same index, search for down req on same line
 		Line2DownReqMap::iterator downIter = line2DownReq.find(lineAddr);
 		if(downIter == line2DownReq.end()) {
-			// [sizhuo] no down req to same cache line, check req num in same cache set
-			Index2ReqNumMap::iterator numIter = index2ReqNum.find(index);
-			if(numIter == index2ReqNum.end()) {
-				// [sizhuo] no up or down req in same cache set, success
+			// [sizhuo] no down req to same cache line, check down req num in same cache set
+			Index2DownNumMap::iterator numIter = index2DownNum.find(index);
+			if(numIter == index2DownNum.end()) {
+				// [sizhuo] no down req in same cache set, success
 				success = true;
 				ID(mreq->dump("success"));
 			} else if (numIter->second < int(cache->assoc)) {
@@ -365,7 +361,10 @@ void IndexSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 				I(numIter->second >= 1);
 				I(maxDownReqNum - freeDownReqNum >= int(cache->assoc));
 				ID(mreq->dump("fail"));
-				ID(GMSG(mreq->isDebug(), "fail reason: %d req in cache set with assoc %d", numIter->second, cache->assoc));
+				ID(GMSG(mreq->isDebug(), "fail reason: %d down req in cache set with assoc %d", numIter->second, cache->assoc));
+				// [sizhuo] fail, add to pendIssueUpByReqNumQ
+				I(pendIssueUpByReqNumQ);
+				pendIssueUpByReqNumQ->push(PendIssueUpReq(en, cb));
 			}
 		} else {
 			I(downIter->second);
@@ -373,6 +372,8 @@ void IndexSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 			I(downIter->second->state == Active);
 			ID(mreq->dump("fail"));
 			ID(GMSG(mreq->isDebug(), "fail reason: active down req (%lx, %d)", downIter->second->lineAddr, downIter->second->state));
+			// [sizhuo] fail, add to pendQ of dowIter
+			(downIter->second->pendIssueUpQ).push(PendIssueUpReq(en, cb));
 		}
 	} else {
 		I(upIter->second);
@@ -380,29 +381,21 @@ void IndexSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 		I(upIter->second->mreq);
 		ID(mreq->dump("fail"));
 		ID(GMSG(mreq->isDebug(), "fail reason: active up req (%lx, %d)", upIter->second->lineAddr, upIter->second->state));
+		// [sizhuo] fail, add to pendQ of upIter
+		(upIter->second->pendIssueUpQ).push(PendIssueUpReq(en, cb));
 	}
 
 	if(success) {
 		// [sizhuo] success: change state to Req
 		I(en->state == Sleep);
 		en->state = Req;
+		I((en->pendIssueDownQ).empty());
+		I((en->pendIssueUpQ).empty());
 		// [sizhuo] insert to invert table: index -> up req
 		I(index2UpReq.find(index) == index2UpReq.end());
 		index2UpReq.insert(std::make_pair<AddrType, UpReqEntry*>(index, en));
-		// [sizhuo] increase cache set req num
-		Index2ReqNumMap::iterator numIter = index2ReqNum.find(index);
-		if(numIter == index2ReqNum.end()) {
-			index2ReqNum.insert(std::make_pair<AddrType, int>(index, 1));
-		} else {
-			I(numIter->second >= 1);
-			numIter->second++;
-		}
 		// [sizhuo] call handler next cycle
 		cb->schedule(1);
-	} else {
-		// [sizhuo] fail to insert to MSHR, enq to pend Q
-		I(pendIssueUpQ);
-		pendIssueUpQ->push(PendIssueUpReq(en, cb));
 	}
 }
 
@@ -517,6 +510,9 @@ void IndexSplitMSHRBank::processPendInsertDown() {
 		return;
 	}
 
+	// TODO: we can only process 1 pending insert req
+	I(freeDownReqNum == 1);
+
 	// [sizhuo] exchange callQ & pendDownReqQ, now pendQ is empty
 	std::swap(callInsertQ, pendInsertDownQ);
 	// [sizhuo] process every req in callQ
@@ -543,6 +539,9 @@ void IndexSplitMSHRBank::processPendInsertUp() {
 		return;
 	}
 
+	// TODO: we can only process 1 pending insert req
+	I(freeUpReqNum == 1);
+
 	// [sizhuo] exchange callQ & pendUpReqQ, now pendQ is empty
 	std::swap(callInsertQ, pendInsertUpQ);
 	// [sizhuo] process every req in callQ
@@ -559,43 +558,46 @@ void IndexSplitMSHRBank::processPendInsertUp() {
 	}
 }
 
-void IndexSplitMSHRBank::processPendIssueDown() {
-	I(callIssueDownQ);
-	I(callIssueDownQ->empty());
-	I(pendIssueDownQ);
-
-	// [sizhuo] no pend req, just return
-	if(pendIssueDownQ->empty()) {
-		return;
-	}
-
-	// [sizhuo] exchange callQ & pendQ
-	std::swap(callIssueDownQ, pendIssueDownQ);
-	// [sizhuo] process every req in callQ
-	while(!callIssueDownQ->empty()) {
-		PendIssueDownReq r = callIssueDownQ->front();
-		callIssueDownQ->pop();
+void IndexSplitMSHRBank::processPendIssueDown(PendIssueDownQ& pendQ) {
+	while(!pendQ.empty()) {
+		PendIssueDownReq r = pendQ.front();
+		pendQ.pop();
 		scheduleIssueDownReq(r.en, r.cb);
 	}
 }
 
-void IndexSplitMSHRBank::processPendIssueUp() {
+void IndexSplitMSHRBank::processPendIssueUp(PendIssueUpQ& pendQ) {
+	while(!pendQ.empty()) {
+		PendIssueUpReq r = pendQ.front();
+		pendQ.pop();
+		scheduleIssueUpReq(r.en, r.cb);
+	}
+}
+
+void IndexSplitMSHRBank::processPendIssueUpByReqNum(AddrType index) {
 	I(callIssueUpQ);
 	I(callIssueUpQ->empty());
-	I(pendIssueUpQ);
+	I(pendIssueUpByReqNumQ);
 
 	// [sizhuo] no pend req, just return
-	if(pendIssueUpQ->empty()) {
+	if(pendIssueUpByReqNumQ->empty()) {
 		return;
 	}
 
 	// [sizhuo] exchange callQ & pendQ
-	std::swap(callIssueUpQ, pendIssueUpQ);
+	std::swap(callIssueUpQ, pendIssueUpByReqNumQ);
 	// [sizhuo] process every req in callQ
 	while(!callIssueUpQ->empty()) {
 		PendIssueUpReq r = callIssueUpQ->front();
 		callIssueUpQ->pop();
-		scheduleIssueUpReq(r.en, r.cb);
+		// [sizhuo] only process pend req with same index
+		// otherwise get back to pendQ
+		I(r.en);
+		if(cache->getIndex((r.en)->lineAddr) == index) {
+			scheduleIssueUpReq(r.en, r.cb);
+		} else {
+			pendIssueUpByReqNumQ->push(r);
+		}
 	}
 }
 
@@ -608,9 +610,8 @@ void IndexSplitMSHRBank::retireDownReq(AddrType lineAddr) {
 	I(en);
 	I(en->lineAddr == lineAddr);
 	I(en->mreq);
-	// [sizhuo] recycle entry
+	// [sizhuo] reset entry state
 	en->clear();
-	downReqPool.in(en);
 	// [sizhuo] remove from invert table
 	line2DownReq.erase(downIter);
 	I(line2DownReq.find(lineAddr) == line2DownReq.end());
@@ -618,21 +619,25 @@ void IndexSplitMSHRBank::retireDownReq(AddrType lineAddr) {
 	freeDownReqNum++;
 	I(freeDownReqNum > 0);
 	I(freeDownReqNum <= maxDownReqNum);
-	// [sizhuo] reduce req num in cache set
-	Index2ReqNumMap::iterator numIter = index2ReqNum.find(index);
-	I(numIter != index2ReqNum.end());
+	// [sizhuo] reduce down req num in cache set
+	Index2DownNumMap::iterator numIter = index2DownNum.find(index);
+	I(numIter != index2DownNum.end());
 	if(numIter->second > 1) {
 		numIter->second--;
 	} else {
 		I(numIter->second == 1);
-		index2ReqNum.erase(numIter);
+		index2DownNum.erase(numIter);
 	}
 	// [sizhuo] invoke pending issue down req
 	// then issue up req
 	// then insert down req
-	processPendIssueDown();
-	processPendIssueUp();
+	processPendIssueDown(en->pendIssueDownQ);
+	processPendIssueUp(en->pendIssueUpQ);
 	processPendInsertDown();
+	// [sizhuo] recycle entry
+	I((en->pendIssueDownQ).empty());
+	I((en->pendIssueUpQ).empty());
+	downReqPool.in(en);
 }
 
 void IndexSplitMSHRBank::upReqToWait(AddrType lineAddr) {
@@ -648,7 +653,7 @@ void IndexSplitMSHRBank::upReqToWait(AddrType lineAddr) {
 	// [sizhuo] change state
 	en->state = Wait;
 	// [sizhuo] invoke pending issue down req
-	processPendIssueDown();
+	processPendIssueDown(en->pendIssueDownQ);
 }
 
 void IndexSplitMSHRBank::upReqToAck(AddrType lineAddr) {
@@ -661,6 +666,7 @@ void IndexSplitMSHRBank::upReqToAck(AddrType lineAddr) {
 	I(en->lineAddr == lineAddr);
 	I(en->state == Wait || en->state == Req); // Req if cache hit
 	I(en->mreq);
+	GI(en->state == Wait, (en->pendIssueDownQ).empty());
 	// [sizhuo] change state
 	en->state = Ack;
 }
@@ -685,19 +691,10 @@ void IndexSplitMSHRBank::retireUpReq(AddrType lineAddr) {
 	freeUpReqNum++;
 	I(freeUpReqNum > 0);
 	I(freeUpReqNum <= maxUpReqNum);
-	// [sizhuo] reduce req num in cache set
-	Index2ReqNumMap::iterator numIter = index2ReqNum.find(index);
-	I(numIter != index2ReqNum.end());
-	if(numIter->second > 1) {
-		numIter->second--;
-	} else {
-		I(numIter->second == 1);
-		index2ReqNum.erase(numIter);
-	}
 	// [sizhuo] invoke pending issue down req
 	// then issue up req
 	// then insert up req
-	processPendIssueDown();
-	processPendIssueUp();
+	processPendIssueDown(en->pendIssueDownQ);
+	processPendIssueUp(en->pendIssueUpQ);
 	processPendInsertUp();
 }
