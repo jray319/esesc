@@ -428,6 +428,9 @@ public:
 	bool isDowngradeAction() {
 		return ma == ma_setShared || ma == ma_setInvalid;
 	}
+	
+	// [sizhuo] data valid bit for setStateAck: true if carries data
+	bool downRespData;
 	/*****************************************************************/
 };
 

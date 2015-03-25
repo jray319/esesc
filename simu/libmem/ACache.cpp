@@ -11,6 +11,13 @@
 #include "../libsampler/BootLoader.h"
 #include <string.h>
 
+// TODO:
+// 1. add contention for tag & data array
+// 2. add counters
+// 3. main memory should have BW limit
+// 4*. currently data delay is added when req turns to ack,
+// we may need more detailed modelling in future
+
 ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 	: MemObj(section, name)
 	, reqFromUpPort(0)
@@ -238,9 +245,6 @@ void ACache::doReq(MemRequest *mreq) {
 	
 	if(mreq->pos == MemRequest::MSHR) {
 		I(mreq->inport == 0);
-		// [sizhuo] the caline line in the same index to be replaced
-		// XXX: if we replace random address not in same index we may have problem
-		// because another active req in the same MSHR may be operating on it
 		if(!mreq->isRetrying()) {
 			// [sizhuo] newly added to MSHR, access tag array
 			I(mreq->line == 0);
@@ -261,7 +265,8 @@ void ACache::doReq(MemRequest *mreq) {
 						I(cache->getLineAddr(repByteAddr) == repLineAddr);
 						I(cache->getIndex(repLineAddr) == cache->getIndex(lineAddr));
 						// [sizhuo] send invalidate msg to upper level
-						int nmsg = router->invalidateAll(repByteAddr, mreq, tagDelay + goUpDelay);
+						I(upNodeNum == router->getUpNodeNum()); // [sizhuo] check up node num
+						int nmsg = router->invalidateAllDir(repByteAddr, mreq, mreq->line->dir, tagDelay + goUpDelay);
 						if(nmsg > 0) {
 							I(mreq->hasPendingSetStateAck());
 							// [sizhuo] wait for downgrade resp to wake me up
@@ -291,7 +296,8 @@ void ACache::doReq(MemRequest *mreq) {
 					if(!isL1) {
 						// [sizhuo] non-L1$, downgrade upper level (other than the initiator)
 						const MsgAction downAct = reqAct == ma_setValid ? ma_setShared : ma_setInvalid;
-						int nmsg = router->sendSetStateOthers(mreq, downAct, tagDelay + goUpDelay);
+						I(upNodeNum == router->getUpNodeNum()); // [sizhuo] check up node num
+						int nmsg = router->sendSetStateOthersDir(mreq, downAct, mreq->line->dir, tagDelay + goUpDelay);
 						if(nmsg > 0) {
 							I(mreq->hasPendingSetStateAck());
 							// [sizhuo] wait for downgrade resp to wake me up
@@ -325,6 +331,7 @@ void ACache::doReq(MemRequest *mreq) {
 
 				if (oldState == CacheLine::M) {
 					// [sizhuo] we need to send disp msg to lower level together with data
+					// note: E state will be converted to M when recv down resp with data
 					const AddrType repLineAddr = mreq->line->lineAddr;
 					const AddrType repByteAddr = repLineAddr << cache->log2LineSize;
 					I(cache->getLineAddr(repByteAddr) == repLineAddr);
@@ -334,9 +341,8 @@ void ACache::doReq(MemRequest *mreq) {
 					// [sizhuo] then forward req to lower level at the same time
 					forwardReqDown(mreq, lineAddr, dataDelay + goDownDelay);
 				} else {
-					// [sizhuo] TODO: for E state, downgrade resp from M should convert E to M
 					// [sizhuo] silently drop the line, directly go to lower level now
-					forwardReqDown(mreq, lineAddr, 0);
+					forwardReqDown(mreq, lineAddr, goDownDelay);
 				}
 			} else {
 				// [sizhuo] cache hit, we can start resp to upper level
@@ -355,7 +361,7 @@ void ACache::doReq(MemRequest *mreq) {
 					mshr->retireUpReq(lineAddr, delay);
 					// [sizhuo] end this msg
 					mreq->pos = MemRequest::Router;
-					mreq->ack(dataDelay + delay);
+					mreq->ack(goUpDelay + delay);
 				} else {
 					I(!isL1);
 					// [sizhuo] not L1 home node, change directory
@@ -364,6 +370,7 @@ void ACache::doReq(MemRequest *mreq) {
 					I(portId >= 0);
 					mreq->line->dir[portId] = CacheLine::upgradeState(reqAct);
 					// [sizhuo] retire from MSHR & release occupation on cache line
+					// we need to read data: add data delay
 					mreq->line->upReq = 0;
 					mreq->line = 0;
 					mshr->retireUpReq(lineAddr, dataDelay);
@@ -403,6 +410,7 @@ void ACache::doReqAck(MemRequest *mreq) {
 		I(line);
 		line->state = CacheLine::upgradeState(reqAckAct);
 		// [sizhuo] retire MSHR & release occupation on cache line & end msg
+		// TODO: write data array
 		line->upReq = 0;
 		mshr->retireUpReq(lineAddr, 0);
 		mreq->ack(goUpDelay);
@@ -432,7 +440,8 @@ void ACache::doReqAck(MemRequest *mreq) {
 		I(mreq->inport == 0);
 		if(!mreq->isRetrying()) {
 			// [sizhuo] send downgrade req to upper level except for upgrade req home node
-			int32_t nmsg = router->sendSetStateOthers(mreq, ma_setInvalid, goUpDelay);
+			I(upNodeNum == router->getUpNodeNum()); // [sizhuo] check up node num
+			int32_t nmsg = router->sendSetStateOthersDir(mreq, ma_setInvalid, mreq->line->dir, goUpDelay);
 			if(nmsg > 0) {
 				I(mreq->hasPendingSetStateAck());
 				// [sizhuo] need to wait for downgrade resp to try again
@@ -454,12 +463,13 @@ void ACache::doReqAck(MemRequest *mreq) {
 		I(portId >= 0);
 		mreq->line->dir[portId] = CacheLine::upgradeState(reqAckAct);
 		// [sizhuo] release occupation on cache line & retire from MSHR
+		// TODO: write data array
 		mreq->line->upReq = 0;
 		mreq->line = 0;
-		mshr->retireUpReq(lineAddr, dataDelay);
-		// [sizhuo] resp to upper level after data read & set pos
+		mshr->retireUpReq(lineAddr, 0);
+		// [sizhuo] resp to upper level after & set pos
 		mreq->pos = MemRequest::Router;
-		router->scheduleReqAck(mreq, dataDelay + goUpDelay);
+		router->scheduleReqAck(mreq, goUpDelay);
 	} else {
 		I(0);
 	}
@@ -502,6 +512,7 @@ void ACache::doSetState(MemRequest *mreq) {
 				mshr->retireDownReq(lineAddr, tagDelay);
 				mreq->pos = MemRequest::Router;
 				mreq->convert2SetStateAck(ma_setInvalid);
+				mreq->downRespData = false; // [sizhuo] no data resp
 				router->scheduleSetStateAck(mreq, tagDelay + goDownDelay);
 			} else {
 				if(CacheLine::compatibleDownReq(mreq->line->state, reqAct)) {
@@ -515,6 +526,7 @@ void ACache::doSetState(MemRequest *mreq) {
 					mshr->retireDownReq(lineAddr, tagDelay);
 					mreq->pos = MemRequest::Router;
 					mreq->convert2SetStateAck(ma_setShared);
+					mreq->downRespData = false; // [sizhuo] no data resp
 					router->scheduleSetStateAck(mreq, tagDelay + goDownDelay);
 				} else {
 					// [sizhuo] we need to do downgrade, first downgrade upper level
@@ -524,7 +536,8 @@ void ACache::doSetState(MemRequest *mreq) {
 						(mreq->redoSetStateCB).schedule(tagDelay);
 					} else {
 						// [sizhuo] forward downgrade req to upper level
-						int32_t nmsg = router->sendSetStateAll(mreq, mreq->getAction(), tagDelay + goUpDelay);
+						I(upNodeNum == router->getUpNodeNum()); // [sizhuo] check up node num
+						int32_t nmsg = router->sendSetStateAllDir(mreq, mreq->getAction(), mreq->line->dir, tagDelay + goUpDelay);
 						if(nmsg > 0) {
 							I(mreq->hasPendingSetStateAck());
 							// [sizhuo] need to wait for downgrade resp to try again
@@ -542,18 +555,26 @@ void ACache::doSetState(MemRequest *mreq) {
 			// [sizhuo] downgrade upper level is done
 			I(!mreq->hasPendingSetStateAck());
 			mreq->clearRetrying(); // [sizhuo] reset retry bit
-			// [sizhuo] change cache line state
 			I(mreq->line);
 			I(mreq->line->state != CacheLine::I);
+			// [sizhuo] calc delay & set data resp bit
+			// we need to read data & send down when in M state
+			TimeDelta_t delay = 0;
+			mreq->downRespData = false;
+			if(mreq->line->state == CacheLine::M) {
+				delay = dataDelay;
+				mreq->downRespData = true;
+			}
+			// [sizhuo] change cache line state
 			mreq->line->state = CacheLine::downgradeState(reqAct);
 			// [sizhuo] release cache line occupation
 			mreq->line->downReq = 0;
 			mreq->line = 0;
-			// [sizhuo] resp to lower level after data read & set pos & retire MSHR entry
-			mshr->retireDownReq(lineAddr, dataDelay);
+			// [sizhuo] resp to lower level & set pos & retire MSHR entry
+			mshr->retireDownReq(lineAddr, delay);
 			mreq->pos = MemRequest::Router;
 			mreq->convert2SetStateAck(reqAct); // [sizhuo] use the original action
-			router->scheduleSetStateAck(mreq, dataDelay + goDownDelay);
+			router->scheduleSetStateAck(mreq, delay + goDownDelay);
 		}
 	} else {
 		I(0);
@@ -590,8 +611,13 @@ void ACache::doSetStateAck(MemRequest *mreq) {
 	I(portId < upNodeNum);
 	I(portId >= 0);
 	line->dir[portId] = CacheLine::downgradeState(ackAct);
-	// [sizhuo] TODO: if downgrade resp has data, and current cache line state is E
-	// we should convert E to M
+	// [sizhuo] check whether resp contains data
+	if(mreq->downRespData) {
+		// [sizhuo] change cache line state to M
+		I(line->state == CacheLine::M || line->state == CacheLine::E);
+		line->state = CacheLine::M;
+		// TODO: write data array
+	}
 
 	// [sizhuo] we can end this msg, setStateAckDone() may be called
 	// and invoke other handler in this cache (delay is 0 here)
@@ -638,6 +664,7 @@ void ACache::doDisp(MemRequest *mreq) {
 	// [sizhuo] we only get disp for dirty block, change cache line state to M
 	I(line->state == CacheLine::M || line->state == CacheLine::E);
 	line->state = CacheLine::M;
+	// TODO: write data array
 
 	// [sizhuo] process msg success, deq it before mreq->ack destroy mreq
 	// no need to set pos here

@@ -413,6 +413,98 @@ int32_t MRouter::invalidateAll(AddrType addr, MemRequest *mreq, TimeDelta_t lat)
 
   return conta;
 }
+
+// [sizhuo] newly added to send set state req using directory
+int32_t MRouter::sendSetStateOthersDir(MemRequest *mreq, MsgAction ma, CacheLine::MESI *dir, TimeDelta_t lat) {
+  if (up_node.size() <= 1)
+    return 0; // if single node, for sure it does not get one
+
+  bool doStats  = mreq->getStatsFlag();
+  AddrType addr = mreq->getAddr();
+
+  MemObj *skip_mobj            = 0;
+  UPMapType::const_iterator it = up_map.find(mreq->getHomeNode());
+  I(it != up_map.end());
+  skip_mobj                    = it->second;
+
+  int32_t conta = 0;
+  I(mreq->isReq() || mreq->isReqAck());
+  for(size_t i=0;i<up_node.size();i++) {
+    if (up_node[i] == skip_mobj) 
+      continue;
+
+		// [sizhuo] send req based on directory
+		if(!CacheLine::compatibleDownReq(dir[i], ma)) {
+			MemRequest *breq = MemRequest::createSetState(self_mobj, mreq->getCreator(), ma, addr, doStats);
+#ifdef DEBUG
+			// [sizhuo] inherit debug bit
+			if (mreq->isDebug()) breq->setDebug();
+#endif
+			breq->addPendingSetStateAck(mreq);
+
+			breq->startSetState(up_node[i], lat);
+			conta++;
+		}
+  }
+
+  return conta;
+}
+
+// [sizhuo] newly added to send set state all using directory
+int32_t MRouter::sendSetStateAllDir(MemRequest *mreq, MsgAction ma, CacheLine::MESI* dir, TimeDelta_t lat) {
+  if(up_node.empty())
+    return 0; // top node?
+
+  bool doStats  = mreq->getStatsFlag();
+  AddrType addr = mreq->getAddr();
+
+  I(mreq->isSetState());
+  int32_t conta = 0;
+  for(size_t i=0;i<up_node.size();i++) {
+		// [sizhuo] send req based on directory
+		if(!CacheLine::compatibleDownReq(dir[i], ma)) {
+			MemRequest *breq = MemRequest::createSetState(self_mobj, mreq->getCreator(), ma, addr, doStats);
+#ifdef DEBUG
+			// [sizhuo] inherit debug bit
+			if (mreq->isDebug()) breq->setDebug();
+#endif
+			breq->addPendingSetStateAck(mreq);
+
+			breq->startSetState(up_node[i], lat);
+			conta++;
+		}
+  }
+
+  return conta;
+}
+
+// [sizhuo] newly added for cache replacement using directory
+int32_t MRouter::invalidateAllDir(AddrType addr, MemRequest *mreq, CacheLine::MESI *dir, TimeDelta_t lat)
+{
+  if(up_node.empty())
+    return 0; // top node?
+
+  bool doStats  = mreq->getStatsFlag();
+
+  I(mreq->isReq());
+  int32_t conta = 0;
+  for(size_t i=0;i<up_node.size();i++) {
+		// [sizhuo] send req based on directory
+		if(dir[i] != CacheLine::I) {
+			MemRequest *breq = MemRequest::createSetState(self_mobj, mreq->getCreator(), ma_setInvalid, addr, doStats);
+#ifdef DEBUG
+			// [sizhuo] inherit debug bit
+			if (mreq->isDebug()) breq->setDebug();
+#endif
+			breq->addPendingSetStateAck(mreq);
+
+			breq->startSetState(up_node[i], lat);
+			conta++;
+		}
+  }
+
+  return conta;
+}
 ///////
 
 TimeDelta_t MRouter::ffread(AddrType addr)

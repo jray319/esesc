@@ -43,41 +43,12 @@
 #include "Resource.h"
 
 #include "nanassert.h"
-
+#include "MsgAction.h"
+#include "CacheLine.h"
 /* }}} */
 
 class MemObj;
 class MemRequest;
-
-// MsgAction enumerate {{{1
-//
-// MOESI States:
-//
-// M: Single copy, memory not consistent
-//
-// E: Single copy, memory is consistent
-//
-// I: invalid
-//
-// S: one of (potentially) several copies. Share does not respond to other bus snoop reads
-// 
-// O: Like shared, but the O is responsible to update memory. If O does
-// a write back, it can change to S
-//
-// [sizhuo] setInvalid, setShared -- downgrade req
-// setValid, setExclusive, setDirty -- upgrade req
-enum MsgAction {
-	ma_setInvalid,
-	ma_setValid,
-	ma_setDirty,
-	ma_setShared,
-	ma_setExclusive,
-	ma_MMU,
-	ma_VPCWU,
-	ma_MAX
-};
-
-// }}}
 
 // [sizhuo] MRouter is a (logical) router for one mem obj
 class MRouter {
@@ -145,11 +116,19 @@ public:
 	// [sizhuo] starts (downgrade) req to all upper nodes
   int32_t sendSetStateAll(MemRequest *mreq, MsgAction ma, TimeDelta_t lat=0);
 
-	// Added by Sizhuo
+	/***** Added by Sizhuo *****/
 	// [sizhuo] starts (downgrade) req to all upper nodes with specific addr
 	// but let setState req all linked to mreq (by addPendingSetStateAck())
   int32_t invalidateAll(AddrType addr, MemRequest *mreq, TimeDelta_t lat=0);
-	/////////
+
+	// [sizhuo] dir versions of send downgrade req functions
+	int32_t sendSetStateOthersDir(MemRequest *mreq, MsgAction ma, CacheLine::MESI *dir, TimeDelta_t lat = 0);
+	int32_t sendSetStateAllDir(MemRequest *mreq, MsgAction ma, CacheLine::MESI *dir, TimeDelta_t lat = 0);
+  int32_t invalidateAllDir(AddrType addr, MemRequest *mreq, CacheLine::MESI *dir, TimeDelta_t lat=0);
+
+	// [sizhuo] return upper node num
+	int32_t getUpNodeNum() { return up_node.size(); }
+	/***************************/
 
   TimeDelta_t ffread(AddrType addr);
   TimeDelta_t ffwrite(AddrType addr);
