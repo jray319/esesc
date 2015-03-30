@@ -2,11 +2,13 @@
 #include <queue>
 #include "nanassert.h"
 #include "MemRequest.h"
+#include <string.h>
 
-LRUCacheArray::LRUCacheArray(const uint32_t sz, const uint32_t lineSz, const uint32_t a, const int upNodeNum)
-	: CacheArray(sz, lineSz, a)
+LRUCacheArray::LRUCacheArray(const uint32_t size_, const uint32_t lineSize_, const uint32_t assoc_, const uint32_t bankNum_, const int upNodeNum, const char *name_str)
+	: CacheArray(size_, lineSize_, assoc_, bankNum_, name_str)
 	, tags(0)
 {
+	// [sizhuo] create tag arrays
 	tags = new CacheSet[setNum];
 	I(tags);
 	for(uint32_t i = 0; i < setNum; i++) {

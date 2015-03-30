@@ -38,6 +38,7 @@ public:
 	virtual void enqNewMsg(StaticCallbackBase *cb, bool statsFlag) = 0;
 	// [sizhuo] deq processed msg
 	virtual void deqDoneMsg() = 0;
+	typedef CallbackMember0<CacheInport, &CacheInport::deqDoneMsg> deqDoneMsgCB;
 
 	// XXX: msg handler (e.g. MemObj::doReq) should schedule itself as callback
 	// when failing to process the msg

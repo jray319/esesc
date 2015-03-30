@@ -71,9 +71,10 @@ BCache::BCache(MemorySystem *gms, const char *section, const char *name)
 	uint32_t cacheSize = SescConf->getInt(section, "Size");
 	uint32_t lineSize = SescConf->getInt(section, "Bsize");
 	uint32_t setAssoc = SescConf->getInt(section, "Assoc");
-	cache = new LRUCacheArray(cacheSize, lineSize, setAssoc, upNodeNum);
+	uint32_t bankNum = SescConf->getInt(section, "numBanks");
+	cache = new LRUCacheArray(cacheSize, lineSize, setAssoc, bankNum, upNodeNum, name);
 	I(cache);
-	MSG("BCache %s creates cache array: size %x, lineSize %x, assoc %x", name, cacheSize, lineSize, setAssoc);
+	MSG("BCache %s creates cache array: size %x, lineSize %x, assoc %x, bankNum %d, upNodeNum %d", name, cacheSize, lineSize, setAssoc, bankNum, upNodeNum);
 
 	// [sizhuo] create MSHR
   const char* mshrSection = SescConf->getCharPtr(section,"MSHR");

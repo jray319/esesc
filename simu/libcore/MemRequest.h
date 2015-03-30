@@ -337,7 +337,7 @@ protected:
     destroy();
   }
   void ack(TimeDelta_t lat) {
-    I(lat);
+    //I(lat); // [sizhuo] lat can be 0
     if(cb) { // Not all the request require a completion notification
       cb->schedule(lat);
     }
