@@ -43,6 +43,7 @@ NICECache::NICECache(MemorySystem *gms, const char *section, const char *sName)
   /* dummy constructor {{{1 */
   : MemObj(section, sName)
   ,hitDelay  (SescConf->getInt(section,"hitDelay"))
+	,port(0)
   ,readHit         ("%s:readHit",         sName)
   ,pushDownHit     ("%s:pushDownHit",     sName)
   ,writeHit        ("%s:writeHit",        sName)
@@ -55,17 +56,31 @@ NICECache::NICECache(MemorySystem *gms, const char *section, const char *sName)
 {
 
 	// FIXME: the hitdelay should be converted to dyn_hitDelay to support DVFS
+	
+	I(hitDelay > 0);
 
+	// [sizhuo] get max req in flight
+	int32_t maxReqNum = SescConf->getInt(section, "maxReq");
+	I(maxReqNum > 0);
+	// [sizhuo] create port: num: maxReqNum, occ: hitDelay
+	port = PortGeneric::create(sName, maxReqNum, hitDelay);
+	I(port);
+
+	MSG("NICE cache %s: num %d, occ %d", sName, maxReqNum, hitDelay);
 }
 /* }}} */
 
 void NICECache::doReq(MemRequest *mreq)    
   /* read (down) {{{1 */
 { 
+	// [sizhuo] req should retrieve data
+	Time_t when = port->nextSlot(mreq->getStatsFlag()) + hitDelay;
+
   readHit.inc(mreq->getStatsFlag());
 
 	if (mreq->isHomeNode()) {
-		mreq->ack(hitDelay);
+		I(0); // [sizhuo] should not be used as L1
+		mreq->ackAbs(when);
 		return;
 	}
 	if (mreq->getAction() == ma_setValid || mreq->getAction() == ma_setExclusive) {
@@ -76,7 +91,7 @@ void NICECache::doReq(MemRequest *mreq)
 		//MSG("wrnice %x",mreq->getAddr());
 	}
 
-  router->scheduleReqAck(mreq, hitDelay);
+  router->scheduleReqAckAbs(mreq, when);
 }
 /* }}} */
 
@@ -104,7 +119,10 @@ void NICECache::doSetStateAck(MemRequest *req)
 void NICECache::doDisp(MemRequest *req)    
   /* push (up) {{{1 */
 { 
-  req->ack();
+  writeBack.inc(req->getStatsFlag());
+	// [sizhuo] schedule write
+	Time_t when = port->nextSlot(req->getStatsFlag());
+  req->ackAbs(when);
 }
 /* }}} */
 

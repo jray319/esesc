@@ -39,11 +39,13 @@
 #include "nanassert.h"
 #include "MemObj.h"
 #include "GStats.h"
+#include "Port.h"
 /* }}} */
 
 class NICECache : public MemObj {
   // a 100% hit cache, used for debugging or as main memory
   const uint32_t hitDelay;
+	PortGeneric *port; // [sizhuo] port for read & write
 protected:
 
   // BEGIN Statistics
