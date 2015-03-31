@@ -37,6 +37,16 @@ protected:
 
 	const int upNodeNum; // number of upper level of nodes
 
+  // BEGIN Statistics
+  GStatsCntr displaced; // [sizhuo] number of replacement
+  GStatsCntr writeBack; // [sizhuo] number of write back to lower level
+  GStatsAvg avgMemLat; // [sizhuo] mem access lat, only useful for L1
+	GStatsCntr *reqNum[ma_MAX]; // [sizhuo] req num
+	GStatsCntr *reqHit[ma_MAX]; // [sizhuo] hit: cache valid && enough permission
+	GStatsCntr *reqMiss[ma_MAX]; // [sizhuo] cache invalid miss
+	GStatsCntr *reqHalfMiss[ma_MAX]; // [sizhuo] cache valid, but without enough permission
+  // END Statistics
+
 private:
 	// [sizhuo] helper function: forward req to lower level
 	void forwardReqDown(MemRequest *mreq, AddrType lineAddr, TimeDelta_t lat);
