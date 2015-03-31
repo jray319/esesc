@@ -24,7 +24,7 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	, pendInsertUpQ(0)
 	, callInsertQ(0)
 {
-	I(name);
+	I(str);
 	I(cache);
 	I(upSize > 0);
 	I(downSize > 0);

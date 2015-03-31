@@ -364,12 +364,19 @@ void ACache::doReq(MemRequest *mreq) {
 				// [sizhuo] send resp
 				if(mreq->isHomeNode()) {
 					// [sizhuo] home node, we can end this msg, it must be L1
-					// no need to update cache tag
 					I(isL1);
+					I(!isLLC);
 					// [sizhuo] we need to access data array 
 					// for load -- we wait data delay to get data
 					// for store -- we don't wait
-					const TimeDelta_t delay = cache->getDataAccessTime(lineAddr, mreq->getStatsFlag()) - globalClock + (reqAct == ma_setValid ? dataDelay : 0);
+					TimeDelta_t delay = cache->getDataAccessTime(lineAddr, mreq->getStatsFlag()) - globalClock + (reqAct == ma_setValid ? dataDelay : 0);
+					// [sizhuo] may need to update cache tag E->M
+					if(reqAct == ma_setDirty && mreq->line->state != CacheLine::M) {
+						I(mreq->line->state == CacheLine::E);
+						mreq->line->state = CacheLine::M;
+						// [sizhuo] update delay with tag write delay
+						delay = std::max(delay, TimeDelta_t(cache->getTagAccessTime(lineAddr, mreq->getStatsFlag()) - globalClock));
+					}
 					// [sizhuo] retire from MSHR & release occupation on cache line
 					mreq->line->upReq = 0;
 					mreq->line = 0;
@@ -384,6 +391,10 @@ void ACache::doReq(MemRequest *mreq) {
 					I(portId < upNodeNum);
 					I(portId >= 0);
 					mreq->line->dir[portId] = CacheLine::upgradeState(reqAct);
+					// [sizhuo] may change line state E->M
+					if(reqAct == ma_setDirty) {
+						mreq->line->state = CacheLine::M;
+					}
 					// [sizhuo] we have delay in writing tag & reading data, we choose the maximum delay
 					const TimeDelta_t delay = std::max(cache->getTagAccessTime(lineAddr, mreq->getStatsFlag()), cache->getDataAccessTime(lineAddr, mreq->getStatsFlag()) + dataDelay) - globalClock;
 					// [sizhuo] retire from MSHR & release occupation on cache line after tag write & data read

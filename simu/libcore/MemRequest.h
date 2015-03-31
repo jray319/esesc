@@ -252,7 +252,7 @@ protected:
   static void sendReqWritePrefetch(MemObj *m, bool doStats, AddrType addr, CallbackBase *cb=0, bool dbg = false) { 
     MemRequest *mreq = create(m,addr,doStats, cb);
     mreq->mt         = mt_req;
-    mreq->ma         = ma_setDirty; 
+    mreq->ma         = ma_setExclusive; //ma_setDirty; // [sizhuo] prefetch to E
 		mreq->debug = dbg || mreq->debug; // [sizhuo] add debug bit
 		m->req(mreq);
   }
