@@ -7,6 +7,7 @@
 #include "Pipeline.h"
 #include "FastQueue.h"
 #include "FrontEnd.h"
+#include <deque>
 
 // [sizhuo] Processor for WMM
 class WMMProcessor : public GProcessor {
@@ -15,26 +16,25 @@ private:
   class RetireState {
   public:
     double committed;
-    Time_t r_dinst_ID;
     Time_t dinst_ID;
-    DInst *r_dinst;
     DInst *dinst;    
     bool operator==(const RetireState& a) const {
       return a.committed == committed;
     };
     RetireState() {
       committed  = 0;
-      r_dinst_ID = 0;
       dinst_ID   = 0;
-      r_dinst    = 0;
       dinst      = 0;
     }
   };
 
+	// [sizhuo] use double-queue as ROB to simulator ROB flush
+	// XXX: we no longer use ROB & rROB from GProcessor class
+	std::deque<DInst*> rob;
+
 	FrontEnd frontEnd; // [sizhuo] simplified front end pipline
 	LSQNone lsq; // [sizhuo] load/store queue: currently just a dummy one
 
-  int32_t spaceInInstQueue; // [sizhuo] remaining free space in inst queue
   DInst *RAT[LREG_MAX]; // [sizhuo] rename table
 
   void fetch(FlowID fid);

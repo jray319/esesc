@@ -16,7 +16,6 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
   , avgFetchWidth("P(%d)_avgFetchWidth",i)
 {
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
-	spaceInInstQueue = InstQueueSize;
 	lockCheckEnabled = false;
 }
 
@@ -58,7 +57,7 @@ void WMMProcessor::issueToROB() {
 
 StallCause WMMProcessor::addInst(DInst *dinst) {
 	// [sizhuo] rob size limit
-	if((ROB.size() + rROB.size()) >= MaxROBSize) {
+	if(rob.size() >= MaxROBSize) {
 		return SmallROBStall;
 	}
 
@@ -72,8 +71,9 @@ StallCause WMMProcessor::addInst(DInst *dinst) {
 
 	// [sizhuo] whether we can add dinst into cluster
   StallCause sc = cluster->canIssue(dinst);
-  if (sc != NoStall)
+  if (sc != NoStall) {
     return sc;
+	}
 	// [sizhuo] now canIssue returns NoStall, this has incur side effects in func unit
 	// we must issue this inst to both ROB & cluster
 
@@ -83,7 +83,7 @@ StallCause WMMProcessor::addInst(DInst *dinst) {
   nInst[inst->getOpcode()]->inc(dinst->getStatsFlag());
 
 	// [sizhuo] issue to ROB & cluster
-	ROB.push(dinst);
+	rob.push_back(dinst);
 
 	// [sizhuo] dependency of src regs of dinst
 	I(RAT[0] == 0); // [sizhuo] read R0 should not cause dependency
@@ -113,46 +113,33 @@ StallCause WMMProcessor::addInst(DInst *dinst) {
 }
 
 void WMMProcessor::retire() {
-	// [sizhuo] move executed inst from ROB to rROB
-	while(!ROB.empty()) {
-		DInst *dinst = ROB.top();
-
-		if( !dinst->isExecuted() ) break;
-
-		// [sizhuo] preretire from func unit, no flushing now
-		bool done = dinst->getClusterResource()->preretire(dinst, false);
-		if(!done) break;
-
-		rROB.push(dinst);
-		ROB.pop();
+	// [sizhuo] stats
+  if(!rob.empty()) {
+    robUsed.sample(rob.size(), rob.front()->getStatsFlag());
 	}
 
-	// [sizhuo] stats
-  if(!ROB.empty())
-    robUsed.sample(ROB.size(), ROB.top()->getStatsFlag());
+	// [sizhuo] retire from ROB
+  for(uint16_t i=0 ; i<RetireWidth && !rob.empty() ; i++) {
+    DInst *dinst = rob.front();
 
-  if(!rROB.empty())
-    rrobUsed.sample(rROB.size(), rROB.top()->getStatsFlag());
-
-	// [sizhuo] retire from rROB
-  for(uint16_t i=0 ; i<RetireWidth && !rROB.empty() ; i++) {
-    DInst *dinst = rROB.top();
-
-    if (!dinst->isExecuted()) break;
-    
+    if (!dinst->isExecuted()) {
+			return;
+		}
     I(dinst->getCluster());
  
-		// [sizhuo] retire from func unit, no flushing now
+		// [sizhuo] retire from func unit (2nd input has no real effect)
     bool done = dinst->getCluster()->retire(dinst, false);
 		// [sizhuo] cannot retire, stop
-    if( !done ) return;
+    if( !done ) {
+			return;
+		}
     
 		// [sizhuo] stats
 		nCommitted.inc(dinst->getStatsFlag());
 
 		// [sizhuo] truly retire inst
     dinst->destroy(eint);
-		rROB.pop();
+		rob.pop_front();
 	}
 }
 
@@ -172,8 +159,8 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 
 	// [sizhuo] stats
 	bool getStatsFlag = false; // [sizhuo] stats flag
-  if( !ROB.empty() ) {
-    getStatsFlag = ROB.top()->getStatsFlag();
+  if( !rob.empty() ) {
+    getStatsFlag = rob.front()->getStatsFlag();
   }
   clockTicks.inc(getStatsFlag);
   setWallClock(getStatsFlag);
@@ -223,29 +210,18 @@ void WMMProcessor::retire_lock_check()
   }else{
     state.committed = 0;
   }
-  if (!rROB.empty()) {
-    state.r_dinst    = rROB.top();
-    state.r_dinst_ID = rROB.top()->getID();
-  }
-  
-  if (!ROB.empty()) {
-    state.dinst    = ROB.top();
-    state.dinst_ID = ROB.top()->getID();
+  if (!rob.empty()) {
+    state.dinst    = rob.front();
+    state.dinst_ID = rob.front()->getID();
   }
 
   if (last_state == state && active) {
     I(0);
     MSG("WARNING: Lock detected in P(%d)", getId());
-    if (!rROB.empty()) {
-			rROB.top()->dump("rROB top");
-//      replay(rROB.top());
-    }
-    if (!ROB.empty()) {
+    if (!rob.empty()) {
 			char str[100];
-			sprintf(str, "Lock in P(%d), ROB top", getId());
-			ROB.top()->dump(str);
-//      ROB.top()->markExecuted();
-//      replay(ROB.top());
+			sprintf(str, "Lock in P(%d), ROB front", getId());
+			rob.front()->dump(str);
     }
   }
 
