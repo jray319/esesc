@@ -81,11 +81,15 @@ DepWindow::~DepWindow() {
 }
 
 StallCause DepWindow::canIssue(DInst *dinst) const {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
 
   return NoStall;
 }
 
 void DepWindow::addInst(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
 
   I(dinst->getCluster() != 0); // Resource::schedule must set the resource field
 
@@ -100,6 +104,9 @@ void DepWindow::addInst(DInst *dinst) {
 // just get the time)
 // [sizhuo] wake up dinst which has resolved data dependency
 void DepWindow::wakeUpDeps(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   I(!dinst->hasDeps());
 
   // [sizhuo] why we need to just increase wake up time of a inst??
@@ -138,6 +145,9 @@ void DepWindow::wakeUpDeps(DInst *dinst) {
 
 // [sizhuo] schedule a callback to select the dinst for execution (NOT callback to execute dinst)
 void DepWindow::preSelect(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   // At the end of the wakeUp, we can start to read the register file
   I(dinst->getWakeUpTime());
   I(!dinst->hasDeps());
@@ -156,6 +166,9 @@ void DepWindow::preSelect(DInst *dinst) {
 
 // [sizhuo] select dinst for execution
 void DepWindow::select(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   I(!dinst->getWakeUpTime());
 
   Time_t schedTime = schedPort->nextSlot(dinst->getStatsFlag()) + SchedDelay;
@@ -168,6 +181,9 @@ void DepWindow::select(DInst *dinst) {
 
 // Called when dinst finished execution. Look for dependent to wakeUp
 void DepWindow::executed(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   //  MSG("execute [0x%x] @%lld",dinst, globalClock);
 
   I(!dinst->hasDeps());

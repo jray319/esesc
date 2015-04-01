@@ -9,8 +9,7 @@
 
 WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 	: GProcessor(gm, i, 1)
-  , IFID(i, this, gm)
-  , pipeQ(i)
+  , frontEnd(i)
 	, lsq(i)
   , retire_lock_checkCB(this)
   , clusterManager(gm, this)
@@ -18,32 +17,43 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 {
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
 	spaceInInstQueue = InstQueueSize;
-	busy = false;
 	lockCheckEnabled = false;
 }
 
 WMMProcessor::~WMMProcessor() {}
 
 void WMMProcessor::fetch(FlowID fid) {
-	// [sizhuo] copied from OoOProcessor.cpp
-	
   I(fid == cpu_id);
   I(active);
   I(eint);
 
-  if( IFID.isBlocked(0)) {
-//    I(0);
-    busy = true;
-  }else{
-    IBucket *bucket = pipeQ.pipeLine.newItem();
-    if( bucket ) {
-      IFID.fetch(bucket, eint, fid);
-      if (!bucket->empty()) {
-        avgFetchWidth.sample(bucket->size());
-        busy = true;
-      }
-    }
+  if(!frontEnd.isBlocked()) {
+		frontEnd.fetch(eint, fid);
   }
+}
+
+void WMMProcessor::issueToROB() {
+	int32_t nIssued = 0;
+	while(nIssued < IssueWidth) {
+		// [sizhou] peek first inst in instQ
+		DInst *dinst = frontEnd.firstInst();
+		if(dinst == 0) {
+			// [sizhuo] instQ empty, done
+			return;
+		}
+		// [sizhuo] try to issue the inst
+		StallCause sc = addInst(dinst);
+		if(sc != NoStall) {
+			// [sizhuo] issue fail, change stat & done
+			if(nIssued < RealisticWidth) {
+				nStall[sc]->add(RealisticWidth - nIssued, dinst->getStatsFlag());
+			}
+			return;
+		}
+		// [sizhuo] issue success, deq inst & incr counter
+		frontEnd.deqInst();
+		nIssued++;
+	}
 }
 
 StallCause WMMProcessor::addInst(DInst *dinst) {
@@ -130,7 +140,6 @@ void WMMProcessor::retire() {
 
     if (!dinst->isExecuted()) break;
     
-		//GI(!flushing, dinst->isExecuted());
     I(dinst->getCluster());
  
 		// [sizhuo] retire from func unit, no flushing now
@@ -154,7 +163,6 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 
 	// fetch
   fetch(fid);
-	if(!busy) return false;
 
 	// [sizhuo] schedule deadlock check
 	if(!lockCheckEnabled) {
@@ -182,29 +190,8 @@ bool WMMProcessor::advance_clock(FlowID fid) {
     throttling_cntr = 1;
   }
 
-  // ID Stage (insert to instQueue)
-  if( spaceInInstQueue >= FetchWidth ) {
-    IBucket *bucket = pipeQ.pipeLine.nextItem();
-    if( bucket ) {
-      I(!bucket->empty());
-
-      spaceInInstQueue -= bucket->size();
-      pipeQ.instQueue.push(bucket);
-    }else{
-      noFetch2.inc(getStatsFlag);
-    }
-  }else{
-    noFetch.inc(getStatsFlag);
-  }
-
 	// [sizhuo] issue inst into ROB
-  if( !pipeQ.instQueue.empty() ) {
-    spaceInInstQueue += issue(pipeQ);
-  }else if( ROB.empty() && rROB.empty() ) {
-    // Still busy if we have some in-flight requests
-    busy = pipeQ.pipeLine.hasOutstandingItems();
-    return true;
-  }
+	issueToROB();
 
 	// [sizhuo] retire
 	retire();
@@ -247,8 +234,8 @@ void WMMProcessor::retire_lock_check()
   }
 
   if (last_state == state && active) {
-    //I(0); [sizhuo] we have error msg
-    //MSG("WARNING: Lock detected in P(%d)", getId());
+    I(0);
+    MSG("WARNING: Lock detected in P(%d)", getId());
     if (!rROB.empty()) {
 			rROB.top()->dump("rROB top");
 //      replay(rROB.top());

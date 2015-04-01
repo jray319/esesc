@@ -20,6 +20,8 @@ public:
   bool       preretire(DInst *dinst, bool flushing);
   bool       retire(DInst    *dinst, bool flushing);
   void       performed(DInst *dinst);
+	// [sizhuo] no need for recovery from ROB flush
+	virtual void flush() {}
 };
 
 class WMMLSResource : public Resource {
@@ -36,6 +38,7 @@ public:
 class WMMFULoad : public WMMLSResource {
 private:
   const TimeDelta_t LSDelay; // [sizhuo] store to load forwarding delay
+	const int32_t maxEntries; // [sizhuo] used to recover freeEntries in ROB flush
   int32_t freeEntries;
 
 protected:
@@ -51,10 +54,15 @@ public:
   bool       preretire(DInst  *dinst, bool flushing);
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
+	// [sizhuo] recover freeEntry when ROB flush
+	virtual void flush() {
+		freeEntries = maxEntries;
+	}
 };
 
 class WMMFUStore : public WMMLSResource {
 private:
+	const int32_t maxEntries; // [sizhuo] used to recover freeEntries in ROB flush
   int32_t freeEntries;
 
 protected:
@@ -70,6 +78,10 @@ public:
   bool       preretire(DInst  *dinst, bool flushing);
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
+	// [sizhuo] recover freeEntry when ROB flush
+	virtual void flush() {
+		freeEntries = maxEntries;
+	}
 };
 
 #endif

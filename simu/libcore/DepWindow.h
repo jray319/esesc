@@ -79,6 +79,10 @@ public:
   void addInst(DInst *dinst); // [sizhuo] add new inst into this window
   // [sizhuo] things to do when dinst finishes execution: wakeup inst depending on dinst when dinst finish execution
   void executed(DInst *dinst); 
+
+	// [sizhuo] recover depWindow stats when flushing
+	// actually there is no state to recover
+	void flush() {}
 };
 
 #endif // DEPWINDOW_H

@@ -126,6 +126,9 @@ public:
 
   Time_t getUsedTime() const { return usedTime; }
   void setUsedTime() { usedTime = globalClock;  }
+
+	// [sizhuo] recover state when flushing ROB (optional)
+	virtual void flush() {}
 };
 
 class GMemorySystem;
@@ -289,6 +292,8 @@ public:
   bool       preretire(DInst  *dinst, bool flushing);
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
+	// [sizhuo] don't need recovery from ROB flush
+	virtual void flush() {}
 };
 
 class FUFuze : public Resource {
@@ -308,6 +313,7 @@ public:
 
 class FUBranch : public Resource {
 private:
+	const int32_t maxBranches; // [sizhuo] used to recover freeBranches in ROB flush
   int32_t freeBranches;
 
 protected:
@@ -320,6 +326,8 @@ public:
   bool       preretire(DInst  *dinst, bool flushing);
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
+	// [sizhuo] when ROB flush, release all branch entries
+	virtual void flush() { freeBranches = maxBranches; }
 };
 
 class FURALU : public Resource {

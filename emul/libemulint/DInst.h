@@ -53,6 +53,7 @@ class BPredictor;
 class Cluster;
 class Resource;
 class EmulInterface;
+class FrontEnd;
 
 // FIXME: do a nice class. Not so public
 //
@@ -131,6 +132,8 @@ private:
   uint32_t pe_id;
 #endif
 
+	bool poisoned; // [sizhuo] poison bit for flushed inst
+
   // END Boolean flags
 
   // BEGIN Time counters
@@ -150,6 +153,8 @@ private:
   DInst      **serializeEntry;
   FetchEngine *fetch;
   Time_t fetchTime;
+
+	FrontEnd *frontEnd; // [sizhuo] front end that this inst has blocked
 
   // [sizhuo] number of older inst that this inst depends on
   char nDeps;              // 0, 1 or 2 for RISC processors
@@ -182,6 +187,8 @@ private:
     executed      = false;
     replay        = false;
     performed     = false;
+		poisoned      = false; // [sizhuo] initially not poisoned
+		frontEnd      = 0; // [sizhuo] locked front end init as NULL
 #ifdef ENABLE_CUDA
     memaccess   = GlobalMem;
 #endif
@@ -445,10 +452,35 @@ public:
   bool isPerformed() const { return performed; }
   void markPerformed() {
     // Loads get performed first, and then executed
-    GI(!inst.isLoad(),executed);
+    //GI(!inst.isLoad(),executed);
     I(inst.isLoad() || inst.isStore());
     performed = true;
   }
+
+	// [sizhuo] return & set poison bit
+	bool isPoisoned() const { return poisoned; }
+	void markPoisoned() {
+		// [sizhuo] remove dependency
+		while(hasPending()) {
+			if(getFirstPending() == 0) {
+				break;
+			}
+			getNextPending();
+		}
+		// [sizhuo] if unissued, mark issued & executed
+		// XXX: this is necessary, otherwise this inst may never become executed
+		if(!issued) {
+			I(!executed);
+			issued = true;
+			executed = true;
+		} // else: will be marked by DepWindown/Cluster/Resource
+		// [sizhuo] set poison bit
+		poisoned = true;
+	}
+	
+	// [sizhuo] lock front end & return its value
+	void lockFrontEnd(FrontEnd *fe) { frontEnd = fe; }
+	FrontEnd *getFrontEnd() { return frontEnd; }
 
   void setWakeUpTime(Time_t t)  {
     //I(wakeUpTime <= t || t == 0);

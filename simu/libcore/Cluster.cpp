@@ -77,6 +77,7 @@ Cluster::Cluster(const char *clusterName, GProcessor *gp)
   ,winNotUsed("P(%d)_%s_winNotUsed",gp->getId(), clusterName)
   ,rdRegPool("P(%d)_%s_rdRegPool",gp->getId(), clusterName)
   ,wrRegPool("P(%d)_%s_wrRegPool",gp->getId(), clusterName)
+	,MaxRegPool(SescConf->getInt(clusterName, "nRegs"))
 {
   bzero(res,sizeof(Resource *)*iMAX);  
 }
@@ -277,6 +278,7 @@ Cluster *Cluster::create(const char *clusterName, GMemorySystem *ms, GProcessor 
   }
 
   cluster->regPool = SescConf->getInt(clusterName, "nRegs");
+	I(cluster->regPool == cluster->MaxRegPool);
 
   SescConf->isInt(clusterName     , "nRegs");
   SescConf->isBetween(clusterName , "nRegs", 16, 262144);
@@ -293,11 +295,17 @@ Cluster *Cluster::create(const char *clusterName, GMemorySystem *ms, GProcessor 
 
 
 void Cluster::select(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+	
   window.select(dinst);
 }
 
 
 StallCause Cluster::canIssue(DInst *dinst) const { 
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+	
   if (regPool<=0) // [sizhuo] check phy reg available for renaming
     return SmallREGStall;
 
@@ -313,7 +321,9 @@ StallCause Cluster::canIssue(DInst *dinst) const {
 }
 
 void Cluster::addInst(DInst *dinst) {
-  
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   rdRegPool.add(2, dinst->getStatsFlag()); // 2 reads
 
   if (dinst->getInst()->hasDstRegister()) {
@@ -329,6 +339,7 @@ void Cluster::addInst(DInst *dinst) {
 //************ Executing Cluster
 
 void ExecutingCluster::executing(DInst *dinst) {
+	I(0); // [sizhuo] we never use this class
 
   window.wakeUpDeps(dinst);
   dinst->clearRATEntry(); 
@@ -336,12 +347,14 @@ void ExecutingCluster::executing(DInst *dinst) {
 }
 
 void ExecutingCluster::executed(DInst *dinst) {
+	I(0); // [sizhuo] we never use this class
 
   window.executed(dinst);
   dinst->clearRATEntry(); 
 }
 
 bool ExecutingCluster::retire(DInst *dinst, bool replay) {
+	I(0); // [sizhuo] we never use this class
 
   bool done = dinst->getClusterResource()->retire(dinst, replay);
 
@@ -363,12 +376,18 @@ bool ExecutingCluster::retire(DInst *dinst, bool replay) {
 //************ Executed Cluster
 
 void ExecutedCluster::executing(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
 
   // [sizhuo] dinst is issued to execution, just increase wake up time of inst depending on dinst
   window.wakeUpDeps(dinst);
 }
 
 void ExecutedCluster::executed(DInst *dinst) {
+	// [sizhuo] dinst must have been executed
+	I(dinst->isExecuted());
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
 
   // [sizhuo] dinst finishes execution, wake up inst depdning on dinst
   window.executed(dinst);
@@ -382,6 +401,8 @@ void ExecutedCluster::executed(DInst *dinst) {
 // its info may be still maintained in function unit, e.g. LSQ, branch,
 // in order to detect speculation failure or forward data, etc
 bool ExecutedCluster::retire(DInst *dinst, bool replay) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
 
   bool done  = dinst->getClusterResource()->retire(dinst, replay);
   if( !done )
@@ -401,16 +422,19 @@ bool ExecutedCluster::retire(DInst *dinst, bool replay) {
 //************ RetiredCluster
 
 void RetiredCluster::executing(DInst *dinst) {
+	I(0); // [sizhuo] we never use this class
 
   window.wakeUpDeps(dinst);
 }
 
 void RetiredCluster::executed(DInst *dinst) {
+	I(0); // [sizhuo] we never use this class
 
   window.executed(dinst);
 }
 
 bool RetiredCluster::retire(DInst *dinst, bool replay) {
+	I(0); // [sizhuo] we never use this class
 
   bool done = dinst->getClusterResource()->retire(dinst, replay);
   if( !done )

@@ -73,6 +73,7 @@ class Cluster {
 
   Resource   *res[iMAX]; // [sizhuo] mapping from uOP type to function unit
 
+	const int32_t MaxRegPool; // [sizhuo] added to recover regPool
   int32_t regPool;
 
 
@@ -110,6 +111,12 @@ class Cluster {
 
   GProcessor *getGProcessor() const { return gproc; }
 
+	// [sizhuo] recover state when flushing ROB
+	void flush() {
+		regPool = MaxRegPool;
+		windowSize = MaxWinSize;
+		window.flush();
+	}
  
 };
 

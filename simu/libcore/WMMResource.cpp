@@ -22,6 +22,9 @@ WMMFURALU::WMMFURALU(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, int32_t id)
 }
 
 StallCause WMMFURALU::canIssue(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   I(dinst->getPC() != 0xf00df00d); // It used to be a Syspend, but not longer true
 
   if (dinst->getPC() == 0xdeaddead){ 
@@ -52,12 +55,24 @@ StallCause WMMFURALU::canIssue(DInst *dinst) {
 }
 
 void WMMFURALU::executing(DInst *dinst) {
+	// [sizhuo] detect poisoned inst & mark as executed
+	if(dinst->isPoisoned()) {
+		dinst->markExecuted();
+		return;
+	}
+
   cluster->executing(dinst);
   executedCB::scheduleAbs(gen->nextSlot(dinst->getStatsFlag())+lat, this, dinst);
 }
 
 void WMMFURALU::executed(DInst *dinst) {
   dinst->markExecuted();
+	
+	// [sizhuo] detect poisoned inst & just return
+	if(dinst->isPoisoned()) {
+		return;
+	}
+
   cluster->executed(dinst);
 }
 
@@ -90,11 +105,15 @@ WMMLSResource::WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, GMe
 WMMFULoad::WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t lsdelay, TimeDelta_t l, GMemorySystem *ms, int32_t size, int32_t id)
 	: WMMLSResource(cls, aGen, l, ms, id)
 	, LSDelay(lsdelay)
+	, maxEntries(size)
 	, freeEntries(size)
 {
 }
 
 StallCause WMMFULoad::canIssue(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
 	if(freeEntries <= 0) {
 		I(freeEntries == 0);
 		return OutsLoadsStall;
@@ -105,6 +124,12 @@ StallCause WMMFULoad::canIssue(DInst *dinst) {
 }
 
 void WMMFULoad::executing(DInst *dinst) {
+	// [sizhuo] detect poisoned inst & mark as executed
+	if(dinst->isPoisoned()) {
+		dinst->markExecuted();
+		return;
+	}
+
 	cluster->executing(dinst); // [sizhuo] just change wake up time
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
@@ -113,6 +138,12 @@ void WMMFULoad::executing(DInst *dinst) {
 }
 
 void WMMFULoad::cacheDispatched(DInst *dinst) {
+	// [sizhuo] detect poisoned inst & mark as executed
+	if(dinst->isPoisoned()) {
+		dinst->markExecuted();
+		return;
+	}
+
 	// [sizhuo] send read req
 	I(!DL1->isBusy(dinst->getAddr())); // [sizhuo] cache always available
   MemRequest::sendReqRead(DL1, dinst->getStatsFlag(), dinst->getAddr(), performedCB::create(this,dinst));
@@ -124,18 +155,30 @@ void WMMFULoad::performed(DInst *dinst) {
 }
 
 void WMMFULoad::executed(DInst *dinst) {
+  dinst->markExecuted();
+	
+	// [sizhuo] detect poisoned inst & just return
+	if(dinst->isPoisoned()) {
+		return;
+	}
+
 	// TODO: wake up inst with addr dependency on dinst via store set
 	
-  dinst->markExecuted();
 	// [sizhuo] wake up inst with data dependency on dinst
   cluster->executed(dinst);
 }
 
 bool WMMFULoad::preretire(DInst *dinst, bool flushing) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
 	return true;
 }
 
 bool WMMFULoad::retire(DInst *dinst, bool flushing) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
 	freeEntries++; // [sizhuo] release entry now
 	return true;
 }
@@ -143,10 +186,14 @@ bool WMMFULoad::retire(DInst *dinst, bool flushing) {
 // [sizhuo] WMMFUStore class: store unit
 WMMFUStore::WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, GMemorySystem *ms, int32_t size, int32_t id)
 	: WMMLSResource(cls, aGen, l, ms, id)
+	, maxEntries(size)
 	, freeEntries(size)
 {}
 
 StallCause WMMFUStore::canIssue(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   if (dinst->getInst()->isStoreAddress())
     return NoStall;
 
@@ -162,6 +209,12 @@ StallCause WMMFUStore::canIssue(DInst *dinst) {
 }
 
 void WMMFUStore::executing(DInst *dinst) {
+	// [sizhuo] detect poisoned inst & mark as executed
+	if(dinst->isPoisoned()) {
+		dinst->markExecuted();
+		return;
+	}
+
   cluster->executing(dinst);
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
@@ -174,21 +227,33 @@ void WMMFUStore::executing(DInst *dinst) {
 }
 
 void WMMFUStore::cacheDispatched(DInst *dinst) {
+	// [sizhuo] detect poisoned inst & mark as executed
+	if(dinst->isPoisoned()) {
+		dinst->markExecuted();
+		return;
+	}
+
 	// [sizhuo] send write req
 	I(!DL1->isBusy(dinst->getAddr())); // [sizhuo] cache always available
-	MemRequest::sendReqWrite(DL1, dinst->getStatsFlag(), dinst->getAddr(), executedCB::create(this,dinst));
+	MemRequest::sendReqWrite(DL1, dinst->getStatsFlag(), dinst->getAddr(), performedCB::create(this,dinst));
 }
 
 void WMMFUStore::executed(DInst *dinst) {
-	// TODO: wake up inst with addr dependency on dinst via store set
+  dinst->markExecuted();
 	
+	// [sizhuo] detect poisoned inst & just return
+	if(dinst->isPoisoned()) {
+		return;
+	}
+
 	if(dinst->getInst()->isStoreAddress()) {
 		// [sizhuo] do prefetch
 		I(!DL1->isBusy(dinst->getAddr())); // [sizhuo] cache always available
 		MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());
 	}
 
-  dinst->markExecuted();
+	// TODO: wake up inst with addr dependency on dinst via store set
+	
 	// [sizhuo] wake up inst with data dependency on dinst
   cluster->executed(dinst);
 }
@@ -199,10 +264,16 @@ void WMMFUStore::performed(DInst *dinst) {
 }
 
 bool WMMFUStore::preretire(DInst *dinst, bool flushing) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
 	return true;
 }
 
 bool WMMFUStore::retire(DInst *dinst, bool flushing) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
 	freeEntries++; // [sizhuo] release entry now
 	return true;
 }

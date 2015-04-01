@@ -51,6 +51,7 @@
 #include "MemRequest.h"
 #include "Port.h"
 #include "LSQ.h"
+#include "FrontEnd.h"
 
 #define SCOORE_LSQ 0
 
@@ -84,6 +85,12 @@ Resource::~Resource()
 void Resource::select(DInst *dinst)
 /* callback entry point for select {{{1 */
 {
+	// [sizhuo] detect poisoned inst & mark as executed
+	if(dinst->isPoisoned()) {
+		dinst->markExecuted();
+		return;
+	}
+
   cluster->select(dinst);
 }
 /* }}} */
@@ -826,12 +833,21 @@ FUGeneric::FUGeneric(Cluster *cls ,PortGeneric *aGen ,TimeDelta_t l )
 
 StallCause FUGeneric::canIssue(DInst *dinst) {
   /* canIssue {{{1 */
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   return NoStall;
 }
 /* }}} */
 
 void FUGeneric::executing(DInst *dinst) {
   /* executing {{{1 */
+	// [sizhuo] detect poisoned inst & mark as executed
+	if(dinst->isPoisoned()) {
+		dinst->markExecuted();
+		return;
+	}
+
   cluster->executing(dinst);
   executedCB::scheduleAbs(gen->nextSlot(dinst->getStatsFlag())+lat, this, dinst);
 }
@@ -840,6 +856,12 @@ void FUGeneric::executing(DInst *dinst) {
 void FUGeneric::executed(DInst *dinst) {
   /* executed {{{1 */
   dinst->markExecuted();
+	
+	// [sizhuo] detect poisoned inst & just return
+	if(dinst->isPoisoned()) {
+		return;
+	}
+
   cluster->executed(dinst);
 }
 /* }}} */
@@ -920,6 +942,7 @@ void FUFuze::performed(DInst *dinst) {
 FUBranch::FUBranch(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, int32_t mb)
   /* constructor {{{1 */
   :Resource(cls, aGen, l)
+	,maxBranches(mb)
   ,freeBranches(mb) {
   I(freeBranches>0);
 }
@@ -927,6 +950,9 @@ FUBranch::FUBranch(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, int32_t mb)
 
 StallCause FUBranch::canIssue(DInst *dinst) {
   /* canIssue {{{1 */
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
   if (freeBranches == 0)
     return OutsBranchesStall;
 
@@ -938,6 +964,12 @@ StallCause FUBranch::canIssue(DInst *dinst) {
 
 void FUBranch::executing(DInst *dinst) {
   /* executing {{{1 */
+	// [sizhuo] detect poisoned inst & mark as executed
+	if(dinst->isPoisoned()) {
+		dinst->markExecuted();
+		return;
+	}
+
   cluster->executing(dinst);
   executedCB::scheduleAbs(gen->nextSlot(dinst->getStatsFlag())+lat, this, dinst);
 }
@@ -946,13 +978,26 @@ void FUBranch::executing(DInst *dinst) {
 void FUBranch::executed(DInst *dinst) {
   /* executed {{{1 */
   dinst->markExecuted();
+	
+	// [sizhuo] detect poisoned inst & just return
+	if(dinst->isPoisoned()) {
+		return;
+	}
+
   cluster->executed(dinst);
 
+	// [sizhuo] resume front end (use simplified front end)
+	if(dinst->getFrontEnd()) {
+		(dinst->getFrontEnd())->unblock(dinst);
+	}
+
+	/*
   if (dinst->getFetch()) { // [sizhuo] branch resolves, resume fetch engine
     (dinst->getFetch())->unBlockFetch(dinst, dinst->getFetchTime());
     //IS(dinst->setFetch(0));
     IS(dinst->lockFetch(0));
   }
+	*/
 
   // NOTE: assuming that once the branch is executed the entry can be recycled
   freeBranches++;
