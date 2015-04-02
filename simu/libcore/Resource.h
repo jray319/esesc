@@ -128,7 +128,9 @@ public:
   void setUsedTime() { usedTime = globalClock;  }
 
 	// [sizhuo] recover state when flushing ROB (optional)
-	virtual void flush() {}
+	virtual void reset() {}
+	// [sizhuo] check whether state is reset
+	virtual bool isReset() { return false; }
 };
 
 class GMemorySystem;
@@ -293,7 +295,8 @@ public:
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
 	// [sizhuo] don't need recovery from ROB flush
-	virtual void flush() {}
+	virtual void reset() {}
+	virtual bool isReset() { return true; }
 };
 
 class FUFuze : public Resource {
@@ -327,7 +330,8 @@ public:
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
 	// [sizhuo] when ROB flush, release all branch entries
-	virtual void flush() { freeBranches = maxBranches; }
+	virtual void reset() { freeBranches = maxBranches; }
+	virtual bool isReset() { return freeBranches == maxBranches; }
 };
 
 class FURALU : public Resource {

@@ -42,6 +42,7 @@
 #include "DInst.h"
 
 #include "nanassert.h"
+#include "Cluster.h"
 
 class Resource;
 class GMemorySystem;
@@ -51,6 +52,8 @@ class GProcessor;
 class ClusterManager {
  private:
   ClusterScheduler *scheduler;
+	// [sizhuo] vector of all clusters
+	std::vector<Cluster*> allClusters;
 
  protected:
  public:
@@ -61,6 +64,28 @@ class ClusterManager {
   Resource *getResource(DInst *dinst) const {
     return scheduler->getResource(dinst);
   }
+
+	// [sizhuo] reset state of all clusters & resources
+	void reset() {
+		for(std::vector<Cluster*>::iterator iter = allClusters.begin(); iter != allClusters.end(); iter++) {
+			Cluster *cluster = *iter;
+			I(cluster);
+			cluster->reset();
+		}
+	}
+
+	// [sizhuo] check whether all cluster & resources has been reset
+	bool isReset() {
+		for(std::vector<Cluster*>::iterator iter = allClusters.begin(); iter != allClusters.end(); iter++) {
+			Cluster *cluster = *iter;
+			I(cluster);
+			if(!cluster->isReset()) {
+				I(0);
+				return false;
+			}
+		}
+		return true;
+	}
 
 };
 

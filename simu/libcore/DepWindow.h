@@ -82,7 +82,8 @@ public:
 
 	// [sizhuo] recover depWindow stats when flushing
 	// actually there is no state to recover
-	void flush() {}
+	void reset() {}
+	bool isReset() { return true; }
 };
 
 #endif // DEPWINDOW_H

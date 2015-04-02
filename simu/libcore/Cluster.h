@@ -112,10 +112,32 @@ class Cluster {
   GProcessor *getGProcessor() const { return gproc; }
 
 	// [sizhuo] recover state when flushing ROB
-	void flush() {
+	void reset() {
 		regPool = MaxRegPool;
 		windowSize = MaxWinSize;
-		window.flush();
+		window.reset();
+		// [sizhuo] reset all resources in this cluster
+		for(int32_t i = 0; i < iMAX; i++) {
+			if(res[i]) {
+				res[i]->reset();
+			}
+		}
+	}
+
+	bool isReset() {
+		if(regPool != MaxRegPool || windowSize != MaxWinSize || !window.isReset()) {
+			I(0);
+			return false;
+		}
+		for(int32_t i = 0; i < iMAX; i++) {
+			if(res[i]) {
+				if(!res[i]->isReset()) {
+					I(0);
+					return false;
+				}
+			}
+		}
+		return true;
 	}
  
 };

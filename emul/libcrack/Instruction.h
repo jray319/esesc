@@ -95,6 +95,19 @@ protected:
   bool isMemory() const   { return opcode == iSALU_ST || opcode == iLALU_LD; }
 
   void dump(const char *str) const;
+
+	// [sizhuo] overload == 
+	bool operator==(const Instruction& x) const {
+		return opcode == x.opcode && src1 == x.src1 && src2 == x.src2 && dst1 == x.dst1 && dst2 == x.dst2;
+	}
+	// [sizhuo] copy
+	void copy(const Instruction *x) {
+		opcode = x->opcode;
+		src1 = x->src1;
+		src2 = x->src2;
+		dst1 = x->dst1;
+		dst2 = x->dst2;
+	}
 };
 
 #endif   // INSTRUCTION_H

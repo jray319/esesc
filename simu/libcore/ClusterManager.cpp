@@ -71,6 +71,9 @@ ClusterManager::ClusterManager(GMemorySystem *ms, GProcessor *gproc) {
       if (r)
         res[t].push_back(r);
     }
+
+		// [sizhuo] push to all cluster vector
+		allClusters.push_back(cluster);
   }
 
   const char *clusterScheduler = SescConf->getCharPtr(coreSection,"clusterScheduler");

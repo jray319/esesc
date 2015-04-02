@@ -46,10 +46,11 @@ public:
 		freeInstQSize++; // [sizhuo] inc free size
 		I(freeInstQSize <= maxInstQSize);
 	}
+	bool isFlushing() { return flushing && missBranch == 0; }
 	void startFlush() {
-		I(!flushing);
 		flushing = true;
 		missBranch = 0;
+		// [sizhuo] freeInstQSize is recovered gradually
 	}
 	void endFlush() {
 		I(flushing);

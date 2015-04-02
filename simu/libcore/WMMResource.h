@@ -21,7 +21,8 @@ public:
   bool       retire(DInst    *dinst, bool flushing);
   void       performed(DInst *dinst);
 	// [sizhuo] no need for recovery from ROB flush
-	virtual void flush() {}
+	virtual void reset() {}
+	virtual bool isReset() { return true; }
 };
 
 class WMMLSResource : public Resource {
@@ -55,9 +56,10 @@ public:
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
 	// [sizhuo] recover freeEntry when ROB flush
-	virtual void flush() {
+	virtual void reset() {
 		freeEntries = maxEntries;
 	}
+	virtual bool isReset() { return freeEntries == maxEntries; }
 };
 
 class WMMFUStore : public WMMLSResource {
@@ -79,9 +81,10 @@ public:
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
 	// [sizhuo] recover freeEntry when ROB flush
-	virtual void flush() {
+	virtual void reset() {
 		freeEntries = maxEntries;
 	}
+	virtual bool isReset() { return freeEntries == maxEntries; }
 };
 
 #endif

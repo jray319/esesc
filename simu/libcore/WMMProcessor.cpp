@@ -6,17 +6,26 @@
 #include "FetchEngine.h"
 #include "GMemorySystem.h"
 #include "EmuSampler.h"
+#include <stdlib.h>
 
 WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 	: GProcessor(gm, i, 1)
   , frontEnd(i)
 	, lsq(i)
+	, replayRecover(false)
+	, replayID(0)
+	, flushing(0)
+	, lockCheckEnabled(0)
   , retire_lock_checkCB(this)
+	, startExcep(false)
+	, excepDelay(1000)
+	, genExcepCB(this)
   , clusterManager(gm, this)
   , avgFetchWidth("P(%d)_avgFetchWidth",i)
+	, nKilled("P(%d)_killedInst", i)
+	, nExcep("P(%d)_exception", i)
 {
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
-	lockCheckEnabled = false;
 }
 
 WMMProcessor::~WMMProcessor() {}
@@ -112,7 +121,7 @@ StallCause WMMProcessor::addInst(DInst *dinst) {
 	return NoStall;
 }
 
-void WMMProcessor::retire() {
+void WMMProcessor::retireFromROB(FlowID fid) {
 	// [sizhuo] stats
   if(!rob.empty()) {
     robUsed.sample(rob.size(), rob.front()->getStatsFlag());
@@ -121,6 +130,7 @@ void WMMProcessor::retire() {
 	// [sizhuo] retire from ROB
   for(uint16_t i=0 ; i<RetireWidth && !rob.empty() ; i++) {
     DInst *dinst = rob.front();
+		I(dinst);
 
     if (!dinst->isExecuted()) {
 			return;
@@ -133,6 +143,32 @@ void WMMProcessor::retire() {
     if( !done ) {
 			return;
 		}
+
+		// [sizhuo] detect replay inst
+		// XXX: the replayed inst should not be dequeued from ROB
+		if(replayRecover && dinst->getID() == replayID) {
+			nExcep.inc(dinst->getStatsFlag()); // [sizhuo] stats
+			// [sizhuo] start flushing
+			I(!flushing);
+			flushing = true;
+			// [sizhuo] poison all inst in ROB
+			for(std::deque<DInst*>::iterator iter = rob.begin(); iter != rob.end(); iter++) {
+				I(*iter);
+				(*iter)->markPoisoned();
+			}
+			// [sizhuo] reset all components
+			reset();
+			// [sizhuo] sync head & tail in emulator
+			eint->syncHeadTail(fid);
+#ifdef DEBUG
+			// [sizhuo] record info about replay inst for debug
+			lastReplayValid = true;
+			lastReplayPC = dinst->getPC();
+			lastReplayInst.copy(dinst->getInst());
+#endif
+			// [sizhuo] stop here, flushing work is done in subsequent cycles
+			return;
+		}
     
 		// [sizhuo] stats
 		nCommitted.inc(dinst->getStatsFlag());
@@ -143,19 +179,92 @@ void WMMProcessor::retire() {
 	}
 }
 
+void WMMProcessor::doFlush() {
+	I(replayRecover);
+	I(flushing);
+	// [sizhuo] check whether flushing is done
+	if(rob.empty() && frontEnd.empty()) {
+		// [sizhuo] flushing is done, return to normal state
+		frontEnd.endFlush();
+		replayID = 0;
+		replayRecover = false;
+		flushing = false;
+		I(isReset());
+		// [sizhuo] for testing, generate exception
+		genExcepCB.schedule(excepDelay);
+
+		return;
+	}
+
+	// [sizhuo] flush not done
+	// XXX: we can't destroy any inst before emulator re-sync head & tail
+
+	// [sizhuo] drain front-end (limited by issue width)
+	I(frontEnd.isFlushing());
+	int32_t nFrontDrained = 0;
+	while(nFrontDrained < IssueWidth) {
+		DInst *dinst = frontEnd.firstInst();
+		if(dinst == 0) {
+			break;
+		}
+		nKilled.inc(dinst->getStatsFlag()); // [sizhuo] stats
+		frontEnd.deqInst();
+		nFrontDrained++; // [sizhuo] incr counter
+		// [sizhuo] destroy the inst
+		dinst->markIssued();
+		dinst->markExecuted();
+		dinst->destroy(eint);
+	}
+
+	// [sizhuo] drain ROB from tail (limited by retire width)
+	int32_t nRobDrained = 0;
+	while(nRobDrained < RetireWidth && !rob.empty()) {
+		DInst *dinst = rob.back();
+		I(dinst);
+		I(dinst->isPoisoned());
+		// [sizhuo] non-executed inst cannot be drained
+		if(!dinst->isExecuted()) {
+			break;
+		}
+		// [sizhuo] dinst executed, drain it
+		nKilled.inc(dinst->getStatsFlag()); // [sizhuo] stats
+		dinst->destroy(eint);
+		rob.pop_back();
+		nRobDrained++; // [sizhuo] incr counter
+	}
+}
+
 bool WMMProcessor::advance_clock(FlowID fid) {
 	if(!active) {
 		return false;
 	}
-
-	// fetch
-  fetch(fid);
 
 	// [sizhuo] schedule deadlock check
 	if(!lockCheckEnabled) {
 		lockCheckEnabled = true;
 		retire_lock_checkCB.scheduleAbs(globalClock + 100000);
 	}
+
+	// [sizhuo] schedule exception test
+	if(!startExcep) {
+		startExcep = true;
+		genExcepCB.schedule(excepDelay);
+	}
+
+#ifdef DEBUG
+	// [sizhuo] check whether the first fetched inst after replay is the replayed inst
+	if(lastReplayValid && !replayRecover) {
+		DInst *dinst = frontEnd.firstInst();
+		if(dinst) {
+			if(*(dinst->getInst()) == lastReplayInst && dinst->getPC() == lastReplayPC) {
+				lastReplayValid = false;
+			} else {
+				I(0);
+				MSG("ERROR: P(%d) first fetched inst after replay is not the replayed inst", getId());
+			}
+		}
+	}
+#endif
 
 	// [sizhuo] stats
 	bool getStatsFlag = false; // [sizhuo] stats flag
@@ -177,28 +286,58 @@ bool WMMProcessor::advance_clock(FlowID fid) {
     throttling_cntr = 1;
   }
 
-	// [sizhuo] issue inst into ROB
-	issueToROB();
+	// [sizhuo] in replay mode, no fetch or issue
+	if(replayRecover) {
+		if(flushing) {
+			doFlush();
+		} else {
+			// [sizhuo] not in flushing mode, just commit good inst
+			retireFromROB(fid);
+		}
+		return true;
+	}
 
-	// [sizhuo] retire
-	retire();
+	// [sizhuo] normal state
+  fetch(fid); // [sizhuo] fetch
+	issueToROB(); // [sizhuo] issue inst into ROB
+	retireFromROB(fid); // [sizhuo] retire
 
 	return true;
 }
 
+void WMMProcessor::reset() {
+	// [sizhuo] reset rename table
+  bzero(RAT,sizeof(DInst*)*LREG_MAX);
+	// [sizhuo] TODO: reset LSQ & store set
+	// [sizhou] reset clusters & resources
+	clusterManager.reset();
+}
+
+bool WMMProcessor::isReset() {
+	for(int i = 0; i < LREG_MAX; i++) {
+		if(RAT[i] != 0) {
+			I(0);
+			return false;
+		}
+	}
+	return clusterManager.isReset();
+}
+
 void WMMProcessor::replay(DInst *target) {
-}
+	I(target);
+	I(!target->isPoisoned());
 
-bool WMMProcessor::isFlushing() {
-	return false;
-}
-
-bool WMMProcessor::isReplayRecovering() {
-	return false;
-}
-
-Time_t WMMProcessor::getReplayID() {
-	return 0;
+	if(replayRecover && replayID < target->getID()) {
+		// [sizhuo] target is younger than current replay inst, ignore it
+		return;
+	}
+	// [sizhuo] flush must have not started
+	I(!flushing);
+	// [sizhuo] record replay inst
+	replayID = target->getID();
+	replayRecover = true;
+	// [sizhuo] lock front-end (but doesn't drain inst)
+	frontEnd.startFlush();
 }
 
 void WMMProcessor::retire_lock_check()
@@ -207,8 +346,10 @@ void WMMProcessor::retire_lock_check()
   RetireState state;
   if (active) {
     state.committed = nCommitted.getDouble();
+		state.killed = nKilled.getDouble();
   }else{
     state.committed = 0;
+		state.killed = 0;
   }
   if (!rob.empty()) {
     state.dinst    = rob.front();
@@ -229,3 +370,23 @@ void WMMProcessor::retire_lock_check()
 
   retire_lock_checkCB.scheduleAbs(globalClock + 100000);
 }
+
+void WMMProcessor::genExcep() {
+	if(!rob.empty()) {
+		// [sizhuo] ROB has inst, randomly select one in ROB to gen exception
+		int32_t pos = rand() % rob.size();
+		std::deque<DInst*>::iterator iter = rob.begin();
+		while(pos > 0) {
+			I(iter != rob.end());
+			iter++;
+			pos--;
+		}
+		I(iter != rob.end());
+		I(*iter);
+		replay(*iter);
+	} else {
+		// [sizhuo] ROB empty, try next time
+		genExcepCB.schedule(excepDelay);
+	}
+}
+
