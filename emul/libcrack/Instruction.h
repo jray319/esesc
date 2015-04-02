@@ -92,7 +92,12 @@ protected:
   bool isStore() const        { return opcode == iSALU_ST; }
   bool isStoreAddress() const { return opcode == iSALU_ADDR; }
 
-  bool isMemory() const   { return opcode == iSALU_ST || opcode == iLALU_LD; }
+	// [sizhuo] check LL & SC
+	bool isLdL() const { return opcode == iSALU_LL; }
+	bool isStC() const { return opcode == iSALU_SC; }
+
+	// [sizhuo] LL & SC are also memory inst
+  bool isMemory() const   { return opcode == iSALU_ST || opcode == iLALU_LD || opcode == iSALU_SC || opcode == iSALU_LL; }
 
   void dump(const char *str) const;
 

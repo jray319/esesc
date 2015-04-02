@@ -27907,23 +27907,39 @@ void ARMCrack::expand(RAWDInst *rinst)
 
         if(!b23 && !b21 && !b20) { //SWP/SWPB //Deprecated in ARMv6
           if(b22) { //SWPB 
-            CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
-            CrackInst::setup(rinst, iLALU_LD, OP_U08_LD, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+						// [sizhuo] change to load link
+            //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+            //CrackInst::setup(rinst, iLALU_LD, OP_U08_LD, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+            CrackInst::setup(rinst, iSALU_LL, OP_U08_LD, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+						MSG("Crack: load link");
 
             CrackInst::setup(rinst, iSALU_ADDR, OP_U64_ADD, RN, 0, 0, RN, 0, 0, 0);
-            CrackInst::setup(rinst, iSALU_ST, OP_U08_ST_COND, RN, RM, 0, 0, 0, 0, 0);
-            CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+
+						// [sizhuo] change to store conditional
+            //CrackInst::setup(rinst, iSALU_ST, OP_U08_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+            //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+            CrackInst::setup(rinst, iSALU_SC, OP_U08_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+						MSG("Crack: store conditionl");
+
             CrackInst::setup(rinst, iAALU, OP_S64_COPYICC, LREG_ICC, RN, 0, LREG_TMP2, 0, 0, 0);
             CrackInst::setup(rinst, iBALU_LBRANCH, OP_U64_LBNE, LREG_TMP2, 0, static_cast<uint32_t>(PC-4), 0, 0, 0, 0);
             CrackInst::setup(rinst, iAALU, OP_U32_ADD, LREG_TMP1, 0, 0, RD, 0, 0, 0);
           }
           else { //SWP
-            CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
-            CrackInst::setup(rinst, iLALU_LD, OP_U32_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+						// [sizhuo] change to load link
+            //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+            //CrackInst::setup(rinst, iLALU_LD, OP_U32_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+            CrackInst::setup(rinst, iSALU_LL, OP_U32_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+						MSG("Crack: load link");
 
             CrackInst::setup(rinst, iSALU_ADDR, OP_U64_ADD, RN, 0, 0, RN, 0, 0, 0);
-            CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, RN, RM, 0, 0, 0, 0, 0);
-            CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+
+						// [sizhuo] change to store conditional
+            //CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+            //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+            CrackInst::setup(rinst, iSALU_SC, OP_U32_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+						MSG("Crack: store conditionl");
+
             CrackInst::setup(rinst, iAALU, OP_S64_COPYICC, LREG_ICC, RN, 0, LREG_TMP2, 0, 0, 0);
             CrackInst::setup(rinst, iBALU_LBRANCH, OP_U64_LBNE, LREG_TMP2 , 0, static_cast<uint32_t>(PC-4), 0, 0, 0, 0);
             CrackInst::setup(rinst, iAALU, OP_U32_ADD, LREG_TMP1, 0, 0, RD, 0, 0, 0);
@@ -27933,16 +27949,23 @@ void ARMCrack::expand(RAWDInst *rinst)
           //If RD or RN or RM == PC_REG then UNPREDICTABLE
           //If RD == RN or RD == RM then UNPREDICTABLE
           CrackInst::setup(rinst, iSALU_ADDR, OP_U64_ADD, RN, 0, 0, RN, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, RN, RM, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+
+					// [sizhuo] change to store conditional
+          //CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_SC, OP_U32_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+					MSG("Crack: store conditionl");
 
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_E, RD, 0, 0, RD, 0, 0, 0); //SUCCESS
           // CrackInst::setup(rinst, iAALU, OP_U64_CMOV_NE, RD, 0, 1, RD, 0, 0, 0); //FAILURE
         }
         else if(b23 && !b22 && !b21 && b20) { //LDREX
           //If RD or RN is PC_REG then UNPREDICTABLE
-          CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iLALU_LD, OP_U32_LD_L, RN, 0, 0, RD, 0, 0, 0);
+					// [sizhuo] change to load link
+          //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iLALU_LD, OP_U32_LD_L, RN, 0, 0, RD, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_LL, OP_U32_LD_L, RN, 0, 0, RD, 0, 0, 0);
+					MSG("Crack: load link");
         }
         else if(b23 && !b22 && b21 && !b20) { //STREXD
           bool big_endian = false; //FIXME: How do we check for big endian?
@@ -27961,8 +27984,11 @@ void ARMCrack::expand(RAWDInst *rinst)
             CrackInst::setup(rinst, iAALU, OP_S64_OR, LREG_TMP1, RM, 0, LREG_TMP1, 0, 0, 0);
           }
 
-          CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, RN, LREG_TMP1, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+					// [sizhuo] change to store conditional
+          //CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, RN, LREG_TMP1, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_SC, OP_U32_ST_COND, RN, LREG_TMP1, 0, 0, 0, 0, 0);
+					MSG("Crack: store conditionl");
 
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_E, RD, 0, 0, RD, 0, 0, 0); //SUCCESS
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_NE, RD, 0, 1, RD, 0, 0, 0); //FAILURE
@@ -27972,18 +27998,26 @@ void ARMCrack::expand(RAWDInst *rinst)
 
           //If RD is ODD, or RD==R14 or RD==PC_REG then UNPREDICTABLE
  
-          CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+					// [sizhuo] change to load link (below)
+          //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
 
           CrackInst::setup(rinst, iAALU, OP_U64_SUB, 0, 0, 1, LREG_TMP2, 0, 0, 0);  
           CrackInst::setup(rinst, iAALU, OP_S64_SRL, LREG_TMP2, 0, 32, LREG_TMP2, 0, 0, 0);  
+					MSG("Crack: load link");
 
           if(big_endian) {
-            CrackInst::setup(rinst, iLALU_LD, OP_U64_LD_B, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+						// [sizhuo] change to load link
+            //CrackInst::setup(rinst, iLALU_LD, OP_U64_LD_B, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+            CrackInst::setup(rinst, iSALU_LL, OP_U64_LD_B, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+
             CrackInst::setup(rinst, iAALU, OP_S64_AND, LREG_TMP1, LREG_TMP2, 0, RD, 0, 0, 0);
             CrackInst::setup(rinst, iAALU, OP_S64_SRL, LREG_TMP1, 0, 32, RD+1, 0, 0, 0);
           }
           else {
-            CrackInst::setup(rinst, iLALU_LD, OP_U64_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+						// [sizhuo] change to load link
+            //CrackInst::setup(rinst, iLALU_LD, OP_U64_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+            CrackInst::setup(rinst, iSALU_LL, OP_U64_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+
             CrackInst::setup(rinst, iAALU, OP_S64_AND, LREG_TMP1, LREG_TMP2, 0, RD+1, 0, 0, 0);
             CrackInst::setup(rinst, iAALU, OP_S64_SRL, LREG_TMP1, 0, 32, RD, 0, 0, 0);
           }
@@ -27993,31 +28027,45 @@ void ARMCrack::expand(RAWDInst *rinst)
           //If RD == RN or RD == RM then UNPREDICTABLE
 
           CrackInst::setup(rinst, iSALU_ADDR, OP_U64_ADD, RN, 0, 0, RN, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U08_ST_COND, RN, RM, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+
+					// [sizhuo] change to store conditional
+          //CrackInst::setup(rinst, iSALU_ST, OP_U08_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_SC, OP_U08_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+					MSG("Crack: store conditionl");
 
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_E, RD, 0, 0, RD, 0, 0, 0); //SUCCESS
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_NE, RD, 0, 1, RD, 0, 0, 0); //FAILURE
         }
         else if(b23 && b22 && !b21 && b20) { //LDREXB
           //If RD or RN is PC_REG then UNPREDICTABLE
-          CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iLALU_LD, OP_U08_LD, RN, 0, 0, RD, 0, 0, 0);
+					// [sizhuo] change to load link
+          //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iLALU_LD, OP_U08_LD, RN, 0, 0, RD, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_LL, OP_U08_LD, RN, 0, 0, RD, 0, 0, 0);
+					MSG("Crack: load link");
         }
         else if(b23 && b22 && b21 && !b20) { //STREXH
           //If RD or RN or RM == PC_REG then UNPREDICTABLE
           //If RD == RN or RD == RM then UNPREDICTABLE
           CrackInst::setup(rinst, iSALU_ADDR, OP_U64_ADD, RN, 0, 0, RN, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U16_ST_COND, RN, RM, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+
+					// [sizhuo] change to store conditional
+          //CrackInst::setup(rinst, iSALU_ST, OP_U16_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, RN, 0, 0, 0, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_SC, OP_U16_ST_COND, RN, RM, 0, 0, 0, 0, 0);
+					MSG("Crack: store conditionl");
 
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_E, RD, 0, 0, RD, 0, 0, 0); //SUCCESS
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_NE, RD, 0, 1, RD, 0, 0, 0); //FAILURE
         }
         else if(b23 && b22 && b21 && b20) { //LDREXH
           //If RD or RN is PC_REG then UNPREDICTABLE
-          CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iLALU_LD, OP_U16_LD_L, RN, 0, 0, RD, 0, 0, 0);
+					// [sizhuo] change to load link
+          //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iLALU_LD, OP_U16_LD_L, RN, 0, 0, RD, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_LL, OP_U16_LD_L, RN, 0, 0, RD, 0, 0, 0);
+					MSG("Crack: load link");
         }
       }
       else if(!(!b24 && b21)) { //Extra Load/Store

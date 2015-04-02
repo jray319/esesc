@@ -586,8 +586,12 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
           } //end not always
 
           CrackInst::setup(rinst, iSALU_ADDR, OP_U64_ADD, RN, 0, IMM8, LREG_TMP1, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, LREG_TMP1, 0, 0, 0, 0, 0, 0);
+
+					// [sizhuo] change to store conditional
+          //CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, LREG_TMP1, 0, 0, 0, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_SC, OP_U32_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
+					MSG("Crack: store conditionl");
 
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_E, RD, 0, 0, RD, 0, 0, 0); //SUCCESS
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_NE, RD, 0, 1, RD, 0, 0, 0); //FAILURE
@@ -605,8 +609,13 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
           } //end not always
 
           CrackInst::setup(rinst, iAALU, OP_U32_ADD, RN, 0, IMM8, LREG_TMP1, 0, 0, 0);
-          CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, LREG_TMP1, 0, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iLALU_LD, OP_U32_LD_L, LREG_TMP1, 0, 0, RT, 0, 0, 0);
+
+					// [sizhuo] change to load link
+          //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, LREG_TMP1, 0, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iLALU_LD, OP_U32_LD_L, LREG_TMP1, 0, 0, RT, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_LL, OP_U32_LD_L, LREG_TMP1, 0, 0, RT, 0, 0, 0);
+					MSG("Crack: load link");
+
         } //end LDREX 
         else if((((op1==0) || (op1 == 1)) && (op2 == 2)) || (((op1 == 2) || (op1 == 3)) && 
                ((op2 == 0) || (op2 == 2)))) { //STRD (imm) //A8-396 //ARMv6T2
@@ -756,8 +765,12 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
           } //end not always
 
           CrackInst::setup(rinst, iSALU_ADDR, OP_U64_ADD, RN, 0, 0, LREG_TMP1, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U08_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, LREG_TMP1, 0, 0, 0, 0, 0, 0);
+
+					// [sizhuo] change to store conditional
+          //CrackInst::setup(rinst, iSALU_ST, OP_U08_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, LREG_TMP1, 0, 0, 0, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_SC, OP_U08_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
+					MSG("Crack: store conditionl");
 
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_E, RM, 0, 0, RM, 0, 0, 0); //SUCCESS
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_NE, RM, 0, 1, RM, 0, 0, 0); //FAILURE
@@ -775,8 +788,12 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
           } //end not always
 
           CrackInst::setup(rinst, iSALU_ADDR, OP_U64_ADD, RN, 0, 0, LREG_TMP1, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U16_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, LREG_TMP1, 0, 0, 0, 0, 0, 0);
+
+					// [sizhuo] change to store conditional
+          //CrackInst::setup(rinst, iSALU_ST, OP_U16_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, LREG_TMP1, 0, 0, 0, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_SC, OP_U16_ST_COND, LREG_TMP1, RT, 0, 0, 0, 0, 0);
+					MSG("Crack: store conditionl");
 
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_E, RM, 0, 0, RM, 0, 0, 0); //SUCCESS
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_NE, RM, 0, 1, RM, 0, 0, 0); //FAILURE
@@ -807,8 +824,11 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
             CrackInst::setup(rinst, iAALU, OP_S64_OR, LREG_TMP1, RT, 0, LREG_TMP1, 0, 0, 0);
           }
 
-          CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, LREG_TMP2, LREG_TMP1, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, LREG_TMP2, 0, 0, 0, 0, 0, 0);
+					// [sizhuo] change to store conditional
+          //CrackInst::setup(rinst, iSALU_ST, OP_U32_ST_COND, LREG_TMP2, LREG_TMP1, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iSALU_ST, OP_U64_ST_CHECK_EX, LREG_TMP2, 0, 0, 0, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_SC, OP_U32_ST_COND, LREG_TMP2, LREG_TMP1, 0, 0, 0, 0, 0);
+					MSG("Crack: store conditionl");
 
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_E, RM, 0, 0, RM, 0, 0, 0); //SUCCESS
           CrackInst::setup(rinst, iAALU, OP_U64_CMOV_NE, RM, 0, 1, RM, 0, 0, 0); //FAILURE
@@ -874,8 +894,12 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
             CrackInst::setup(rinst, iBALU_RBRANCH, negrbranchArray[cond], LREG_TMP3, LREG_TMP3, 0, 0, 0, 0, 0);
           } //end not always
 
-          CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iLALU_LD, OP_U08_LD, RN, 0, 0, RT, 0, 0, 0);
+					// [sizhuo] change to load link
+          //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iLALU_LD, OP_U08_LD, RN, 0, 0, RT, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_LL, OP_U08_LD, RN, 0, 0, RT, 0, 0, 0);
+					MSG("Crack: load link");
+
         } //end LDREXB 
         else if((op1 == 1) && (op2 == 1) && (op3 == 5)) { //LDREXH //A8-148 //ARMv7
           //If RN == PC_REG, UNPREDICTABLE
@@ -887,8 +911,12 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
             CrackInst::setup(rinst, iBALU_RBRANCH, negrbranchArray[cond], LREG_TMP3, LREG_TMP3, 0, 0, 0, 0, 0);
           } //end not always
 
-          CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iLALU_LD, OP_U16_LD_L, RN, 0, 0, RT, 0, 0, 0);
+					// [sizhuo] change to load link
+          //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iLALU_LD, OP_U16_LD_L, RN, 0, 0, RT, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_LL, OP_U16_LD_L, RN, 0, 0, RT, 0, 0, 0);
+					MSG("Crack: load link");
+					
         } //end LDREXH 
         else if((op1 == 1) && (op2 == 1) && (op3 == 7)) { //LDREXD //A8-146 //ARMv7
           //If RN == PC_REG, UNPREDICTABLE
@@ -907,8 +935,11 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
             CrackInst::setup(rinst, iBALU_RBRANCH, negrbranchArray[cond], LREG_TMP3, LREG_TMP3, 0, 0, 0, 0, 0);
           } //end not always
 
-          CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
-          CrackInst::setup(rinst, iLALU_LD, OP_U64_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+					// [sizhuo] change to load link
+          //CrackInst::setup(rinst, iAALU, OP_U64_MARK_EX, RN, 0, 0, 0, 0, 0, 0);
+          //CrackInst::setup(rinst, iLALU_LD, OP_U64_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+          CrackInst::setup(rinst, iSALU_LL, OP_U64_LD_L, RN, 0, 0, LREG_TMP1, 0, 0, 0);
+					MSG("Crack: load link");
 
           if(big_endian) {
             CrackInst::setup(rinst, iAALU, OP_S64_AND, LREG_TMP1, LREG_TMP2, 0, RD, 0, 0, 0);
