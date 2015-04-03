@@ -22561,7 +22561,10 @@ void ARMCrack::expand(RAWDInst *rinst)
             OOPS("WARNING: DSB is NOT IMPLEMENTED.\n");
           }
           else if(!b7 && b6 && !b5 && b4) { //DMB //ARMv7 //NEEDTODO
-            CrackInst::setup(rinst, iRALU, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0);
+						// [sizhuo] crack DMB to Commit + Reconcile
+            //CrackInst::setup(rinst, iRALU, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0);
+            CrackInst::setup(rinst, iSALU_COM, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0);
+            CrackInst::setup(rinst, iLALU_REC, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0);
           }
           else if(!b7 && b6 && b5 && !b4) { //ISB //ARMv6T2 //NEEDTODO
             OOPS("WARNING: ISB is NOT IMPLEMENTED.\n");

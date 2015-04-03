@@ -69,6 +69,9 @@ enum InstOpcode {
   iCALU_MULT,
   iCALU_DIV,
   //-----------------
+	// [sizhuo] reconcile & commit fence
+	iLALU_REC,
+	iSALU_COM,
   iMAX // [sizhuo] maximum opcodes
 };
 

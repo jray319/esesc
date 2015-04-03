@@ -44,7 +44,12 @@ StallCause WMMFURALU::canIssue(DInst *dinst) {
   } else if (!dinst->getInst()->hasDstRegister() 
             && !dinst->getInst()->hasSrc1Register() 
             && !dinst->getInst()->hasSrc2Register()
-            ) { // [sizhuo] TODO: DMB fence, we can do better here
+            ) { 
+		// [sizhuo] TODO: DMB fence, we should not have it anymore
+		// it should be cracked into Commit & Reconcile fences
+		I(0);
+		MSG("ERROR: unexpected DMB fence");
+
     if (gproc->isROBEmpty())
       return NoStall;
     memoryBarrier.inc(dinst->getStatsFlag());
@@ -133,8 +138,12 @@ void WMMFULoad::executing(DInst *dinst) {
 	cluster->executing(dinst); // [sizhuo] just change wake up time
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
-	// [sizhuo] schedule call back to access cache
-	cacheDispatchedCB::scheduleAbs(when, this, dinst);
+	if(dinst->getInst()->isRecFence()) {
+		executedCB::scheduleAbs(when, this, dinst);
+	} else {
+		// [sizhuo] schedule call back to access cache
+		cacheDispatchedCB::scheduleAbs(when, this, dinst);
+	}
 }
 
 void WMMFULoad::cacheDispatched(DInst *dinst) {
@@ -194,8 +203,13 @@ StallCause WMMFUStore::canIssue(DInst *dinst) {
 	// [sizhuo] should not be poisoned inst
 	I(!dinst->isPoisoned());
 
-  if (dinst->getInst()->isStoreAddress())
+  if (dinst->getInst()->isStoreAddress()) {
     return NoStall;
+	}
+
+	if(dinst->getInst()->isComFence()) {
+		return NoStall;
+	}
 
   if( freeEntries <= 0 ) {
     I(freeEntries == 0); // Can't be negative
@@ -218,7 +232,7 @@ void WMMFUStore::executing(DInst *dinst) {
   cluster->executing(dinst);
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
-	if(dinst->getInst()->isStoreAddress()) {
+	if(dinst->getInst()->isStoreAddress() || dinst->getInst()->isComFence()) {
 		executedCB::scheduleAbs(when, this, dinst);
 	} else {
 		// [sizhuo] schedule call back to access cache

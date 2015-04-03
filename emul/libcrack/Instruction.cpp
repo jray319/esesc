@@ -65,6 +65,9 @@ static const char *opcode2NameTable[] = {
   "iCALU_MULT",
   "iCALU_DIV",
   //-----------------
+	// [sizhuo] reconcile & commit fences
+	"iLALU_REC",
+	"iSALU_COM",
 };
 
 const char *Instruction::opcode2Name(InstOpcode op) {

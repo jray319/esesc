@@ -96,6 +96,10 @@ protected:
 	bool isLdL() const { return opcode == iSALU_LL; }
 	bool isStC() const { return opcode == iSALU_SC; }
 
+	// [sizhuo] check fences
+	bool isRecFence() const { return opcode == iLALU_REC; }
+	bool isComFence() const { return opcode == iSALU_COM; }
+
 	// [sizhuo] LL & SC are also memory inst
   bool isMemory() const   { return opcode == iSALU_ST || opcode == iLALU_LD || opcode == iSALU_SC || opcode == iSALU_LL; }
 

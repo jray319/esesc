@@ -245,11 +245,13 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 		retire_lock_checkCB.scheduleAbs(globalClock + 100000);
 	}
 
+	/*
 	// [sizhuo] schedule exception test
 	if(!startExcep) {
 		startExcep = true;
 		genExcepCB.schedule(excepDelay);
 	}
+	*/
 
 #ifdef DEBUG
 	// [sizhuo] check whether the first fetched inst after replay is the replayed inst

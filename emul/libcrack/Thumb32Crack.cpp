@@ -19419,13 +19419,20 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
             CrackInst::setup(rinst, iAALU, OP_U64_CLR_ADDR, 0, 0, 0, 0, 0, 0, 0); //NOTE: CLR_ADDR with 0 == clear everything
           }
           else if(op == 4) { //Data Synchronization Barrier DSB //A8-92 //ARMv7
-            CrackInst::setup(rinst, iRALU, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0); 
+            //CrackInst::setup(rinst, iRALU, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0); 
+						// [sizhuo] don't do DSB
+						MSG("WARNING: DSB not implemented");
           }
           else if(op == 5) { //Data Memory Barrier DMB //A8-90 //ARMv7
-            CrackInst::setup(rinst, iRALU, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0); 
+						// [sizhuo] crack DMB to Commit + Reconcile
+            //CrackInst::setup(rinst, iRALU, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0); 
+            CrackInst::setup(rinst, iSALU_COM, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0);
+            CrackInst::setup(rinst, iLALU_REC, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0);
           }
           else if(op == 6) { //Instruction Synchronization Barrier ISB //A8-102 //ARMv7
             CrackInst::setup(rinst, iRALU, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0); 
+						// [sizhuo] don't do ISB
+						MSG("WARNING: ISB not implemented");
           }
           else
             OOPS("WARNING: Instruction in Miscellaenous Control Instructions is UNDEFINED.\n");

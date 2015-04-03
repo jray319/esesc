@@ -183,6 +183,7 @@ void Cluster::buildUnit(const char *clusterName
       }
       break;
     case iLALU_LD: 
+		case iLALU_REC: // [sizhuo] reconcile fence
       {
 				if(wmmProc) { // [sizhuo] add WMM load unit
           TimeDelta_t ldstdelay=SescConf->getInt("cpusimu", "stForwardDelay",gproc->getId());
@@ -215,6 +216,7 @@ void Cluster::buildUnit(const char *clusterName
     case iSALU_SC:
     case iSALU_ST:
     case iSALU_ADDR:
+		case iSALU_COM: // [sizhuo] commit fence
       {
 				if(wmmProc) { // [sizhuo] add WMM store unit
           SescConf->isInt("cpusimu", "maxStores",gproc->getId());
