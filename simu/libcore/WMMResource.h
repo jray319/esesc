@@ -5,6 +5,9 @@
 #include "Resource.h"
 #include "nanassert.h"
 #include "callback.h"
+#include "WMMLSQ.h"
+
+class MemObj;
 
 class WMMFURALU : public Resource {
   GStatsCntr memoryBarrier;
@@ -27,27 +30,16 @@ public:
 
 class WMMLSResource : public Resource {
 protected:
-	MemObj *DL1;
-	GMemorySystem *memorySystem;
 	LSQ *lsq;
 	StoreSet *storeset;
 	
 public:
-	WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, GMemorySystem *ms, int32_t id);
+	WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, int32_t id);
 };
 
 class WMMFULoad : public WMMLSResource {
-private:
-  const TimeDelta_t LSDelay; // [sizhuo] store to load forwarding delay
-	const int32_t maxEntries; // [sizhuo] used to recover freeEntries in ROB flush
-  int32_t freeEntries;
-
-protected:
-  void cacheDispatched(DInst *dinst);
-  typedef CallbackMember1<WMMFULoad, DInst *, &WMMFULoad::cacheDispatched> cacheDispatchedCB;
-
 public:
-	WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t lsdelay, TimeDelta_t l, GMemorySystem *ms, int32_t size, int32_t id);
+	WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, int32_t id);
 
   StallCause canIssue(DInst  *dinst);
   void       executing(DInst *dinst);
@@ -55,24 +47,16 @@ public:
   bool       preretire(DInst  *dinst, bool flushing);
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
-	// [sizhuo] recover freeEntry when ROB flush
-	virtual void reset() {
-		freeEntries = maxEntries;
-	}
-	virtual bool isReset() { return freeEntries == maxEntries; }
+	// [sizhuo] no need for recovery when ROB flush
+	virtual void reset() {}
+	virtual bool isReset() { return true; }
 };
 
 class WMMFUStore : public WMMLSResource {
 private:
-	const int32_t maxEntries; // [sizhuo] used to recover freeEntries in ROB flush
-  int32_t freeEntries;
-
-protected:
-  void cacheDispatched(DInst *dinst);
-  typedef CallbackMember1<WMMFUStore, DInst *, &WMMFUStore::cacheDispatched> cacheDispatchedCB;
-
+	MemObj *DL1;
 public:
-	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, GMemorySystem *ms, int32_t size, int32_t id);
+	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MemObj *dcache, int32_t id);
 
   StallCause canIssue(DInst  *dinst);
   void       executing(DInst *dinst);
@@ -80,11 +64,9 @@ public:
   bool       preretire(DInst  *dinst, bool flushing);
   bool       retire(DInst    *dinst,  bool flushing);
   void       performed(DInst *dinst);
-	// [sizhuo] recover freeEntry when ROB flush
-	virtual void reset() {
-		freeEntries = maxEntries;
-	}
-	virtual bool isReset() { return freeEntries == maxEntries; }
+	// [sizhuo] no need for recovery when ROB flush
+	virtual void reset() {}
+	virtual bool isReset() { return true; }
 };
 
 #endif

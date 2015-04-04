@@ -1,6 +1,5 @@
 
 #include <limits.h>
-#include "Resource.h"
 #include "WMMResource.h"
 
 #include "Cluster.h"
@@ -10,8 +9,8 @@
 #include "GProcessor.h"
 #include "WMMProcessor.h"
 #include "MemRequest.h"
+#include "MemObj.h"
 #include "Port.h"
-#include "LSQ.h"
 
 // [sizhuo] WMMFURALU class: for fences & syscall
 WMMFURALU::WMMFURALU(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, int32_t id)
@@ -95,23 +94,18 @@ void WMMFURALU::performed(DInst *dinst) {
 }
 
 // WMMLSResource class: base class for LSU
-WMMLSResource::WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, GMemorySystem *ms, int32_t id)
+WMMLSResource::WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, int32_t id)
 	: Resource(cls, aGen, l)
-	, DL1(ms->getDL1())
-	, memorySystem(ms)
-	, lsq(NULL)
+	, lsq(q)
 	, storeset(NULL)
 {
   I(SescConf->getBool("cpusimu", "enableDcache", id));
-	I(ms);
+	I(q);
 }
 
 // [sizhuo] WMMFULoad class: load unit
-WMMFULoad::WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t lsdelay, TimeDelta_t l, GMemorySystem *ms, int32_t size, int32_t id)
-	: WMMLSResource(cls, aGen, l, ms, id)
-	, LSDelay(lsdelay)
-	, maxEntries(size)
-	, freeEntries(size)
+WMMFULoad::WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, int32_t id)
+	: WMMLSResource(cls, aGen, l, q, id)
 {
 }
 
@@ -119,13 +113,8 @@ StallCause WMMFULoad::canIssue(DInst *dinst) {
 	// [sizhuo] should not be poisoned inst
 	I(!dinst->isPoisoned());
 
-	if(freeEntries <= 0) {
-		I(freeEntries == 0);
-		return OutsLoadsStall;
-	}
-	freeEntries--;
-	// TODO: update store set
-	return NoStall;
+	// [sizhuo] reserve entry in LSQ, reconcile fence is truly added
+	return lsq->addEntry(dinst);
 }
 
 void WMMFULoad::executing(DInst *dinst) {
@@ -138,29 +127,19 @@ void WMMFULoad::executing(DInst *dinst) {
 	cluster->executing(dinst); // [sizhuo] just change wake up time
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
-	if(dinst->getInst()->isRecFence()) {
+	const Instruction *const ins = dinst->getInst();
+	if(ins->isRecFence()) {
+		// [sizhuo] reconcile: mark executed
 		executedCB::scheduleAbs(when, this, dinst);
 	} else {
-		// [sizhuo] schedule call back to access cache
-		cacheDispatchedCB::scheduleAbs(when, this, dinst);
+		I(ins->isLoad());
+		// [sizhuo] load: schedule call back to issue to LSQ
+		WMMLSQ::issueCB::scheduleAbs(when, lsq, dinst);
 	}
-}
-
-void WMMFULoad::cacheDispatched(DInst *dinst) {
-	// [sizhuo] detect poisoned inst & mark as executed
-	if(dinst->isPoisoned()) {
-		dinst->markExecuted();
-		return;
-	}
-
-	// [sizhuo] send read req
-	I(!DL1->isBusy(dinst->getAddr())); // [sizhuo] cache always available
-  MemRequest::sendReqRead(DL1, dinst->getStatsFlag(), dinst->getAddr(), performedCB::create(this,dinst));
 }
 
 void WMMFULoad::performed(DInst *dinst) {
-  dinst->markPerformed();
-  executed(dinst);
+	I(0); // [sizhuo] obsolete
 }
 
 void WMMFULoad::executed(DInst *dinst) {
@@ -171,8 +150,6 @@ void WMMFULoad::executed(DInst *dinst) {
 		return;
 	}
 
-	// TODO: wake up inst with addr dependency on dinst via store set
-	
 	// [sizhuo] wake up inst with data dependency on dinst
   cluster->executed(dinst);
 }
@@ -188,38 +165,35 @@ bool WMMFULoad::retire(DInst *dinst, bool flushing) {
 	// [sizhuo] should not be poisoned inst
 	I(!dinst->isPoisoned());
 
-	freeEntries++; // [sizhuo] release entry now
+	// [sizhuo] retire load/reconcile from LSQ
+	lsq->retire(dinst);
 	return true;
 }
 
 // [sizhuo] WMMFUStore class: store unit
-WMMFUStore::WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, GMemorySystem *ms, int32_t size, int32_t id)
-	: WMMLSResource(cls, aGen, l, ms, id)
-	, maxEntries(size)
-	, freeEntries(size)
-{}
+WMMFUStore::WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MemObj *dcache, int32_t id)
+	: WMMLSResource(cls, aGen, l, q, id)
+	, DL1(dcache)
+{
+	I(DL1);
+}
 
 StallCause WMMFUStore::canIssue(DInst *dinst) {
 	// [sizhuo] should not be poisoned inst
 	I(!dinst->isPoisoned());
 
-  if (dinst->getInst()->isStoreAddress()) {
+	const Instruction *const ins = dinst->getInst();
+	// [sizhuo] for store addr & commit fence, no need to add to LSQ
+  if (ins->isStoreAddress()) {
     return NoStall;
 	}
-
-	if(dinst->getInst()->isComFence()) {
+	if(ins->isComFence()) {
 		return NoStall;
 	}
 
-  if( freeEntries <= 0 ) {
-    I(freeEntries == 0); // Can't be negative
-    return OutsStoresStall;
-  }
-
-	// TODO: update store set
-	
-  freeEntries--;
-  return NoStall;
+	// [sizhuo] store needs to be added to LSQ
+	I(ins->isStore());
+  return lsq->addEntry(dinst);
 }
 
 void WMMFUStore::executing(DInst *dinst) {
@@ -232,24 +206,15 @@ void WMMFUStore::executing(DInst *dinst) {
   cluster->executing(dinst);
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
-	if(dinst->getInst()->isStoreAddress() || dinst->getInst()->isComFence()) {
+	const Instruction *const ins = dinst->getInst();
+	if(ins->isStoreAddress() || ins->isComFence()) {
+		// [sizhuo] store addr or commit: mark as executed
 		executedCB::scheduleAbs(when, this, dinst);
 	} else {
-		// [sizhuo] schedule call back to access cache
-		cacheDispatchedCB::scheduleAbs(when, this, dinst);
+		// [sizhuo] store: schedule callback to issue to LSQ
+		I(ins->isStore());
+		WMMLSQ::issueCB::scheduleAbs(when, lsq, dinst);
 	}
-}
-
-void WMMFUStore::cacheDispatched(DInst *dinst) {
-	// [sizhuo] detect poisoned inst & mark as executed
-	if(dinst->isPoisoned()) {
-		dinst->markExecuted();
-		return;
-	}
-
-	// [sizhuo] send write req
-	I(!DL1->isBusy(dinst->getAddr())); // [sizhuo] cache always available
-	MemRequest::sendReqWrite(DL1, dinst->getStatsFlag(), dinst->getAddr(), performedCB::create(this,dinst));
 }
 
 void WMMFUStore::executed(DInst *dinst) {
@@ -266,15 +231,12 @@ void WMMFUStore::executed(DInst *dinst) {
 		MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());
 	}
 
-	// TODO: wake up inst with addr dependency on dinst via store set
-	
 	// [sizhuo] wake up inst with data dependency on dinst
   cluster->executed(dinst);
 }
 
 void WMMFUStore::performed(DInst *dinst) {
-  dinst->markPerformed();
-  executed(dinst);
+	I(0); // [sizhuo] obsolete
 }
 
 bool WMMFUStore::preretire(DInst *dinst, bool flushing) {
@@ -288,7 +250,18 @@ bool WMMFUStore::retire(DInst *dinst, bool flushing) {
 	// [sizhuo] should not be poisoned inst
 	I(!dinst->isPoisoned());
 
-	freeEntries++; // [sizhuo] release entry now
-	return true;
+	const Instruction *const ins = dinst->getInst();
+	if(ins->isStoreAddress()) {
+		// [sizhuo] store addr: just retire
+		return true;
+	} else if(ins->isComFence()) {
+		// [sizhuo] commit: retire only when commited SQ empty
+		return lsq->isComSQEmpty();
+	} else {
+		// [sizhuo] store: retire store to commited SQ
+		I(ins->isStore());
+		lsq->retire(dinst);
+		return true;
+	}
 }
 

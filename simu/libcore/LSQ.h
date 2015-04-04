@@ -31,6 +31,7 @@ Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #include "GStats.h"
 
 #include "DInst.h"
+#include "Resource.h"
 
 class LSQ {
 private:
@@ -45,6 +46,13 @@ public:
   virtual void insert(DInst *dinst)      = 0; // [sizhuo] add inst into LSQ
   virtual DInst *executing(DInst *dinst) = 0; // [sizhuo] ex an inst?
   virtual void remove(DInst *dinst)      = 0; // [sizhuo] remove inst from LSQ
+
+	// [sizhuo] newly added functions
+	virtual StallCause addEntry(DInst *dinst) = 0;
+	virtual void issue(DInst *dinst) = 0;
+	typedef CallbackMember1<LSQ, DInst*, &LSQ::issue> issueCB;
+	virtual void retire(DInst *dinst) = 0;
+	virtual bool isComSQEmpty() = 0;
 };
 
 // [sizhuo] LSQ for OOO core
@@ -78,6 +86,12 @@ public:
   void insert(DInst *dinst);
   DInst *executing(DInst *dinst);
   void remove(DInst *dinst);
+
+	// [sizhuo] newly added functions
+	virtual StallCause addEntry(DInst *dinst) { return NoStall; }
+	virtual void issue(DInst *dinst) {}
+	virtual void retire(DInst *dinst) {}
+	virtual bool isComSQEmpty() { return true; }
 };
 
 // [sizhuo] an dummy LSQ, used for in order core
@@ -91,6 +105,12 @@ public:
   void insert(DInst *dinst);
   DInst *executing(DInst *dinst);
   void remove(DInst *dinst);
+
+	// [sizhuo] newly added functions
+	virtual StallCause addEntry(DInst *dinst) { return NoStall; }
+	virtual void issue(DInst *dinst) {}
+	virtual void retire(DInst *dinst) {}
+	virtual bool isComSQEmpty() { return true; }
 };
 
 class LSQVPC : public LSQ {
@@ -111,5 +131,11 @@ public:
   DInst * executing(DInst *dinst);
   void remove(DInst *dinst);
   AddrType replayCheck(DInst *dinst);
+
+	// [sizhuo] newly added functions
+	virtual StallCause addEntry(DInst *dinst) { return NoStall; }
+	virtual void issue(DInst *dinst) {}
+	virtual void retire(DInst *dinst) {}
+	virtual bool isComSQEmpty() { return true; }
 };
 #endif

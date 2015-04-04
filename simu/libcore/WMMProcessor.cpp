@@ -1,7 +1,6 @@
 #include "SescConf.h"
 
 #include "WMMProcessor.h"
-
 #include "TaskHandler.h"
 #include "FetchEngine.h"
 #include "GMemorySystem.h"
@@ -11,7 +10,7 @@
 WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 	: GProcessor(gm, i, 1)
   , frontEnd(i)
-	, lsq(i)
+	, lsq(this, gm->getDL1())
 	, replayRecover(false)
 	, replayID(0)
 	, flushing(0)

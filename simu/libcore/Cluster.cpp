@@ -186,14 +186,7 @@ void Cluster::buildUnit(const char *clusterName
 		case iLALU_REC: // [sizhuo] reconcile fence
       {
 				if(wmmProc) { // [sizhuo] add WMM load unit
-          TimeDelta_t ldstdelay=SescConf->getInt("cpusimu", "stForwardDelay",gproc->getId());
-          SescConf->isInt("cpusimu", "maxLoads",gproc->getId());
-          SescConf->isBetween("cpusimu", "maxLoads", 0, 256*1024, gproc->getId());
-          int32_t maxLoads=SescConf->getInt("cpusimu", "maxLoads",gproc->getId());
-          if( maxLoads == 0 )
-            maxLoads = 256*1024;
-
-					r = new WMMFULoad(cluster, gen, ldstdelay, lat, ms, maxLoads, gproc->getId());
+					r = new WMMFULoad(cluster, gen, lat, gproc->getLSQ(), gproc->getId());
 				} else if(scooreMemory){
           r = new FUSCOORELoad(cluster, gen, gproc->getSS(), lat, ms, gproc->getId(), "scooreld");
         }else{
@@ -219,13 +212,7 @@ void Cluster::buildUnit(const char *clusterName
 		case iSALU_COM: // [sizhuo] commit fence
       {
 				if(wmmProc) { // [sizhuo] add WMM store unit
-          SescConf->isInt("cpusimu", "maxStores",gproc->getId());
-          SescConf->isBetween("cpusimu", "maxStores", 0, 256*1024, gproc->getId());
-          int32_t maxStores=SescConf->getInt("cpusimu", "maxStores",gproc->getId());
-          if( maxStores == 0 )
-            maxStores = 256*1024;
-
-					r = new WMMFUStore(cluster, gen, lat, ms, maxStores, gproc->getId());
+					r = new WMMFUStore(cluster, gen, lat, gproc->getLSQ(), ms->getDL1(), gproc->getId());
 				} else if(scooreMemory){
           r = new FUSCOOREStore(cluster, gen, gproc->getSS(), lat, ms, gproc->getId(), "scoorest");
         }else{
