@@ -55,35 +55,35 @@ DInst::DInst()
 
 void DInst::dump(const char *str) {
 #ifdef ENABLE_CUDA
-  printf("%s:PE:%d %p (%d) %lld %c DInst: pc=0x%x, addr=0x%x src1=%d (%d) src2 = %d dest1 =%d dest2 = %d",str, (int)getPE(), this, fid, (long long)ID, keepStats? 't': 'd', (int)pc,(int)addr,(int)(inst.getSrc1()), inst.getOpcode(),inst.getSrc2(),inst.getDst1(), inst.getDst2());
+  MSG("%s:PE:%d %p (%d) %lld %c DInst: pc=0x%x, addr=0x%x src1=%d (%d) src2 = %d dest1 =%d dest2 = %d",str, (int)getPE(), this, fid, (long long)ID, keepStats? 't': 'd', (int)pc,(int)addr,(int)(inst.getSrc1()), inst.getOpcode(),inst.getSrc2(),inst.getDst1(), inst.getDst2());
 #else
-  printf("%s:%p (%d) %lld %c DInst: pc=0x%x, addr=0x%x src1=%d (%d) src2 = %d dest1 =%d dest2 = %d",str, this, fid, (long long)ID, keepStats? 't': 'd', (int)pc,(int)addr,(int)(inst.getSrc1()), inst.getOpcode(),inst.getSrc2(),inst.getDst1(), inst.getDst2());
+  MSG("%s:%p (%d) %lld %c DInst: pc=0x%x, addr=0x%x src1=%d (%d) src2 = %d dest1 =%d dest2 = %d",str, this, fid, (long long)ID, keepStats? 't': 'd', (int)pc,(int)addr,(int)(inst.getSrc1()), inst.getOpcode(),inst.getSrc2(),inst.getDst1(), inst.getDst2());
 #endif
 
   if (performed) {
-    printf(" performed");
+    MSG(" performed");
   }else if (executed) {
-    printf(" executed");
+    MSG(" executed");
   }else if (issued) {
-    printf(" issued");
+    MSG(" issued");
   }else{
-    printf(" non-issued");
+    MSG(" non-issued");
   }
   if (replay)
-    printf(" REPLAY ");
+    MSG(" REPLAY ");
 
   if (hasPending())
-    printf(" has pending");
+    MSG(" has pending");
   if (!isSrc1Ready())
-    printf(" has src1 deps");
+    MSG(" has src1 deps");
   if (!isSrc2Ready())
-    printf(" has src2 deps");
+    MSG(" has src2 deps");
   if (!isSrc3Ready())
-    printf(" has src3 deps");
+    MSG(" has src3 deps");
 
   //inst.dump("Inst->");
 
-  printf("\n");
+  //MSG("\n");
 }
 
 void DInst::clearRATEntry() {
@@ -113,6 +113,12 @@ DInst *DInst::clone() {
   i->keepStats   = keepStats;
 
   i->setup();
+
+	// [sizhuo] we want i has same ID
+	i->ID = ID;
+	// [sizhuo] the increment of currentID in setup() is unnecessary here
+	// so we decrement it
+	currentID--;
 
   return i;
 }

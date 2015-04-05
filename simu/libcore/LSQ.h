@@ -53,6 +53,8 @@ public:
 	typedef CallbackMember1<LSQ, DInst*, &LSQ::issue> issueCB;
 	virtual void retire(DInst *dinst) = 0;
 	virtual bool isComSQEmpty() = 0;
+	virtual void reset() = 0;
+	virtual bool isReset() = 0;
 };
 
 // [sizhuo] LSQ for OOO core
@@ -92,6 +94,8 @@ public:
 	virtual void issue(DInst *dinst) {}
 	virtual void retire(DInst *dinst) {}
 	virtual bool isComSQEmpty() { return true; }
+	virtual void reset() {}
+	virtual bool isReset() { return false; }
 };
 
 // [sizhuo] an dummy LSQ, used for in order core
@@ -111,6 +115,8 @@ public:
 	virtual void issue(DInst *dinst) {}
 	virtual void retire(DInst *dinst) {}
 	virtual bool isComSQEmpty() { return true; }
+	virtual void reset() {}
+	virtual bool isReset() { return false; }
 };
 
 class LSQVPC : public LSQ {
@@ -137,5 +143,7 @@ public:
 	virtual void issue(DInst *dinst) {}
 	virtual void retire(DInst *dinst) {}
 	virtual bool isComSQEmpty() { return true; }
+	virtual void reset() {}
+	virtual bool isReset() { return false; }
 };
 #endif

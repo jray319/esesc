@@ -55,10 +55,17 @@ private:
 	bool flushing; // [sizhuo] flush the inst in ROB
 
 #ifdef DEBUG
-	// [sizhuo] debug for flushing
+	// [sizhuo] debug for whether killed inst are re-fetched
 	bool lastReplayValid;
 	AddrType lastReplayPC;
 	Instruction lastReplayInst;
+	// [sizhuo] min value of next commit inst ID
+	Time_t minComID;
+	// [sizhuo] debug function for flush: randomly generate exception
+	bool startExcep;
+	const TimeDelta_t excepDelay;
+	void genExcep();
+	StaticCallbackMember0<WMMProcessor, &WMMProcessor::genExcep> genExcepCB;
 #endif
 
 	// [sizhuo] check processor deadlock
@@ -72,11 +79,6 @@ private:
 	bool isReset();
 	void doFlush();
 
-	// [sizhuo] debug function for flush: randomly generate exception
-	bool startExcep;
-	const TimeDelta_t excepDelay;
-	void genExcep();
-	StaticCallbackMember0<WMMProcessor, &WMMProcessor::genExcep> genExcepCB;
 
 protected:
   ClusterManager clusterManager;

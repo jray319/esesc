@@ -61,6 +61,7 @@ StallCause WMMFURALU::canIssue(DInst *dinst) {
 void WMMFURALU::executing(DInst *dinst) {
 	// [sizhuo] detect poisoned inst & mark as executed
 	if(dinst->isPoisoned()) {
+		I(!dinst->isExecuted());
 		dinst->markExecuted();
 		return;
 	}
@@ -70,6 +71,7 @@ void WMMFURALU::executing(DInst *dinst) {
 }
 
 void WMMFURALU::executed(DInst *dinst) {
+	I(!dinst->isExecuted());
   dinst->markExecuted();
 	
 	// [sizhuo] detect poisoned inst & just return
@@ -120,7 +122,9 @@ StallCause WMMFULoad::canIssue(DInst *dinst) {
 void WMMFULoad::executing(DInst *dinst) {
 	// [sizhuo] detect poisoned inst & mark as executed
 	if(dinst->isPoisoned()) {
-		dinst->markExecuted();
+		if(!dinst->isExecuted()) {
+			dinst->markExecuted();
+		}
 		return;
 	}
 
@@ -143,10 +147,17 @@ void WMMFULoad::performed(DInst *dinst) {
 }
 
 void WMMFULoad::executed(DInst *dinst) {
-  dinst->markExecuted();
+	if(!dinst->isExecuted()) {
+		// [sizhuo] if reconcile fence is killed,
+		// it may already be marked as executed
+		dinst->markExecuted();
+	}
 	
 	// [sizhuo] detect poisoned inst & just return
 	if(dinst->isPoisoned()) {
+		// [sizhuo] this can only be reconcile fence
+		// and its removal from LSQ is already done in WMMLSQ::reset
+		I(dinst->getInst()->isRecFence());
 		return;
 	}
 
@@ -199,6 +210,7 @@ StallCause WMMFUStore::canIssue(DInst *dinst) {
 void WMMFUStore::executing(DInst *dinst) {
 	// [sizhuo] detect poisoned inst & mark as executed
 	if(dinst->isPoisoned()) {
+		I(!dinst->isExecuted());
 		dinst->markExecuted();
 		return;
 	}
@@ -218,10 +230,13 @@ void WMMFUStore::executing(DInst *dinst) {
 }
 
 void WMMFUStore::executed(DInst *dinst) {
+	I(!dinst->isExecuted());
   dinst->markExecuted();
 	
 	// [sizhuo] detect poisoned inst & just return
 	if(dinst->isPoisoned()) {
+		// [sizhuo] this can only be commit fence or store addr
+		I(dinst->getInst()->isComFence() || dinst->getInst()->isStoreAddress());
 		return;
 	}
 

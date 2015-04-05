@@ -2,6 +2,7 @@
 #include "GProcessor.h"
 #include "MemRequest.h"
 #include "SescConf.h"
+#include "DInst.h"
 
 WMMLSQ::WMMLSQ(GProcessor *gproc_, MemObj *DL1_)
 	: gproc(gproc_)
@@ -39,6 +40,7 @@ WMMLSQ::WMMLSQ(GProcessor *gproc_, MemObj *DL1_)
 
 StallCause WMMLSQ::addEntry(DInst *dinst) {
 	I(dinst);
+	I(!dinst->isPoisoned()); // [sizhuo] can't be poisoned
 	I(freeLdNum >= 0);
 	I(freeStNum >= 0);
 	I(freeLdNum <= maxLdNum);
@@ -83,6 +85,14 @@ void WMMLSQ::issue(DInst *dinst) {
 	const bool doStats = dinst->getStatsFlag();
 	I(ins->isLoad() || ins->isStore());
 
+	// [sizhuo] catch poisoned inst
+	if(dinst->isPoisoned()) {
+		// [sizhuo] mark executed without inserting to LSQ
+		I(!dinst->isExecuted());
+		dinst->markExecuted();
+		return;
+	}
+
 	// [sizhuo] create new entry
 	SpecLSQEntry *issueEn = specLSQEntryPool.out();
 	issueEn->clear();
@@ -103,11 +113,8 @@ void WMMLSQ::issue(DInst *dinst) {
 		I(killEn);
 		DInst *killDInst = killEn->dinst;
 		I(killDInst);
+		I(!killDInst->isPoisoned()); // [sizhuo] can't be poisoned
 		const Instruction *const killIns = killDInst->getInst();
-		// [sizhuo] we hit a poisoned inst, we can stop here
-		if(killDInst->isPoisoned()) {
-			break;
-		}
 		// [sizhuo] we hit a reconcile fence we can stop
 		if(killIns->isRecFence()) {
 			break;
@@ -138,9 +145,9 @@ void WMMLSQ::issue(DInst *dinst) {
 					// so we can stop here
 					break;
 				} else if(killEn->state == Done) {
-					// [sizhuo] TODO: this load must be killed
+					// [sizhuo] this load must be killed
 					// TODO: add to store set
-					//gproc->replay(en->dinst);
+					gproc->replay(killDInst);
 					// [sizhuo] stats
 					if(ins->isStore()) {
 						nLdKillBySt.inc(doStats);
@@ -157,13 +164,13 @@ void WMMLSQ::issue(DInst *dinst) {
 		}
 	}
 
-	// [sizhuo] TODO: check store set dependency here, for both load & store
 	if(ins->isLoad()) {
 		// [sizhuo] send load to execution
 		scheduleLdEx(dinst);
 	} else if(ins->isStore()) {
 		// [sizhuo] store is done, change state, inform resource
 		issueEn->state = Done;
+		// [sizhuo] call immediately, easy for flushing
 		dinst->getClusterResource()->executed(dinst);
 	} else {
 		I(0);
@@ -172,6 +179,13 @@ void WMMLSQ::issue(DInst *dinst) {
 
 void WMMLSQ::scheduleLdEx(DInst *dinst) {
 	I(dinst->getInst()->isLoad());
+
+	// [sizhuo] catch poisoned inst
+	if(dinst->isPoisoned()) {
+		removePoisonedInst(dinst);
+		return;
+	}
+
 	ldExecuteCB::scheduleAbs(ldExPort->nextSlot(dinst->getStatsFlag()), this, dinst);
 }
 
@@ -191,6 +205,12 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 	I(exEn->dinst == dinst);
 	I(exEn->state == Wait);
 
+	// [sizhuo] catch poisoned inst
+	if(dinst->isPoisoned()) {
+		removePoisonedEntry(exIter);
+		return;
+	}
+
 	// [sizhuo] search older inst (with lower ID) in specLSQ for bypass or stall
 	// XXX: decrement iterator smaller than begin() results in undefined behavior
 	SpecLSQ::iterator iter = exIter;
@@ -202,7 +222,7 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 		DInst *olderDInst = olderEn->dinst;
 		I(olderDInst);
 		const Instruction *const olderIns = olderDInst->getInst();
-		I(!olderDInst->isPoisoned());
+		I(!olderDInst->isPoisoned()); // [sizhuo] can't be poisoned
 		I(iter->first < id);
 		// [sizhuo] we hit reconcile fence, we should should stall until it retires
 		if(olderIns->isRecFence()) {
@@ -268,6 +288,7 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 void WMMLSQ::ldDone(DInst *dinst) {
 	I(dinst);
 	I(dinst->getInst()->isLoad());
+
 	// [sizhuo] get done entry
 	SpecLSQ::iterator doneIter = specLSQ.find(dinst->getID());
 	I(doneIter != specLSQ.end());
@@ -276,6 +297,12 @@ void WMMLSQ::ldDone(DInst *dinst) {
 	I(doneEn);
 	I(doneEn->dinst == dinst);
 	I(doneEn->state == Exe);
+
+	// [sizhuo] catch poisoned inst
+	if(dinst->isPoisoned()) {
+		removePoisonedEntry(doneIter);
+		return;
+	}
 
 	// [sizhuo] check re-execute bit
 	if(doneEn->needReEx) {
@@ -295,12 +322,13 @@ void WMMLSQ::ldDone(DInst *dinst) {
 		cb->schedule(1);
 	}
 	// [sizhuo] inform resource that this load is done at this cycle
+	// calling immediately is easy for flushing
 	dinst->getClusterResource()->executed(dinst);
-	// [sizhuo] TODO: resolve store set dependency
 }
 
 void WMMLSQ::retire(DInst *dinst) {
 	I(dinst);
+	I(!dinst->isPoisoned()); // [sizhuo] can't be poisoned
 	const Time_t id = dinst->getID();
 	const AddrType addr = dinst->getAddr();
 	const Instruction *const ins = dinst->getInst();
@@ -365,6 +393,7 @@ void WMMLSQ::retire(DInst *dinst) {
 	}
 
 	// [sizhuo] recycle spec LSQ entry
+	I((retireEn->pendRetireQ).empty() && (retireEn->pendExQ).empty());
 	specLSQEntryPool.in(retireEn);
 }
 
@@ -394,4 +423,76 @@ void WMMLSQ::stCommited(Time_t id) {
 
 	// [sizhuo] recycle entry
 	comSQEntryPool.in(comEn);
+}
+
+void WMMLSQ::removePoisonedEntry(SpecLSQ::iterator rmIter) {
+	I(rmIter != specLSQ.end());
+	// [sizhuo] get entry pointer
+	SpecLSQEntry *rmEn = rmIter->second;
+	I(rmEn);
+	I(rmEn->dinst);
+	I(rmEn->dinst->isPoisoned());
+	// [sizhuo] mark inst as executed
+	if(!rmEn->dinst->isExecuted()) {
+		rmEn->dinst->markExecuted();
+	}
+	// [sizhuo] erase the entry
+	specLSQ.erase(rmIter);
+	// [sizhuo] call all events in pending Q
+	while(!(rmEn->pendExQ).empty()) {
+		CallbackBase *cb = (rmEn->pendExQ).front();
+		(rmEn->pendExQ).pop();
+		cb->call();
+	}
+	while(!(rmEn->pendRetireQ).empty()) {
+		CallbackBase *cb = (rmEn->pendRetireQ).front();
+		(rmEn->pendRetireQ).pop();
+		cb->call();
+	}
+	// [sizhuo] recycle the entry
+	I((rmEn->pendRetireQ).empty() && (rmEn->pendExQ).empty());
+	specLSQEntryPool.in(rmEn);
+}
+
+void WMMLSQ::removePoisonedInst(DInst *dinst) {
+	I(dinst);
+	I(dinst->isPoisoned());
+	SpecLSQ::iterator rmIter = specLSQ.find(dinst->getID());
+	I(rmIter->second);
+	I(rmIter->second->dinst == dinst);
+	removePoisonedEntry(rmIter);
+}
+
+void WMMLSQ::reset() {
+	// [sizhuo] remove all reconcile & store & executed load
+	while(true) {
+		SpecLSQ::iterator rmIter = specLSQ.begin();
+		// [sizhuo] search through specLSQ for reconcile & store & executed load
+		// because these entries are only invoked by retire(), which will not be called in flushing mode
+		for(; rmIter != specLSQ.end(); rmIter++) {
+			SpecLSQEntry *rmEn = rmIter->second;
+			I(rmEn);
+			I(rmEn->dinst);
+			const Instruction *const rmIns = rmEn->dinst->getInst();
+			I(rmIns);
+			if(rmIns->isRecFence() || rmIns->isStore() || (rmIns->isLoad() && rmEn->state == Done)) {
+				break;
+			}
+		}
+		if(rmIter != specLSQ.end()) {
+			// [sizhuo] find a reconcile / store to remove
+			removePoisonedEntry(rmIter);
+		} else {
+			// [sizhuo] no more reconcile or store, stop
+			break;
+		}
+	}
+	// [sizhuo] recover free entry num
+	freeLdNum = maxLdNum;
+	freeStNum = maxStNum - comSQ.size();
+	I(freeStNum >= 0);
+}
+
+bool WMMLSQ::isReset() {
+	return specLSQ.empty() && freeLdNum == maxLdNum && freeStNum == (maxStNum - comSQ.size());
 }

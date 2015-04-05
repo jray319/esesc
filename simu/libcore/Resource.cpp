@@ -87,7 +87,10 @@ void Resource::select(DInst *dinst)
 {
 	// [sizhuo] detect poisoned inst & mark as executed
 	if(dinst->isPoisoned()) {
-		dinst->markExecuted();
+		// [sizhuo] reconcile fence may be already marked as executed
+		if(!dinst->isExecuted()) {
+			dinst->markExecuted();
+		}
 		return;
 	}
 
@@ -359,6 +362,7 @@ void FUSCOORELoad::executed(DInst* dinst) {
     //replayManage(dinst);
   }
 
+	I(!dinst->isExecuted());
   dinst->markExecuted();
   cluster->executed(dinst);
 }
@@ -508,6 +512,7 @@ void FUSCOOREStore::executed(DInst *dinst) {
     storeset->remove(dinst);
   }
 
+	I(!dinst->isExecuted());
   dinst->markExecuted();
   cluster->executed(dinst);
 }
@@ -660,6 +665,7 @@ void FULoad::executed(DInst* dinst) {
   /* executed {{{1 */
   storeset->remove(dinst); 
 
+	I(!dinst->isExecuted());
   dinst->markExecuted();
   cluster->executed(dinst);
 }
@@ -767,6 +773,7 @@ void FUStore::executed(DInst *dinst) {
   if (dinst->getInst()->isStore())
     storeset->remove(dinst);
 
+	I(!dinst->isExecuted());
   dinst->markExecuted();
   cluster->executed(dinst);
   // We have data&address, the LSQ can be populated
@@ -844,6 +851,7 @@ void FUGeneric::executing(DInst *dinst) {
   /* executing {{{1 */
 	// [sizhuo] detect poisoned inst & mark as executed
 	if(dinst->isPoisoned()) {
+		I(!dinst->isExecuted());
 		dinst->markExecuted();
 		return;
 	}
@@ -855,6 +863,7 @@ void FUGeneric::executing(DInst *dinst) {
 
 void FUGeneric::executed(DInst *dinst) {
   /* executed {{{1 */
+	I(!dinst->isExecuted());
   dinst->markExecuted();
 	
 	// [sizhuo] detect poisoned inst & just return
@@ -911,6 +920,7 @@ void FUFuze::executing(DInst *dinst) {
 
 void FUFuze::executed(DInst *dinst) {
   /* executed {{{1 */
+	I(!dinst->isExecuted());
   dinst->markExecuted();
   cluster->executed(dinst);
 }
@@ -966,6 +976,7 @@ void FUBranch::executing(DInst *dinst) {
   /* executing {{{1 */
 	// [sizhuo] detect poisoned inst & mark as executed
 	if(dinst->isPoisoned()) {
+		I(!dinst->isExecuted());
 		dinst->markExecuted();
 		return;
 	}
@@ -977,6 +988,7 @@ void FUBranch::executing(DInst *dinst) {
 
 void FUBranch::executed(DInst *dinst) {
   /* executed {{{1 */
+	I(!dinst->isExecuted());
   dinst->markExecuted();
 	
 	// [sizhuo] detect poisoned inst & just return
@@ -1085,6 +1097,7 @@ void FURALU::executing(DInst *dinst)
 void FURALU::executed(DInst *dinst) 
 /* executed {{{1 */
 {
+	I(!dinst->isExecuted());
   dinst->markExecuted();
   cluster->executed(dinst);
 }
@@ -1170,6 +1183,7 @@ void FULoad_noMemSpec::cacheDispatched(DInst *dinst) {
 
 void FULoad_noMemSpec::executed(DInst* dinst) {
   /* executed {{{1 */
+	I(!dinst->isExecuted());
   dinst->markExecuted();
   cluster->executed(dinst);
 }
@@ -1242,6 +1256,7 @@ void FUStore_noMemSpec::executing(DInst *dinst) {
 
 void FUStore_noMemSpec::executed(DInst *dinst) {
   /* executed {{{1 */
+	I(!dinst->isExecuted());
   dinst->markExecuted();
   cluster->executed(dinst);
   // We have data&address, the LSQ can be populated

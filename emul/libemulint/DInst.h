@@ -460,7 +460,7 @@ public:
 	// [sizhuo] return & set poison bit
 	bool isPoisoned() const { return poisoned; }
 	void markPoisoned() {
-		// [sizhuo] remove dependency
+		// [sizhuo] remove dependency (TODO: store set dependency)
 		while(hasPending()) {
 			if(getFirstPending() == 0) {
 				break;
@@ -469,6 +469,7 @@ public:
 		}
 		// [sizhuo] if unissued, mark issued & executed
 		// XXX: this is necessary, otherwise this inst may never become executed
+		// XXX: this is justified, because this inst will never be invoked
 		if(!issued) {
 			I(!executed);
 			issued = true;
