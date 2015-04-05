@@ -386,6 +386,7 @@ void WMMProcessor::retire_lock_check()
   retire_lock_checkCB.scheduleAbs(globalClock + 100000);
 }
 
+#ifdef DEBUG
 void WMMProcessor::genExcep() {
 	/*
 	if(!rob.empty()) {
@@ -406,4 +407,4 @@ void WMMProcessor::genExcep() {
 	}
 	*/
 }
-
+#endif
