@@ -31,8 +31,11 @@ const uint64_t MaxTime = ((~0ULL) - 1024);  // -1024 is to give a little bit of 
 
 extern volatile Time_t globalClock; // Defined in Thread.cpp
 
-typedef uint16_t TimeDelta_t;
-const uint16_t MaxDeltaTime = (65535 - 1024);  // -1024 is to give a little bit of margin
+// [sizhuo] use larger time delta
+//typedef uint16_t TimeDelta_t;
+//const uint16_t MaxDeltaTime = (65535 - 1024);  // -1024 is to give a little bit of margin
+typedef uint32_t TimeDelta_t;
+const TimeDelta_t MaxDeltaTime = (0xFFFFFFFF - 1024);
 
 //x, y are integers and x,y > 0
 #define CEILDiv(x,y)            ((x)-1)/(y)+1

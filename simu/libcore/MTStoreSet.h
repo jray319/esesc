@@ -26,6 +26,7 @@ public:
 	virtual bool isReset() = 0;
 };
 
+/*
 // [sizhuo] serialize all memory instruction
 class NaiveMTStoreSet : public MTStoreSet {
 private:
@@ -64,5 +65,33 @@ public:
 
 	virtual bool isReset() { return lastFetchInst == 0; }
 };
+
+// [sizhuo] real store set
+// -1 is invalid SSID
+class FullMTStoreSet : public MTStoreSet {
+private:
+	SSID_t *SSIT; // [sizhuo] Store Set Id Table
+	DInst **LFMT; // [sizhuo] Last Fetched Memory inst Table
+	const int32_t SSITSize;
+	const int32_t LFMTSize;
+	const Time_t clearCycle;
+
+	void clear();
+	StaticCallbackMember0<FullMTStoreSet, &FullMTStoreSet::clear> clearCB;
+
+	int32_t getSSITIndex(DInst *dinst);
+	SSID_t createSSID(DInst *dinst);
+
+public:
+	FullMTStoreSet(int32_t cpu_id);
+	virtual ~FullMTStoreSet();
+
+	virtual void insert(DInst *dinst);
+	virtual void remove(DInst *dinst);
+	virtual void memDepViolate(DInst *oldInst, DInst *youngInst);
+	virtual void reset();
+	virtual bool isReset();
+};
+*/
 
 #endif
