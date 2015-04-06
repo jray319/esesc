@@ -1,7 +1,6 @@
 #ifndef _WMMPROCESSOR_H_
 #define _WMMPROCESSOR_H_
 
-#include "WMMLSQ.h"
 #include "nanassert.h"
 #include "callback.h"
 #include "GProcessor.h"
@@ -35,7 +34,6 @@ private:
 	// XXX: we no longer use ROB & rROB from GProcessor class
 	std::deque<DInst*> rob;
 	FrontEnd frontEnd; // [sizhuo] simplified front end pipline
-	WMMLSQ lsq; // [sizhuo] load/store queue
   DInst *RAT[LREG_MAX]; // [sizhuo] rename table
 
 	// [sizhuo] ROB flush state
@@ -97,7 +95,7 @@ public:
 	WMMProcessor(GMemorySystem *gm, CPU_t i);
 	virtual ~WMMProcessor();
 
-	LSQ *getLSQ() { return &lsq; }
+	LSQ *getLSQ() { return 0; } // [sizhuo] LSQ is obsolete, use GProcessor::getMTLSQ
 	void replay(DInst *target);
 	bool isFlushing() { return flushing; }
 	bool isReplayRecovering() { return replayRecover; }

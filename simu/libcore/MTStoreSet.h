@@ -24,15 +24,30 @@ public:
 	// [sizhuo] reset when ROB flush
 	virtual void reset() = 0;
 	virtual bool isReset() = 0;
+
+	// [sizhuo] creator function
+	static MTStoreSet *create(int32_t cpu_id);
+};
+
+// [sizhuo] store set without any forcing any dependency
+class EmptyMTStoreSet : public MTStoreSet {
+public:
+	EmptyMTStoreSet() {}
+	virtual ~EmptyMTStoreSet() {}
+	virtual void insert(DInst *dinst) {}
+	virtual void remove(DInst *dinst) {}
+	virtual void memDepViolate(DInst *oldInst, DInst *youngInst) {}
+	virtual void reset() {}
+	virtual bool isReset() { return true; }
 };
 
 // [sizhuo] serialize all memory instruction
-class NaiveMTStoreSet : public MTStoreSet {
+class SerialMTStoreSet : public MTStoreSet {
 private:
 	DInst *lastFetchInst; // [sizhuo] last fetched mem inst
 public:
-	NaiveMTStoreSet() : lastFetchInst(0) {}
-	virtual ~NaiveMTStoreSet() {}
+	SerialMTStoreSet() : lastFetchInst(0) {}
+	virtual ~SerialMTStoreSet() {}
 
 	virtual void insert(DInst *dinst) {
 		I(dinst);

@@ -2,6 +2,21 @@
 #include <algorithm>
 #include "SescConf.h"
 
+MTStoreSet* MTStoreSet::create(int32_t cpu_id) {
+	const char *type = SescConf->getCharPtr("cpusimu", "storeSetType", cpu_id);
+	MTStoreSet *ret = 0;
+	if(!strcasecmp(type, "empty")) {
+		ret = new EmptyMTStoreSet;
+	} else if(!strcasecmp(type, "serial")) {
+		ret = new SerialMTStoreSet;
+	} else if(!strcasecmp(type, "full")) {
+		ret = new FullMTStoreSet(cpu_id);
+	} else {
+		SescConf->notCorrect();
+	}
+	return ret;
+}
+
 const SSID_t FullMTStoreSet::invalidSSID = -1;
 
 FullMTStoreSet::FullMTStoreSet(int32_t cpu_id)

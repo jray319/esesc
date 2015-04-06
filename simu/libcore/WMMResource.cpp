@@ -12,6 +12,7 @@
 #include "MemObj.h"
 #include "Port.h"
 #include "MTStoreSet.h"
+#include "MTLSQ.h"
 
 // [sizhuo] WMMFURALU class: for fences & syscall
 WMMFURALU::WMMFURALU(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, int32_t id)
@@ -97,9 +98,9 @@ void WMMFURALU::performed(DInst *dinst) {
 }
 
 // WMMLSResource class: base class for LSU
-WMMLSResource::WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, int32_t id)
+WMMLSResource::WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, int32_t id)
 	: Resource(cls, aGen, l)
-	, lsq(q)
+	, mtLSQ(q)
 	, mtStoreSet(ss)
 {
   I(SescConf->getBool("cpusimu", "enableDcache", id));
@@ -108,7 +109,7 @@ WMMLSResource::WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ
 }
 
 // [sizhuo] WMMFULoad class: load unit
-WMMFULoad::WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, int32_t id)
+WMMFULoad::WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, int32_t id)
 	: WMMLSResource(cls, aGen, l, q, ss, id)
 {
 }
@@ -119,7 +120,7 @@ StallCause WMMFULoad::canIssue(DInst *dinst) {
 	I(dinst->getInst()->isLoad() || dinst->getInst()->isRecFence());
 
 	// [sizhuo] reserve entry in LSQ, reconcile fence is truly added
-	StallCause sc = lsq->addEntry(dinst);
+	StallCause sc = mtLSQ->addEntry(dinst);
 	if(sc != NoStall) {
 		return sc;
 	}
@@ -149,7 +150,7 @@ void WMMFULoad::executing(DInst *dinst) {
 	} else {
 		I(ins->isLoad());
 		// [sizhuo] load: schedule call back to issue to LSQ
-		WMMLSQ::issueCB::scheduleAbs(when, lsq, dinst);
+		WMMLSQ::issueCB::scheduleAbs(when, mtLSQ, dinst);
 	}
 }
 
@@ -194,12 +195,11 @@ bool WMMFULoad::retire(DInst *dinst, bool flushing) {
 	I(!dinst->isPoisoned());
 
 	// [sizhuo] retire load/reconcile from LSQ
-	lsq->retire(dinst);
-	return true;
+	return mtLSQ->retire(dinst);
 }
 
 // [sizhuo] WMMFUStore class: store unit
-WMMFUStore::WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, MemObj *dcache, int32_t id)
+WMMFUStore::WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, MemObj *dcache, int32_t id)
 	: WMMLSResource(cls, aGen, l, q, ss, id)
 	, DL1(dcache)
 {
@@ -222,7 +222,7 @@ StallCause WMMFUStore::canIssue(DInst *dinst) {
 
 	// [sizhuo] store needs to be added to LSQ
 	I(ins->isStore());
-  StallCause sc = lsq->addEntry(dinst);
+  StallCause sc = mtLSQ->addEntry(dinst);
 	if(sc != NoStall) {
 		return sc;
 	}
@@ -251,7 +251,7 @@ void WMMFUStore::executing(DInst *dinst) {
 	} else {
 		// [sizhuo] store: schedule callback to issue to LSQ
 		I(ins->isStore());
-		WMMLSQ::issueCB::scheduleAbs(when, lsq, dinst);
+		WMMLSQ::issueCB::scheduleAbs(when, mtLSQ, dinst);
 	}
 }
 
@@ -299,14 +299,12 @@ bool WMMFUStore::retire(DInst *dinst, bool flushing) {
 	if(ins->isStoreAddress()) {
 		// [sizhuo] store addr: just retire
 		return true;
-	} else if(ins->isComFence()) {
-		// [sizhuo] commit: retire only when commited SQ empty
-		return lsq->isComSQEmpty();
 	} else {
-		// [sizhuo] store: retire store to commited SQ
-		I(ins->isStore());
-		lsq->retire(dinst);
-		return true;
+		// [sizhuo] store & commit: all handled by LSQ
+		// store: retire store to commited SQ
+		// commit fence: check commited SQ empty
+		I(ins->isStore() || ins->isComFence());
+		return mtLSQ->retire(dinst);
 	}
 }
 

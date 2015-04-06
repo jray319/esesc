@@ -5,10 +5,10 @@
 #include "Resource.h"
 #include "nanassert.h"
 #include "callback.h"
-#include "WMMLSQ.h"
 
 class MemObj;
 class MTStoreSet;
+class MTLSQ;
 
 class WMMFURALU : public Resource {
   GStatsCntr memoryBarrier;
@@ -31,16 +31,16 @@ public:
 
 class WMMLSResource : public Resource {
 protected:
-	LSQ *lsq;
+	MTLSQ *mtLSQ;
 	MTStoreSet *mtStoreSet;
 	
 public:
-	WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, int32_t id);
+	WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, int32_t id);
 };
 
 class WMMFULoad : public WMMLSResource {
 public:
-	WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, int32_t id);
+	WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, int32_t id);
 
   StallCause canIssue(DInst  *dinst);
   void       executing(DInst *dinst);
@@ -57,7 +57,7 @@ class WMMFUStore : public WMMLSResource {
 private:
 	MemObj *DL1;
 public:
-	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, MemObj *dcache, int32_t id);
+	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, MemObj *dcache, int32_t id);
 
   StallCause canIssue(DInst  *dinst);
   void       executing(DInst *dinst);

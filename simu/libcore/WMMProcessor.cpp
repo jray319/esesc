@@ -1,6 +1,7 @@
 #include "SescConf.h"
 
 #include "WMMProcessor.h"
+#include "MTLSQ.h"
 #include "MTStoreSet.h"
 #include "TaskHandler.h"
 #include "FetchEngine.h"
@@ -11,7 +12,6 @@
 WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 	: GProcessor(gm, i, 1)
   , frontEnd(i)
-	, lsq(this, gm->getDL1())
 	, replayRecover(false)
 	, replayID(0)
 	, flushing(0)
@@ -92,9 +92,6 @@ StallCause WMMProcessor::addInst(DInst *dinst) {
 	// we must issue this inst to both ROB & cluster
 
   const Instruction *inst = dinst->getInst();
-
-	// [sizhuo] stats of inst type
-  nInst[inst->getOpcode()]->inc(dinst->getStatsFlag());
 
 	// [sizhuo] issue to ROB & cluster
 	rob.push_back(dinst);
@@ -182,6 +179,7 @@ void WMMProcessor::retireFromROB(FlowID fid) {
 
 		// [sizhuo] stats
 		nCommitted.inc(dinst->getStatsFlag());
+		nInst[dinst->getInst()->getOpcode()]->inc(dinst->getStatsFlag());
 
 		// [sizhuo] next commit ID min value
 		ID(minComID = dinst->getID() + 1);
@@ -323,7 +321,7 @@ void WMMProcessor::reset() {
 	// [sizhuo] reset rename table
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
 	// [sizhuo] reset LSQ
-	lsq.reset();
+	mtLSQ->reset();
 	// [sizhuo] reset store set
 	mtStoreSet->reset();
 	// [sizhou] reset clusters & resources
@@ -337,7 +335,7 @@ bool WMMProcessor::isReset() {
 			return false;
 		}
 	}
-	return lsq.isReset() && mtStoreSet->isReset() && clusterManager.isReset();
+	return mtLSQ->isReset() && mtStoreSet->isReset() && clusterManager.isReset();
 }
 
 void WMMProcessor::replay(DInst *target) {

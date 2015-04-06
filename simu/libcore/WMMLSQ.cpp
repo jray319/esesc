@@ -1,44 +1,8 @@
-#include "WMMLSQ.h"
+#include "MTLSQ.h"
 #include "MTStoreSet.h"
 #include "GProcessor.h"
-#include "MemRequest.h"
 #include "SescConf.h"
 #include "DInst.h"
-
-WMMLSQ::WMMLSQ(GProcessor *gproc_, MemObj *DL1_)
-	: gproc(gproc_)
-	, mtStoreSet(gproc->getMTSS())
-	, DL1(DL1_)
-	, maxLdNum(SescConf->getInt("cpusimu", "maxLoads", gproc->getId()))
-	, maxStNum(SescConf->getInt("cpusimu", "maxStores", gproc->getId()))
-	, freeLdNum(maxLdNum)
-	, freeStNum(maxStNum)
-	, ldldForwardDelay(SescConf->getInt("cpusimu", "ldldForwardDelay", gproc->getId()))
-	, stldForwardDelay(SescConf->getInt("cpusimu", "stldForwardDelay", gproc->getId()))
-	, specLSQEntryPool(maxLdNum + maxStNum, "WMMLSQ_specLSQEntryPool")
-	, comSQEntryPool(maxStNum, "WMMLSQ_comSQEntryPool")
-	, ldExPort(0)
-	, nLdKillByLd("P(%d)_WMMLSQ_nLdKillByLd", gproc->getId())
-	, nLdKillBySt("P(%d)_WMMLSQ_nLdKillBySt", gproc->getId())
-	, nLdReExByLd("P(%d)_WMMLSQ_nLdReExByLd", gproc->getId())
-	, nLdReExBySt("P(%d)_WMMLSQ_nLdReExBySt", gproc->getId())
-	, nStLdForward("P(%d)_WMMLSQ_nStLdForward", gproc->getId())
-	, nLdLdForward("P(%d)_WMMLSQ_nLdLdForward", gproc->getId())
-{
-
-	SescConf->isInt("cpusimu", "maxLoads", gproc->getId());
-	SescConf->isInt("cpusimu", "maxStores", gproc->getId());
-	SescConf->isInt("cpusimu", "ldldForwardDelay", gproc->getId());
-	SescConf->isInt("cpusimu", "stldForwardDelay", gproc->getId());
-	SescConf->isBetween("cpusimu", "maxLoads", 1, 256, gproc->getId());
-	SescConf->isBetween("cpusimu", "maxStores", 1, 256, gproc->getId());
-	SescConf->isBetween("cpusimu", "ldldForwardDelay", 1, 5, gproc->getId());
-	SescConf->isBetween("cpusimu", "stldForwardDelay", 1, 5, gproc->getId());
-
-	char portName[100];
-	sprintf(portName, "P(%d)_WMMLSQ_LdExPort", gproc->getId());
-	ldExPort = PortGeneric::create(portName, 1, 1);
-}
 
 StallCause WMMLSQ::addEntry(DInst *dinst) {
 	I(dinst);
@@ -181,18 +145,6 @@ void WMMLSQ::issue(DInst *dinst) {
 	}
 }
 
-void WMMLSQ::scheduleLdEx(DInst *dinst) {
-	I(dinst->getInst()->isLoad());
-
-	// [sizhuo] catch poisoned inst
-	if(dinst->isPoisoned()) {
-		removePoisonedInst(dinst);
-		return;
-	}
-
-	ldExecuteCB::scheduleAbs(ldExPort->nextSlot(dinst->getStatsFlag()), this, dinst);
-}
-
 void WMMLSQ::ldExecute(DInst *dinst) {
 	I(dinst);
 	I(dinst->getInst()->isLoad());
@@ -330,15 +282,22 @@ void WMMLSQ::ldDone(DInst *dinst) {
 	dinst->getClusterResource()->executed(dinst);
 }
 
-void WMMLSQ::retire(DInst *dinst) {
+bool WMMLSQ::retire(DInst *dinst) {
 	I(dinst);
 	I(!dinst->isPoisoned()); // [sizhuo] can't be poisoned
 	const Time_t id = dinst->getID();
 	const AddrType addr = dinst->getAddr();
 	const Instruction *const ins = dinst->getInst();
-	I(ins->isLoad() || ins->isStore() || ins->isRecFence());
+	const bool doStats = dinst->getStatsFlag();
+	I(ins->isLoad() || ins->isStore() || ins->isRecFence() || ins->isComFence());
 
-	// [sizhuo] find the entry in spec LSQ
+	// [sizhuo] for commit fence, just check comSQ empty
+	if(ins->isComFence()) {
+		return comSQ.empty();
+	}
+
+	// [sizhuo] for other inst, they must be in spec LSQ
+	// find the entry in spec LSQ
 	SpecLSQ::iterator retireIter = specLSQ.find(id);
 	I(retireIter == specLSQ.begin());
 	I(retireIter != specLSQ.end());
@@ -367,7 +326,7 @@ void WMMLSQ::retire(DInst *dinst) {
 		ComSQEntry *en = comSQEntryPool.out();
 		en->clear();
 		en->addr = addr;
-		en->doStats = dinst->getStatsFlag();
+		en->doStats = doStats;
 		std::pair<ComSQ::iterator, bool> insertRes = comSQ.insert(std::make_pair<Time_t, ComSQEntry*>(id, en));
 		I(insertRes.second);
 		ComSQ::iterator comIter = insertRes.first;
@@ -385,7 +344,7 @@ void WMMLSQ::retire(DInst *dinst) {
 			}
 		}
 		if(noOlderSt) {
-			MemRequest::sendReqWrite(DL1, dinst->getStatsFlag(), addr, stCommitedCB::create(this, id));
+			stToMemCB::scheduleAbs(stToMemPort->nextSlot(doStats), this, addr, id, doStats);
 		}
 	} else if(ins->isRecFence()) {
 		// [sizhuo] reconcile: call events in pend retireQ next cycle
@@ -399,6 +358,8 @@ void WMMLSQ::retire(DInst *dinst) {
 	// [sizhuo] recycle spec LSQ entry
 	I((retireEn->pendRetireQ).empty() && (retireEn->pendExQ).empty());
 	specLSQEntryPool.in(retireEn);
+
+	return true;
 }
 
 void WMMLSQ::stCommited(Time_t id) {
@@ -420,51 +381,13 @@ void WMMLSQ::stCommited(Time_t id) {
 		I(en);
 		if(en->addr == addr) {
 			I(iter->first > id);
-			MemRequest::sendReqWrite(DL1, en->doStats, addr, stCommitedCB::create(this, iter->first));
+			stToMemCB::scheduleAbs(stToMemPort->nextSlot(en->doStats), this, addr, iter->first, en->doStats);
 			break;
 		}
 	}
 
 	// [sizhuo] recycle entry
 	comSQEntryPool.in(comEn);
-}
-
-void WMMLSQ::removePoisonedEntry(SpecLSQ::iterator rmIter) {
-	I(rmIter != specLSQ.end());
-	// [sizhuo] get entry pointer
-	SpecLSQEntry *rmEn = rmIter->second;
-	I(rmEn);
-	I(rmEn->dinst);
-	I(rmEn->dinst->isPoisoned());
-	// [sizhuo] mark inst as executed
-	if(!rmEn->dinst->isExecuted()) {
-		rmEn->dinst->markExecuted();
-	}
-	// [sizhuo] erase the entry
-	specLSQ.erase(rmIter);
-	// [sizhuo] call all events in pending Q
-	while(!(rmEn->pendExQ).empty()) {
-		CallbackBase *cb = (rmEn->pendExQ).front();
-		(rmEn->pendExQ).pop();
-		cb->call();
-	}
-	while(!(rmEn->pendRetireQ).empty()) {
-		CallbackBase *cb = (rmEn->pendRetireQ).front();
-		(rmEn->pendRetireQ).pop();
-		cb->call();
-	}
-	// [sizhuo] recycle the entry
-	I((rmEn->pendRetireQ).empty() && (rmEn->pendExQ).empty());
-	specLSQEntryPool.in(rmEn);
-}
-
-void WMMLSQ::removePoisonedInst(DInst *dinst) {
-	I(dinst);
-	I(dinst->isPoisoned());
-	SpecLSQ::iterator rmIter = specLSQ.find(dinst->getID());
-	I(rmIter->second);
-	I(rmIter->second->dinst == dinst);
-	removePoisonedEntry(rmIter);
 }
 
 void WMMLSQ::reset() {

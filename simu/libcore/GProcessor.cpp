@@ -42,6 +42,7 @@
 #include "FetchEngine.h"
 #include "GMemorySystem.h"
 #include "MTStoreSet.h"
+#include "MTLSQ.h"
 
 GStatsCntr *GProcessor::wallClock=0;
 Time_t GProcessor::lastWallClock=0;
@@ -58,8 +59,9 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
   ,MaxROBSize(SescConf->getInt("cpusimu", "robSize",i))
   // [sizhuo] components
   ,memorySystem(gm)
-  ,storeset(i)
+  //,storeset(i)
 	,mtStoreSet(0)
+	,mtLSQ(0)
   ,rROB(SescConf->getInt("cpusimu", "robSize", i))
   ,ROB(MaxROBSize)
   // [sizhuo] stats
@@ -126,8 +128,11 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
   buildInstStats(nInst, "ExeEngine");
 
 	// [sizhuo] build store set
-	mtStoreSet = new FullMTStoreSet(i);
+	mtStoreSet = MTStoreSet::create(i);
 	I(mtStoreSet);
+	// [sizhuo] build LSQ
+	mtLSQ = MTLSQ::create(this);
+	I(mtLSQ);
 }
 
 GProcessor::~GProcessor() {

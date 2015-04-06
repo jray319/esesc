@@ -186,7 +186,7 @@ void Cluster::buildUnit(const char *clusterName
 		case iLALU_REC: // [sizhuo] reconcile fence
       {
 				if(wmmProc) { // [sizhuo] add WMM load unit
-					r = new WMMFULoad(cluster, gen, lat, gproc->getLSQ(), gproc->getMTSS(), gproc->getId());
+					r = new WMMFULoad(cluster, gen, lat, gproc->getMTLSQ(), gproc->getMTSS(), gproc->getId());
 				} else if(scooreMemory){
           r = new FUSCOORELoad(cluster, gen, gproc->getSS(), lat, ms, gproc->getId(), "scooreld");
         }else{
@@ -212,7 +212,7 @@ void Cluster::buildUnit(const char *clusterName
 		case iSALU_COM: // [sizhuo] commit fence
       {
 				if(wmmProc) { // [sizhuo] add WMM store unit
-					r = new WMMFUStore(cluster, gen, lat, gproc->getLSQ(), gproc->getMTSS(), ms->getDL1(), gproc->getId());
+					r = new WMMFUStore(cluster, gen, lat, gproc->getMTLSQ(), gproc->getMTSS(), ms->getDL1(), gproc->getId());
 				} else if(scooreMemory){
           r = new FUSCOOREStore(cluster, gen, gproc->getSS(), lat, ms, gproc->getId(), "scoorest");
         }else{

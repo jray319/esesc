@@ -70,6 +70,7 @@ class FetchEngine;
 class GMemorySystem;
 class BPredictor;
 class MTStoreSet;
+class MTLSQ;
 
 class GProcessor {
   private:
@@ -88,8 +89,9 @@ class GProcessor {
     EmulInterface   *eint; // [sizhuo] ifc to emulator
     GMemorySystem   *memorySystem; // [sizhuo] memory system 
 
-    StoreSet           storeset; // [sizhuo] store set -- obsolete
+    //StoreSet           storeset; // [sizhuo] obsolete store set
 		MTStoreSet* mtStoreSet; // [sizhuo] new store set for multithread scenario
+		MTLSQ* mtLSQ; // [sizhuo] new LSQ for multithread scenario
 
 		// [sizhuo] rROB contains inst able to retire but not guaranteed to retire
 		// rROB is introduced mostly for simulation convenience
@@ -196,8 +198,11 @@ class GProcessor {
       wallClock->inc(en);
     }
 
-    StoreSet *getSS() { return &storeset; }
-		MTStoreSet *getMTSS() { return mtStoreSet; }
+    //StoreSet *getSS() { return &storeset; }
+    StoreSet *getSS() { return 0; } // [sizhuo] never use obsolete store set
+
+		MTStoreSet *getMTSS() { return mtStoreSet; } 
+		MTLSQ *getMTLSQ() { return mtLSQ; }
 
 #ifdef ENABLE_CUDA
     float getTurboRatioGPU() { return EmuSampler::getTurboRatioGPU(); };
