@@ -8,6 +8,7 @@
 
 class GProcessor;
 class MemObj;
+class MTStoreSet;
 
 // [sizhuo] LSQ for WMM
 // 
@@ -27,8 +28,8 @@ class MemObj;
 class WMMLSQ : public LSQ {
 private:
 	GProcessor *gproc; // [sizhuo] pointer to processor
+	MTStoreSet *mtStoreSet; // [sizhuo] pointer to store set
 	MemObj *DL1; // [sizhuo] pointer to D$
-	// [sizhuo] TODO: pointer to store set
 
 	// [sizhuo] max ld/st number
 	const int32_t maxLdNum;

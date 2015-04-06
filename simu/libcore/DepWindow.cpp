@@ -94,7 +94,7 @@ void DepWindow::addInst(DInst *dinst) {
   I(dinst->getCluster() != 0); // Resource::schedule must set the resource field
 
   // [sizhuo] if the new instruction doesn't bear dependency, we can wake it up
-  if (!dinst->hasDeps()) {
+  if (!dinst->hasDeps() && !dinst->hasMemDep()) {
     dinst->setWakeUpTime(wakeUpPort->nextSlot(dinst->getStatsFlag()) + WakeUpDelay);
     preSelect(dinst);
   }
@@ -108,6 +108,7 @@ void DepWindow::wakeUpDeps(DInst *dinst) {
 	I(!dinst->isPoisoned());
 
   I(!dinst->hasDeps());
+	I(!dinst->hasMemDep());
 
   // [sizhuo] why we need to just increase wake up time of a inst??
   // since wake up port is configured to have 0 occupation time
@@ -117,7 +118,7 @@ void DepWindow::wakeUpDeps(DInst *dinst) {
   Time_t wakeUpTime= wakeUpPort->nextSlot(dinst->getStatsFlag());
   //dinst->dump("Clearing:");
 
-  if (!dinst->hasPending())
+  if (!dinst->hasPending() && !dinst->hasMemPending())
     return;
 
   // NEVER HERE FOR in-order cores
@@ -128,19 +129,31 @@ void DepWindow::wakeUpDeps(DInst *dinst) {
   I(srcCluster == dinst->getCluster());
 
   // [sizhuo] for all other inst depending on me, try to increase their minimum wake up time
-  I(dinst->hasPending());
-  for(const DInstNext *it = dinst->getFirst();
-       it ;
-       it = it->getNext() ) {
-    DInst *dstReady = it->getDInst();
+  if(dinst->hasPending()) {
+		for(const DInstNext *it = dinst->getFirst();
+				 it ;
+				 it = it->getNext() ) {
+			DInst *dstReady = it->getDInst();
 
-    const Cluster *dstCluster = dstReady->getCluster();
-    I(dstCluster); // all the instructions should have a resource after rename stage
+			const Cluster *dstCluster = dstReady->getCluster();
+			I(dstCluster); // all the instructions should have a resource after rename stage
 
-	// [sizhuo] only increase wakeup time of inst in same cluster
-    if (dstCluster == srcCluster && dstReady->getWakeUpTime() < wakeUpTime)
-      dstReady->setWakeUpTime(wakeUpTime);
-  }
+			// [sizhuo] only increase wakeup time of inst in same cluster
+			if (dstCluster == srcCluster && dstReady->getWakeUpTime() < wakeUpTime)
+				dstReady->setWakeUpTime(wakeUpTime);
+		}
+	}
+	// [sizhuo] also increase wake up time for mem pending inst
+	if(dinst->hasMemPending()) {
+		DInst *dstReady = dinst->getMemPending();
+
+		const Cluster *dstCluster = dstReady->getCluster();
+		I(dstCluster); // all the instructions should have a resource after rename stage
+
+		// [sizhuo] only increase wakeup time of inst in same cluster
+		if (dstCluster == srcCluster && dstReady->getWakeUpTime() < wakeUpTime)
+			dstReady->setWakeUpTime(wakeUpTime);
+	}
 }
 
 // [sizhuo] schedule a callback to select the dinst for execution (NOT callback to execute dinst)
@@ -151,6 +164,7 @@ void DepWindow::preSelect(DInst *dinst) {
   // At the end of the wakeUp, we can start to read the register file
   I(dinst->getWakeUpTime());
   I(!dinst->hasDeps());
+	I(!dinst->hasMemDep());
 
   Time_t wakeUpTime = dinst->getWakeUpTime() + RegFileDelay;
 
@@ -187,10 +201,11 @@ void DepWindow::executed(DInst *dinst) {
   //  MSG("execute [0x%x] @%lld",dinst, globalClock);
 
   I(!dinst->hasDeps());
+	I(!dinst->hasMemDep());
 
   //dinst->dump("Clearing2:");
 
-  if (!dinst->hasPending())
+  if (!dinst->hasPending() && !dinst->hasMemPending())
     return;
 
   // NEVER HERE FOR in-order cores
@@ -209,7 +224,7 @@ void DepWindow::executed(DInst *dinst) {
 
     if (stopAtDst == dinst->getFirstPending()) // [sizhuo] list empty, stop
       break;
-	// [sizhuo] remove dependency to dstReady
+		// [sizhuo] remove dependency to dstReady
     DInst *dstReady = dinst->getNextPending();
     I(dstReady);
 
@@ -223,8 +238,8 @@ void DepWindow::executed(DInst *dinst) {
 #endif
     I(!dstReady->isExecuted());
 
-	// [sizhuo] wake up dstReady if it has no dependency now
-    if (!dstReady->hasDeps()) {
+		// [sizhuo] wake up dstReady if it has no dependency now
+    if (!dstReady->hasDeps() && !dstReady->hasMemDep()) {
       // Check dstRes because dstReady may not be issued
       I(dstReady->getCluster());
       const Cluster *dstCluster = dstReady->getCluster();
@@ -243,5 +258,32 @@ void DepWindow::executed(DInst *dinst) {
       preSelect(dstReady);
     }
   }
+
+	// [sizhuo] resolve memory dep
+	if(dinst->hasMemPending()) {
+		DInst *dstReady = dinst->resolveMemPending();
+		I(dstReady);
+    I(!dstReady->isExecuted());
+		// [sizhuo] wake up dstReady if it has no dependency now
+    if (!dstReady->hasDeps() && !dstReady->hasMemDep()) {
+      // Check dstRes because dstReady may not be issued
+      I(dstReady->getCluster());
+      const Cluster *dstCluster = dstReady->getCluster();
+      I(dstCluster);
+
+			// [sizhuo] this function is called by a callback, and wake up port is unlimited
+			// XXX: the selectCB scheduled in preSelect will be called in the same cycle...
+      Time_t when = wakeUpPort->nextSlot(dinst->getStatsFlag());
+      if (dstCluster != srcCluster) {
+        wrForwardBus.inc(dinst->getStatsFlag());
+        when += InterClusterLat;
+      }
+
+      dstReady->setWakeUpTime(when);
+
+      preSelect(dstReady);
+    }
+	}
+	I(!dinst->hasMemPending());
 }
 

@@ -54,8 +54,9 @@ private:
   typedef std::vector<SSID_t>  SSIT_t;
   typedef std::vector<DInst *> LFST_t;
 
-  SSIT_t SSIT;
-  LFST_t LFST;
+  SSIT_t SSIT; // [sizhuo] store set ID table
+  LFST_t LFST; // [sizhuo] last fetched store table
+	// TODO: we need to include load into LFST
 
   SSID_t StoreSetSize;
 
@@ -65,6 +66,7 @@ private:
   StaticCallbackMember0<StoreSet,&StoreSet::clearStoreSetsTimer> clearStoreSetsTimerCB;
 #endif
 
+	// [sizhuo] SSIT index
   AddrType hashPC(AddrType PC) const {
 //    return ((PC>>2) % 8191);
     return ((((PC>>2) ^ (PC>>11)) + PC)>>2) & (StoreSetSize-1);

@@ -1,4 +1,5 @@
 #include "WMMLSQ.h"
+#include "MTStoreSet.h"
 #include "GProcessor.h"
 #include "MemRequest.h"
 #include "SescConf.h"
@@ -6,6 +7,7 @@
 
 WMMLSQ::WMMLSQ(GProcessor *gproc_, MemObj *DL1_)
 	: gproc(gproc_)
+	, mtStoreSet(gproc->getMTSS())
 	, DL1(DL1_)
 	, maxLdNum(SescConf->getInt("cpusimu", "maxLoads", gproc->getId()))
 	, maxStNum(SescConf->getInt("cpusimu", "maxStores", gproc->getId()))
@@ -133,8 +135,9 @@ void WMMLSQ::issue(DInst *dinst) {
 					break;
 				} else if(killEn->state == Exe) {
 					// [sizhuo] we don't need to kill it, just let it re-execute
-					// TODO: add to store set
 					killEn->needReEx = true;
+					// [sizhuo] add to store set
+					mtStoreSet->memDepViolate(dinst, killDInst);
 					// [sizhuo] stats
 					if(ins->isStore()) {
 						nLdReExBySt.inc(doStats);
@@ -146,8 +149,9 @@ void WMMLSQ::issue(DInst *dinst) {
 					break;
 				} else if(killEn->state == Done) {
 					// [sizhuo] this load must be killed
-					// TODO: add to store set
 					gproc->replay(killDInst);
+					// [sizhuo] add to store set
+					mtStoreSet->memDepViolate(dinst, killDInst);
 					// [sizhuo] stats
 					if(ins->isStore()) {
 						nLdKillBySt.inc(doStats);

@@ -41,6 +41,7 @@
 #include "Report.h"
 #include "FetchEngine.h"
 #include "GMemorySystem.h"
+#include "MTStoreSet.h"
 
 GStatsCntr *GProcessor::wallClock=0;
 Time_t GProcessor::lastWallClock=0;
@@ -58,6 +59,7 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
   // [sizhuo] components
   ,memorySystem(gm)
   ,storeset(i)
+	,mtStoreSet(0)
   ,rROB(SescConf->getInt("cpusimu", "robSize", i))
   ,ROB(MaxROBSize)
   // [sizhuo] stats
@@ -122,6 +124,10 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
   eint = 0;
 
   buildInstStats(nInst, "ExeEngine");
+
+	// [sizhuo] build store set
+	mtStoreSet = new NaiveMTStoreSet;
+	I(mtStoreSet);
 }
 
 GProcessor::~GProcessor() {

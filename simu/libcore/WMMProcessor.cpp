@@ -1,6 +1,7 @@
 #include "SescConf.h"
 
 #include "WMMProcessor.h"
+#include "MTStoreSet.h"
 #include "TaskHandler.h"
 #include "FetchEngine.h"
 #include "GMemorySystem.h"
@@ -323,7 +324,8 @@ void WMMProcessor::reset() {
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
 	// [sizhuo] reset LSQ
 	lsq.reset();
-	// TODO: reset store set
+	// [sizhuo] reset store set
+	mtStoreSet->reset();
 	// [sizhou] reset clusters & resources
 	clusterManager.reset();
 }
@@ -335,7 +337,7 @@ bool WMMProcessor::isReset() {
 			return false;
 		}
 	}
-	return lsq.isReset() && clusterManager.isReset();
+	return lsq.isReset() && mtStoreSet->isReset() && clusterManager.isReset();
 }
 
 void WMMProcessor::replay(DInst *target) {

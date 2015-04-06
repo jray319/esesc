@@ -114,6 +114,11 @@ private:
   DInstNext *last;
   DInstNext *first;
 
+	// [sizhuo] newly added: store set dependency
+	DInst *oldMemDep; // [sizhuo] older inst to same addr based on store set
+	DInst *youngMemDep; // [sizhuo] younger inst with mem dependency on this inst
+	/////////////
+
   FlowID fid; // [sizhuo] what is this??
 
   // BEGIN Boolean flags
@@ -132,7 +137,9 @@ private:
   uint32_t pe_id;
 #endif
 
+	// [sizhuo] newly added
 	bool poisoned; // [sizhuo] poison bit for flushed inst
+	/////////////
 
   // END Boolean flags
 
@@ -154,7 +161,9 @@ private:
   FetchEngine *fetch;
   Time_t fetchTime;
 
+	// [sizhuo] newly added
 	FrontEnd *frontEnd; // [sizhuo] front end that this inst has blocked
+	/////////////
 
   // [sizhuo] number of older inst that this inst depends on
   char nDeps;              // 0, 1 or 2 for RISC processors
@@ -187,8 +196,13 @@ private:
     executed      = false;
     replay        = false;
     performed     = false;
+
+		// [sizhuo] newly added fields
 		poisoned      = false; // [sizhuo] initially not poisoned
 		frontEnd      = 0; // [sizhuo] locked front end init as NULL
+		oldMemDep     = 0;
+		youngMemDep   = 0;
+		//////////
 #ifdef ENABLE_CUDA
     memaccess   = GlobalMem;
 #endif
@@ -456,6 +470,30 @@ public:
     I(inst.isLoad() || inst.isStore());
     performed = true;
   }
+
+	// [sizhuo] check memory dependency
+	bool hasMemDep() { return oldMemDep != 0; }
+	bool hasMemPending() { return youngMemDep != 0; }
+	// [sizhuo] return the younger inst that depends on it
+	DInst *getMemPending() { return youngMemDep; }
+	// [sizhuo] resolve the dependency of younger inst
+	DInst *resolveMemPending() {
+		I(oldMemDep == 0);
+		I(youngMemDep);
+		I(youngMemDep->oldMemDep == this);
+		youngMemDep->oldMemDep = 0;
+		DInst *ret = youngMemDep;
+		youngMemDep = 0;
+		return ret;
+	}
+	// [sizhuo] younger dinst has mem dependency on this
+	void addMemDep(DInst *dinst) {
+		I(dinst);
+		I(dinst->oldMemDep == 0);
+		I(youngMemDep == 0);
+		dinst->oldMemDep = this;
+		youngMemDep = dinst;
+	}
 
 	// [sizhuo] return & set poison bit
 	bool isPoisoned() const { return poisoned; }

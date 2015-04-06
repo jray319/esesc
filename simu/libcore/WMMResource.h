@@ -8,6 +8,7 @@
 #include "WMMLSQ.h"
 
 class MemObj;
+class MTStoreSet;
 
 class WMMFURALU : public Resource {
   GStatsCntr memoryBarrier;
@@ -31,15 +32,15 @@ public:
 class WMMLSResource : public Resource {
 protected:
 	LSQ *lsq;
-	StoreSet *storeset;
+	MTStoreSet *mtStoreSet;
 	
 public:
-	WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, int32_t id);
+	WMMLSResource(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, int32_t id);
 };
 
 class WMMFULoad : public WMMLSResource {
 public:
-	WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, int32_t id);
+	WMMFULoad(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, int32_t id);
 
   StallCause canIssue(DInst  *dinst);
   void       executing(DInst *dinst);
@@ -56,7 +57,7 @@ class WMMFUStore : public WMMLSResource {
 private:
 	MemObj *DL1;
 public:
-	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MemObj *dcache, int32_t id);
+	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, LSQ *q, MTStoreSet *ss, MemObj *dcache, int32_t id);
 
   StallCause canIssue(DInst  *dinst);
   void       executing(DInst *dinst);
