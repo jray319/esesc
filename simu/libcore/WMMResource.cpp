@@ -174,6 +174,7 @@ void WMMFULoad::executed(DInst *dinst) {
 	}
 
 	// [sizhuo] remove from store set
+	// when ROB flushes, this is done in MTStoreSet::reset
 	if(dinst->getInst()->isLoad()) {
 		mtStoreSet->remove(dinst);
 	}
@@ -271,6 +272,7 @@ void WMMFUStore::executed(DInst *dinst) {
 		MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());
 	} else if(dinst->getInst()->isStore()) {
 		// [sizhuo] remove from store set
+		// when ROB flushes, this is done in MTStoreSet::reset
 		mtStoreSet->remove(dinst);
 	}
 

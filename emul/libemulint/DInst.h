@@ -487,7 +487,7 @@ public:
 		return ret;
 	}
 	// [sizhuo] younger dinst has mem dependency on this
-	void addMemDep(DInst *dinst) {
+	void addMemPending(DInst *dinst) {
 		I(dinst);
 		I(dinst->oldMemDep == 0);
 		I(youngMemDep == 0);
@@ -498,12 +498,16 @@ public:
 	// [sizhuo] return & set poison bit
 	bool isPoisoned() const { return poisoned; }
 	void markPoisoned() {
-		// [sizhuo] remove dependency (TODO: store set dependency)
+		// [sizhuo] remove dependency
 		while(hasPending()) {
 			if(getFirstPending() == 0) {
 				break;
 			}
 			getNextPending();
+		}
+		// [sizhuo] remove store set dependency
+		if(hasMemPending()) {
+			resolveMemPending();
 		}
 		// [sizhuo] if unissued, mark issued & executed
 		// XXX: this is necessary, otherwise this inst may never become executed

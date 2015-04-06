@@ -126,7 +126,7 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
   buildInstStats(nInst, "ExeEngine");
 
 	// [sizhuo] build store set
-	mtStoreSet = new NaiveMTStoreSet;
+	mtStoreSet = new FullMTStoreSet(i);
 	I(mtStoreSet);
 }
 

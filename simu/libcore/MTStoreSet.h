@@ -26,7 +26,6 @@ public:
 	virtual bool isReset() = 0;
 };
 
-/*
 // [sizhuo] serialize all memory instruction
 class NaiveMTStoreSet : public MTStoreSet {
 private:
@@ -39,7 +38,7 @@ public:
 		I(dinst);
 		// [sizhuo] create dependency
 		if(lastFetchInst) {
-			lastFetchInst->addMemDep(dinst);
+			lastFetchInst->addMemPending(dinst);
 		}
 		// [sizhuo] set last fetch inst
 		lastFetchInst = dinst;
@@ -70,17 +69,28 @@ public:
 // -1 is invalid SSID
 class FullMTStoreSet : public MTStoreSet {
 private:
-	SSID_t *SSIT; // [sizhuo] Store Set Id Table
-	DInst **LFMT; // [sizhuo] Last Fetched Memory inst Table
-	const int32_t SSITSize;
-	const int32_t LFMTSize;
+	SSID_t *ssit; // [sizhuo] Store Set Id Table
+	DInst **lfmt; // [sizhuo] Last Fetched Memory inst Table
+	static const SSID_t invalidSSID; // [sizhuo] -1 is invalid SSID
+	const uint32_t ssitSize;
+	const uint32_t ssitMask;
+	const uint32_t lfmtSize;
+	const uint32_t lfmtMask;
 	const Time_t clearCycle;
 
 	void clear();
 	StaticCallbackMember0<FullMTStoreSet, &FullMTStoreSet::clear> clearCB;
 
-	int32_t getSSITIndex(DInst *dinst);
-	SSID_t createSSID(DInst *dinst);
+	uint32_t getSSITIndex(DInst *dinst) {
+		return (dinst->getPC() >> 2) & ssitMask;
+	}
+
+	SSID_t nextSSID;
+	SSID_t createSSID() {
+		SSID_t retID = nextSSID;
+		nextSSID = uint32_t(nextSSID + 1) & lfmtMask;
+		return retID;
+	}
 
 public:
 	FullMTStoreSet(int32_t cpu_id);
@@ -92,6 +102,5 @@ public:
 	virtual void reset();
 	virtual bool isReset();
 };
-*/
 
 #endif
