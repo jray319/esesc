@@ -430,7 +430,7 @@ void ACache::doReq(MemRequest *mreq) {
 					// [sizhuo] for L1 D$: search LSQ to kill eager loads
 					if(isL1) {
 						I(mtLSQ);
-						MTLSQ::cacheInvCB::schedule(maxDelay, mtLSQ, repLineAddr, cache->log2LineSize);
+						MTLSQ::cacheInvCB::schedule(maxDelay + goUpDelay, mtLSQ, repLineAddr, cache->log2LineSize);
 					}
 				} else {
 					// [sizhuo] silently drop the line, directly go to lower level after tag write
@@ -438,7 +438,7 @@ void ACache::doReq(MemRequest *mreq) {
 					// [sizhuo] for L1 D$: search LSQ to kill eager loads
 					if(isL1) {
 						I(mtLSQ);
-						MTLSQ::cacheInvCB::schedule(tagWriteDelay, mtLSQ, repLineAddr, cache->log2LineSize);
+						MTLSQ::cacheInvCB::schedule(tagWriteDelay + goUpDelay, mtLSQ, repLineAddr, cache->log2LineSize);
 					}
 				}
 			} else {
@@ -704,7 +704,7 @@ void ACache::doSetState(MemRequest *mreq) {
 			// [sizhuo] for L1 D$: search LSQ to kill eager loads
 			if(isL1 && reqAct == ma_setInvalid) {
 				I(mtLSQ);
-				MTLSQ::cacheInvCB::schedule(delay, mtLSQ, lineAddr, cache->log2LineSize);
+				MTLSQ::cacheInvCB::schedule(delay + goUpDelay, mtLSQ, lineAddr, cache->log2LineSize);
 			}
 		}
 	} else {

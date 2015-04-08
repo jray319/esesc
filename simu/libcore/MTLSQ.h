@@ -205,7 +205,6 @@ public:
 	virtual void cacheInv(AddrType lineAddr, uint32_t shift) {};
 };
 
-/*
 // [sizhuo] LSQ for SC & TSO
 // reconcile fence is treated as NOP, never inserted into LSQ
 // commit fence only has effect in TSO, but it is never inserted into LSQ in both SC & TSO
@@ -213,14 +212,10 @@ public:
 class SCTSOLSQ : public MTLSQ {
 private:
 	bool isSC; // [sizhuo] true: SC, false: TSO
-
-	// [sizhuo] kill eager load using alignAddr (addr of a aligned block)
-	// the aligned block size is 2^shift
-	// otherwise, the function is invoked by cache invalidation
-	void killLoad(SpecLSQ::iterator startIter, AddrType alignAddr, uint32_t shift, DInst *store);
+	Time_t lastComStID; // [sizhuo] inst ID of last store commited to memory
 
 protected:
-	virtual void ldExecute(DInst *dinst) {}
+	virtual void ldExecute(DInst *dinst);
 	virtual void stCommited(Time_t id);
 
 public:
@@ -232,5 +227,5 @@ public:
 	virtual bool retire(DInst *dinst);
 	virtual void cacheInv(AddrType lineAddr, uint32_t shift);
 };
-*/
+
 #endif

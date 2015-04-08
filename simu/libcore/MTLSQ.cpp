@@ -14,9 +14,9 @@ MTLSQ* MTLSQ::create(GProcessor *gproc_) {
 	if(!strcasecmp(memModel, "wmm")) {
 		ret = new WMMLSQ(gproc_);
 	} else if(!strcasecmp(memModel, "tso")) {
-		//ret = new SCTSOLSQ(gproc_, false);
+		ret = new SCTSOLSQ(gproc_, false);
 	} else if(!strcasecmp(memModel, "sc")) {
-		//ret = new SCTSOLSQ(gproc_, true);
+		ret = new SCTSOLSQ(gproc_, true);
 	} else {
 		SescConf->notCorrect();
 	}

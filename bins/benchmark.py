@@ -10,6 +10,7 @@ bench_root_dir = '/home/szzhang/local-proj/mem-model/simulation/program'
 # params to run launcher
 launch_param = {}
 
+'''
 launch_param['blackscholes'] = {
 		'dev'    : '__THREAD_NUM__ in_16.txt blackscholes_dev.out'     ,
 		'small'  : '__THREAD_NUM__ in_4K.txt blackscholes_small.out'   ,
@@ -21,28 +22,21 @@ launch_param['bodytrack'] = { # we use posix thread model (2)
 		'dev'    : 'sequenceB_1 4 1 100 3 2 __THREAD_NUM__'  ,
 		'small'  : 'sequenceB_1 4 1 1000 5 2 __THREAD_NUM__' ,
 		'medium' : 'sequenceB_2 4 2 2000 5 2 __THREAD_NUM__' ,
-		'large'  : 'sequenceB_4 4 4 4000 5 2 __THREAD_NUM__' 
-		}
-
-launch_param['canneal'] = {
-		'dev'    : '__THREAD_NUM__ 100 300 100.nets 2'         ,
-		'small'  : '__THREAD_NUM__ 10000 2000 100000.nets 32'  ,
-		'medium' : '__THREAD_NUM__ 15000 2000 200000.nets 64'  ,
-		'large'  : '__THREAD_NUM__ 15000 2000 400000.nets 128' 
+		'large'  : 'sequenceB_4 4 4 4000 5 2 __THREAD_NUM__'
 		}
 
 launch_param['facesim'] = {
 		'dev'    : '-timing -threads __THREAD_NUM__' ,
 		'small'  : '-timing -threads __THREAD_NUM__' ,
 		'medium' : '-timing -threads __THREAD_NUM__' ,
-		'large'  : '-timing -threads __THREAD_NUM__' 
+		'large'  : '-timing -threads __THREAD_NUM__' ,
 		}
 
 launch_param['ferret'] = {
 		'dev'    : 'corel lsh queries 5 5 __THREAD_NUM__ ferret_dev.out'      ,
 		'small'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret_small.out'  ,
 		'medium' : 'corel lsh queries 10 20 __THREAD_NUM__ ferret_medium.out' ,
-		'large'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret_large.out' 
+		'large'  : 'corel lsh queries 10 20 __THREAD_NUM__ ferret_large.out'
 		}
 
 launch_param['fluidanimate'] = {
@@ -53,7 +47,7 @@ launch_param['fluidanimate'] = {
 		}
 
 launch_param['swaptions'] = {
-		'dev'    : '-ns 8 -sm 50 -nt __THREAD_NUM__'     , # change 3 to 8 to enable 4 threads
+		'dev'    : '-ns 16 -sm 50 -nt __THREAD_NUM__'     , # change 3 to 16 to enable 8 threads
 		'small'  : '-ns 16 -sm 5000 -nt __THREAD_NUM__'  ,
 		'medium' : '-ns 32 -sm 10000 -nt __THREAD_NUM__' ,
 		'large'  : '-ns 64 -sm 20000 -nt __THREAD_NUM__'
@@ -93,6 +87,15 @@ launch_param['radix'] = {
 		'small'  : '-p__THREAD_NUM__ -r4096 -n4194304 -m2147483647'  ,
 		'medium' : '-p__THREAD_NUM__ -r4096 -n16777216 -m2147483647' ,
 		'large'  : '-p__THREAD_NUM__ -r4096 -n67108864 -m2147483647' 
+		}
+'''
+
+launch_param['canneal'] = {
+		'dev'    : '__THREAD_NUM__ 100 300 100.nets 2'         ,
+		'small'  : '__THREAD_NUM__ 10000 2000 100000.nets 32'  ,
+		'medium' : '__THREAD_NUM__ 15000 2000 200000.nets 64'  ,
+		'large'  : '__THREAD_NUM__ 15000 2000 400000.nets 128' ,
+		'thread' : lambda core : core
 		}
 
 # params to run PARSEC 3.0
@@ -214,7 +217,7 @@ def copy_here(src_dir):
 	return file_list
 
 # subroutine to run one benchmark in launcher
-def run_launcher(name, size, mem_model, core_num, thread_num):
+def run_launcher(name, size, mem_model, core_num, thread_num = 0):
 	# PARSEC real thread num = input thread num + 1 (main thread)
 	# But SPLASH real thread num = input thread num
 	# so we need core_num (# of CPU) & thread_num (input to benchmark)
@@ -230,12 +233,14 @@ def run_launcher(name, size, mem_model, core_num, thread_num):
 	# copy input files
 	input_dir = os.path.join(bench_root_dir, 'launcher', name, size)
 	all_inputs = copy_here(input_dir)
-	
+
 	# change esesc.conf
+	if thread_num == 0: # thread_num is at default, we use func in launch_param to calculate it
+		thread_num = launch_param[name]['thread'](core_num)
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = 'launcher -- ' + name + ' ' + launch_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
-	report_file = name + '_' + size + '_' + mem_model + '_c' + str(core_num) + '_t' + str(thread_num)
+	report_file = 'parsec_' + name + '_' + size + '_' + mem_model + '_c' + str(core_num) + '_t' + str(thread_num)
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
@@ -301,7 +306,7 @@ def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = name + ' ' + parsec3_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
-	report_file = 'parsec3_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num)
+	report_file = 'parsec_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num)
 	if comment != "":
 		report_file = report_file + '_' + comment
 
