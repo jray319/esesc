@@ -103,8 +103,8 @@ void WMMLSQ::issue(DInst *dinst) {
 					if(killEn->ldSrcID < id) {
 						// [sizhuo] we don't need to kill it, just let it re-execute
 						killEn->needReEx = true;
-						// [sizhuo] add to store set
-						mtStoreSet->memDepViolate(dinst, killDInst);
+						// [sizhuo] don't add to store set
+						// because SC impl only adds when ROB flush
 						// [sizhuo] stats
 						if(ins->isStore()) {
 							nLdReExBySt.inc(doStats);
@@ -214,8 +214,8 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 				} else if(olderEn->state == Wait || olderEn->state == Exe) {
 					// [sizhuo] stall on this older load which has not finished
 					(olderEn->pendExQ).push(scheduleLdExCB::create(this, dinst));
-					// [sizhuo] add to store set
-					mtStoreSet->memDepViolate(olderDInst, dinst);
+					// [sizhuo] don't add to store set
+					// because SC impl only add to store set when ROB flush
 					// [sizhuo] stats
 					nLdStallByLd.inc(doStats);
 					return;

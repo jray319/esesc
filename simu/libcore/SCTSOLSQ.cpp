@@ -89,9 +89,8 @@ void SCTSOLSQ::issue(DInst *dinst) {
 			if(getMemOrdAlignAddr(killDInst->getAddr()) == getMemOrdAlignAddr(addr) && killIns->isLoad() && killEn->ldSrcID < id) {
 				if(killEn->state == Exe) {
 					// [sizhuo] we don't need to kill it, just let it re-execute
-					// FIXME: we can't train store set here, because many loads may be re-ex
-					// However, in WMM we train store set
-					// maybe we should switch to train store set only at ROB flush
+					// we can't train store set here, because many loads may be re-ex
+					// so in WMM impl, we also only add to store set when ROB flush
 					killEn->needReEx = true;
 					// [sizhuo] stats
 					nLdReExBySt.inc(doStats);
