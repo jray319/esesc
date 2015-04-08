@@ -1,6 +1,7 @@
 #include "nanassert.h"
 
 #include "SescConf.h"
+#include "MTLSQ.h"
 #include "MemorySystem.h"
 #include "ACache.h"
 #include "MSHR.h"
@@ -400,6 +401,11 @@ void ACache::doReq(MemRequest *mreq) {
 
 			I(mreq->line);
 			if(mreq->line->lineAddr != lineAddr) {
+				const AddrType repLineAddr = mreq->line->lineAddr;
+				const AddrType repByteAddr = repLineAddr << cache->log2LineSize;
+				I(cache->getLineAddr(repByteAddr) == repLineAddr);
+				I(cache->getIndex(repLineAddr) == cache->getIndex(lineAddr));
+
 				const CacheLine::MESI oldState = mreq->line->state;
 				// [sizhuo] cache line is replaced, change its state
 				mreq->line->state = CacheLine::I;
@@ -412,10 +418,6 @@ void ACache::doReq(MemRequest *mreq) {
 					writeBack.inc(doStats);
 					// [sizhuo] we need to send disp msg to lower level together with data
 					// note: E state will be converted to M when recv down resp with data
-					const AddrType repLineAddr = mreq->line->lineAddr;
-					const AddrType repByteAddr = repLineAddr << cache->log2LineSize;
-					I(cache->getLineAddr(repByteAddr) == repLineAddr);
-					I(cache->getIndex(repLineAddr) == cache->getIndex(lineAddr));
 					// [sizhuo] we also need to read data
 					const TimeDelta_t dataReadDelay = cache->getDataAccessTime(lineAddr, doStats) - globalClock + dataDelay;
 					I(dataReadDelay >= dataDelay);
@@ -425,9 +427,19 @@ void ACache::doReq(MemRequest *mreq) {
 					router->sendDisp(repByteAddr, doStats, maxDelay + goDownDelay);
 					// [sizhuo] then forward req to lower level at the same time
 					forwardReqDown(mreq, lineAddr, maxDelay + goDownDelay);
+					// [sizhuo] for L1 D$: search LSQ to kill eager loads
+					if(isL1) {
+						I(mtLSQ);
+						MTLSQ::cacheInvCB::schedule(maxDelay, mtLSQ, repLineAddr, cache->log2LineSize);
+					}
 				} else {
 					// [sizhuo] silently drop the line, directly go to lower level after tag write
 					forwardReqDown(mreq, lineAddr, tagWriteDelay + goDownDelay);
+					// [sizhuo] for L1 D$: search LSQ to kill eager loads
+					if(isL1) {
+						I(mtLSQ);
+						MTLSQ::cacheInvCB::schedule(tagWriteDelay, mtLSQ, repLineAddr, cache->log2LineSize);
+					}
 				}
 			} else {
 				// [sizhuo] cache hit, we can start resp to upper level
@@ -689,6 +701,11 @@ void ACache::doSetState(MemRequest *mreq) {
 			mreq->pos = MemRequest::Router;
 			mreq->convert2SetStateAck(reqAct); // [sizhuo] use the original action
 			router->scheduleSetStateAck(mreq, delay + goDownDelay);
+			// [sizhuo] for L1 D$: search LSQ to kill eager loads
+			if(isL1 && reqAct == ma_setInvalid) {
+				I(mtLSQ);
+				MTLSQ::cacheInvCB::schedule(delay, mtLSQ, lineAddr, cache->log2LineSize);
+			}
 		}
 	} else {
 		I(0);

@@ -224,6 +224,10 @@ public:
 
   DInst *clone();
 
+	// [sizhuo] newly added: invalid inst ID -- 0
+	static const Time_t invalidID;
+	/////
+
   bool getStatsFlag() const { return keepStats; }
 
   static DInst *create(const Instruction *inst, RAWDInst *rinst, AddrType address, FlowID fid) {

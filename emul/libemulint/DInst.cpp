@@ -39,7 +39,10 @@
 
 pool<DInst> DInst::dInstPool(1024, "DInst"); //4 * tsfifo size
 
-Time_t DInst::currentID=0;
+// [sizhuo] ID starts from 1
+Time_t DInst::currentID= 1; //0;
+// [sizhuo] 0 is invalid ID
+const Time_t DInst::invalidID = 0;
 
 DInst::DInst()
 {

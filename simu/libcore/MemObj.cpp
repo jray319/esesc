@@ -59,6 +59,7 @@ MemObj::MemObj(const char *sSection, const char *sName)
   :section(sSection)
   ,name(sName)
   ,id(id_counter++)
+	,mtLSQ(0)
 {
 	coreid = -1; // No first Level cache by default
   // Create router (different objects may override the default router)

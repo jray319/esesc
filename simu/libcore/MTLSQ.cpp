@@ -5,12 +5,18 @@
 #include "SescConf.h"
 #include "DInst.h"
 
+const uint32_t MTLSQ::memOrdAlignShift = 2;
+
 MTLSQ* MTLSQ::create(GProcessor *gproc_) {
 	const char *memModel = SescConf->getCharPtr("cpusimu", "memModel", gproc_->getId());
 	MTLSQ *ret = 0;
 
 	if(!strcasecmp(memModel, "wmm")) {
 		ret = new WMMLSQ(gproc_);
+	} else if(!strcasecmp(memModel, "tso")) {
+		//ret = new SCTSOLSQ(gproc_, false);
+	} else if(!strcasecmp(memModel, "sc")) {
+		//ret = new SCTSOLSQ(gproc_, true);
 	} else {
 		SescConf->notCorrect();
 	}
@@ -31,6 +37,7 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	, comSQEntryPool(maxStNum, "MTLSQ_comSQEntryPool")
 	, ldExPort(0)
 	, stToMemPort(0)
+	, nLdStallByLd("P(%d)_MTLSQ_nLdStallByLd", gproc->getId())
 	, nLdKillByLd("P(%d)_MTLSQ_nLdKillByLd", gproc->getId())
 	, nLdKillBySt("P(%d)_MTLSQ_nLdKillBySt", gproc->getId())
 	, nLdKillByInv("P(%d)_MTLSQ_nLdKillByInv", gproc->getId())
@@ -39,6 +46,8 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	, nLdReExByInv("P(%d)_MTLSQ_nLdReExByInv", gproc->getId())
 	, nStLdForward("P(%d)_MTLSQ_nStLdForward", gproc->getId())
 	, nLdLdForward("P(%d)_MTLSQ_nLdLdForward", gproc->getId())
+	, nUnalignLd("P(%d)_MTLSQ_nUnalignLd", gproc->getId())
+	, nUnalignSt("P(%d)_MTLSQ_nUnalignSt", gproc->getId())
 {
 	SescConf->isInt("cpusimu", "maxLoads", gproc->getId());
 	SescConf->isInt("cpusimu", "maxStores", gproc->getId());
@@ -52,6 +61,9 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	I(gproc);
 	I(mtStoreSet);
 	I(DL1);
+
+	// [sizhuo] set LSQ field in L1 D$
+	DL1->setMTLSQ(this);
 
 	char portName[100];
 
@@ -74,6 +86,48 @@ void MTLSQ::scheduleLdEx(DInst *dinst) {
 	}
 
 	ldExecuteCB::scheduleAbs(ldExPort->nextSlot(dinst->getStatsFlag()), this, dinst);
+}
+
+void MTLSQ::ldDone(DInst *dinst) {
+	I(dinst);
+	I(dinst->getInst()->isLoad());
+
+	// [sizhuo] get done entry
+	SpecLSQ::iterator doneIter = specLSQ.find(dinst->getID());
+	I(doneIter != specLSQ.end());
+	I(doneIter->first == dinst->getID());
+	SpecLSQEntry *doneEn = doneIter->second;
+	I(doneEn);
+	I(doneEn->dinst == dinst);
+	I(doneEn->state == Exe);
+
+	// [sizhuo] catch poisoned inst
+	if(dinst->isPoisoned()) {
+		removePoisonedEntry(doneIter);
+		return;
+	}
+
+	// [sizhuo] check re-execute bit
+	if(doneEn->needReEx) {
+		// [sizhuo] re-schedule this entry for execution
+		doneEn->needReEx = false;
+		doneEn->state = Wait;
+		doneEn->ldSrcID = DInst::invalidID;
+		scheduleLdEx(dinst);
+		return;
+	}
+
+	// [sizhuo] this load is truly done, change state
+	doneEn->state = Done;
+	// [sizhuo] call pending events next cycle
+	while(!(doneEn->pendExQ).empty()) {
+		CallbackBase *cb = (doneEn->pendExQ).front();
+		(doneEn->pendExQ).pop();
+		cb->schedule(1);
+	}
+	// [sizhuo] inform resource that this load is done at this cycle
+	// calling immediately is easy for flushing
+	dinst->getClusterResource()->executed(dinst);
 }
 
 void MTLSQ::removePoisonedEntry(SpecLSQ::iterator rmIter) {
@@ -114,3 +168,36 @@ void MTLSQ::removePoisonedInst(DInst *dinst) {
 	removePoisonedEntry(rmIter);
 }
 
+void MTLSQ::reset() {
+	// [sizhuo] remove all reconcile & store & executed load
+	while(true) {
+		SpecLSQ::iterator rmIter = specLSQ.begin();
+		// [sizhuo] search through specLSQ for reconcile & store & executed load
+		// because these entries are only invoked by retire(), which will not be called in flushing mode
+		for(; rmIter != specLSQ.end(); rmIter++) {
+			SpecLSQEntry *rmEn = rmIter->second;
+			I(rmEn);
+			I(rmEn->dinst);
+			const Instruction *const rmIns = rmEn->dinst->getInst();
+			I(rmIns);
+			if(rmIns->isRecFence() || rmIns->isStore() || (rmIns->isLoad() && rmEn->state == Done)) {
+				break;
+			}
+		}
+		if(rmIter != specLSQ.end()) {
+			// [sizhuo] find a reconcile / store to remove
+			removePoisonedEntry(rmIter);
+		} else {
+			// [sizhuo] no more reconcile or store, stop
+			break;
+		}
+	}
+	// [sizhuo] recover free entry num
+	freeLdNum = maxLdNum;
+	freeStNum = maxStNum - comSQ.size();
+	I(freeStNum >= 0);
+}
+
+bool MTLSQ::isReset() {
+	return specLSQ.empty() && freeLdNum == maxLdNum && freeStNum == (maxStNum - comSQ.size());
+}

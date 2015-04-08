@@ -214,7 +214,7 @@ def copy_here(src_dir):
 	return file_list
 
 # subroutine to run one benchmark in launcher
-def run_launcher(name, size, core_num, thread_num):
+def run_launcher(name, size, mem_model, core_num, thread_num):
 	# PARSEC real thread num = input thread num + 1 (main thread)
 	# But SPLASH real thread num = input thread num
 	# so we need core_num (# of CPU) & thread_num (input to benchmark)
@@ -235,10 +235,11 @@ def run_launcher(name, size, core_num, thread_num):
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = 'launcher -- ' + name + ' ' + launch_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
-	report_file = name + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num)
+	report_file = name + '_' + size + '_' + mem_model + '_c' + str(core_num) + '_t' + str(thread_num)
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
+			"sed 's/__MEMORY_MODEL__/" + mem_model + "/g' | " +
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
 			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
 			)
@@ -269,7 +270,7 @@ def run_launcher(name, size, core_num, thread_num):
 
 # subroutine to run PARSEC 3.0 benchmarks
 # comment is suffix of log & report files
-def run_parsec3(name, size, core_num, thread_num = 0, comment = ""):
+def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 	# check we have param for benchmark
 	if name not in parsec3_param:
 		print(name + " doesn't have parameters!")
@@ -300,12 +301,13 @@ def run_parsec3(name, size, core_num, thread_num = 0, comment = ""):
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = name + ' ' + parsec3_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
-	report_file = 'parsec3_' + name + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num)
+	report_file = 'parsec3_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num)
 	if comment != "":
 		report_file = report_file + '_' + comment
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
+			"sed 's/__MEMORY_MODEL__/" + mem_model + "/g' | " +
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
 			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
 			)

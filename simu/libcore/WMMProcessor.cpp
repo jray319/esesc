@@ -18,12 +18,12 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 #ifdef DEBUG
 	, lastReplayValid(0)
 	, lastReplayPC(0)
-	, minComID(0)
+	, lastComID(DInst::invalidID)
 	, startExcep(false)
 	, excepDelay(1000)
 	, genExcepCB(this)
 #endif
-	, lockCheckEnabled(0)
+	, lockCheckEnabled(false)
   , retire_lock_checkCB(this)
   , clusterManager(gm, this)
   , avgFetchWidth("P(%d)_avgFetchWidth",i)
@@ -135,7 +135,7 @@ void WMMProcessor::retireFromROB(FlowID fid) {
 		I(dinst);
 
 		// [sizhuo] check whether ID is increasing
-		GIS(minComID > dinst->getID(), MSG("ERROR: retire ID OOO, min %lu, real %lu", minComID, dinst->getID()));
+		GIS(lastComID >= dinst->getID(), MSG("ERROR: retire ID OOO, min %lu, real %lu", lastComID, dinst->getID()));
 
     if (!dinst->isExecuted()) {
 			return;
@@ -182,7 +182,7 @@ void WMMProcessor::retireFromROB(FlowID fid) {
 		nInst[dinst->getInst()->getOpcode()]->inc(dinst->getStatsFlag());
 
 		// [sizhuo] next commit ID min value
-		ID(minComID = dinst->getID() + 1);
+		ID(lastComID = dinst->getID());
 
 		// [sizhuo] truly retire inst
     dinst->destroy(eint);
@@ -297,6 +297,11 @@ bool WMMProcessor::advance_clock(FlowID fid) {
     }
     throttling_cntr = 1;
   }
+
+	// [sizhuo] check active again
+	if(!active) {
+		return false;
+	}
 
 	// [sizhuo] in replay mode, no fetch or issue
 	if(replayRecover) {

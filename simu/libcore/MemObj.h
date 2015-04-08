@@ -45,6 +45,7 @@
 #include "MRouter.h"
 
 class MemRequest;
+class MTLSQ;
 
 class MemObj {
 private:
@@ -59,6 +60,10 @@ protected:
 	// [sizhuo] core id it belongs to, only valid for L1?? otherwise -1
 	// XXX: what about private L2? TLB?
   int16_t coreid; 
+
+	// [sizhuo] newly added: pointer to LSQ
+	MTLSQ *mtLSQ;
+	///////
 
   void addLowerLevel(MemObj *obj); // [sizhuo] add lower mem obj (closer to mem)
 	void addUpperLevel(MemObj *obj); // [sizhuo] add upper mem obj (closer to proc)
@@ -127,6 +132,12 @@ public:
 	virtual void setNeedsCoherence();
 	virtual void clearNeedsCoherence();
 
+	// [sizhuo] set LSQ pointer
+	void setMTLSQ(MTLSQ *q) {
+		I(mtLSQ == 0);
+		mtLSQ = q;
+		I(mtLSQ);
+	}
 };
 
 class DummyMemObj : public MemObj {

@@ -4,6 +4,12 @@
 #include "SescConf.h"
 #include "DInst.h"
 
+WMMLSQ::WMMLSQ(GProcessor *gproc_)
+	: MTLSQ(gproc_) 
+{
+	MSG("INFO: create P(%d)_WMMLSQ", gproc->getId());
+}
+
 StallCause WMMLSQ::addEntry(DInst *dinst) {
 	I(dinst);
 	I(!dinst->isPoisoned()); // [sizhuo] can't be poisoned
@@ -48,7 +54,6 @@ void WMMLSQ::issue(DInst *dinst) {
 	const Instruction *const ins = dinst->getInst();
 	const Time_t id = dinst->getID();
 	const AddrType addr = dinst->getAddr();
-	const bool doStats = dinst->getStatsFlag();
 	I(ins->isLoad() || ins->isStore());
 
 	// [sizhuo] catch poisoned inst
@@ -58,7 +63,7 @@ void WMMLSQ::issue(DInst *dinst) {
 		dinst->markExecuted();
 		return;
 	}
-
+	
 	// [sizhuo] create new entry
 	SpecLSQEntry *issueEn = specLSQEntryPool.out();
 	issueEn->clear();
@@ -81,53 +86,61 @@ void WMMLSQ::issue(DInst *dinst) {
 		I(killDInst);
 		I(!killDInst->isPoisoned()); // [sizhuo] can't be poisoned
 		const Instruction *const killIns = killDInst->getInst();
+		const bool doStats = killDInst->getStatsFlag();
 		// [sizhuo] we hit a reconcile fence we can stop
 		if(killIns->isRecFence()) {
 			break;
 		}
-		// [sizhuo] search inst to same address
-		if(killDInst->getAddr() == addr) {
-			if(killIns->isStore()) {
-				// [sizhuo] remaining load either bypass from this load or get killed
-				// stop here
-				break;
-			} else if(killIns->isLoad()) {
+		// XXX: [sizhuo] search load to same ALIGNED address that reads across the issuing inst
+		// XXX: we decide kill/re-ex based on load source ID
+		if(getMemOrdAlignAddr(killDInst->getAddr()) == getMemOrdAlignAddr(addr)) {
+			if(killIns->isLoad()) {
 				if(killEn->state == Wait) {
-					// [sizhuo] this load is good
-					// remaining younger loads are either stalled by this one, or killed by it
-					// so we can stop here
+					// [sizhuo] younger loads on same aligned addr cannot read across this one
+					// they are either stalled or killed, so stop here
 					break;
 				} else if(killEn->state == Exe) {
-					// [sizhuo] we don't need to kill it, just let it re-execute
-					killEn->needReEx = true;
-					// [sizhuo] add to store set
-					mtStoreSet->memDepViolate(dinst, killDInst);
-					// [sizhuo] stats
-					if(ins->isStore()) {
-						nLdReExBySt.inc(doStats);
-					} else {
-						nLdReExByLd.inc(doStats);
+					if(killEn->ldSrcID < id) {
+						// [sizhuo] we don't need to kill it, just let it re-execute
+						killEn->needReEx = true;
+						// [sizhuo] add to store set
+						mtStoreSet->memDepViolate(dinst, killDInst);
+						// [sizhuo] stats
+						if(ins->isStore()) {
+							nLdReExBySt.inc(doStats);
+						} else {
+							nLdReExByLd.inc(doStats);
+						}
 					}
-					// [sizhuo] remaining younger loads are either stalled by this one, or killed by it
-					// so we can stop here
+					// [sizhuo] younger loads on same aligned addr cannot read across this one
+					// they are either stalled or killed, so stop here
 					break;
 				} else if(killEn->state == Done) {
-					// [sizhuo] this load must be killed
-					gproc->replay(killDInst);
-					// [sizhuo] add to store set
-					mtStoreSet->memDepViolate(dinst, killDInst);
-					// [sizhuo] stats
-					if(ins->isStore()) {
-						nLdKillBySt.inc(doStats);
+					if(killEn->ldSrcID < id) {
+						// [sizhuo] this load must be killed
+						gproc->replay(killDInst);
+						// [sizhuo] add to store set
+						mtStoreSet->memDepViolate(dinst, killDInst);
+						// [sizhuo] stats
+						if(ins->isStore()) {
+							nLdKillBySt.inc(doStats);
+						} else {
+							nLdKillByLd.inc(doStats);
+						}
+						break; // [sizhuo] ROB will flush, we can stop
 					} else {
-						nLdKillByLd.inc(doStats);
+						// [sizhuo] if bypass & kill are at same alignment
+						// then we can stop here
+						// but generally we should continue the search
 					}
-					break;
 				} else {
 					I(0);
 				}
 			} else {
-				I(0);
+				I(killIns->isStore());
+				// [sizhuo] if bypass & kill are at same alignment
+				// then we can stop here
+				// but generally we should continue the search
 			}
 		}
 	}
@@ -168,6 +181,7 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 	}
 
 	// [sizhuo] search older inst (with lower ID) in specLSQ for bypass or stall
+	// XXX: bypass in on BYTE addr, while stall is on WORD addr
 	// XXX: decrement iterator smaller than begin() results in undefined behavior
 	SpecLSQ::iterator iter = exIter;
 	while(iter != specLSQ.begin()) {
@@ -186,21 +200,25 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 			(olderEn->pendRetireQ).push(scheduleLdExCB::create(this, dinst));
 			return;
 		}
-		// [sizhuo] we find inst to same address
-		if(olderDInst->getAddr() == addr) {
+		// [sizhuo] we find inst to same ALIGNED address for bypass or stall
+		if(getMemOrdAlignAddr(olderDInst->getAddr()) == getMemOrdAlignAddr(addr)) {
 			if(olderIns->isLoad()) {
-				if(olderEn->state == Wait || olderEn->state == Exe) {
-					// [sizhuo] load not finished execution, but address has resolved
-					// we should stall until this inst has finished execution
-					(olderEn->pendExQ).push(scheduleLdExCB::create(this, dinst));
-					return;
-				} else if(olderEn->state == Done) {
+				if(olderEn->state == Done) {
 					// [sizhuo] we can bypass from this executed load, mark as executing
+					exEn->ldSrcID = olderEn->ldSrcID; // [sizhuo] same load src ID
 					exEn->state = Exe;
 					// [sizhuo] finish the load after forwarding delay
 					ldDoneCB::schedule(ldldForwardDelay, this, dinst);
 					// [sizhuo] stats
 					nLdLdForward.inc(doStats);
+					return;
+				} else if(olderEn->state == Wait || olderEn->state == Exe) {
+					// [sizhuo] stall on this older load which has not finished
+					(olderEn->pendExQ).push(scheduleLdExCB::create(this, dinst));
+					// [sizhuo] add to store set
+					mtStoreSet->memDepViolate(olderDInst, dinst);
+					// [sizhuo] stats
+					nLdStallByLd.inc(doStats);
 					return;
 				} else {
 					I(0);
@@ -208,6 +226,7 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 			} else if(olderIns->isStore()) {
 				// [sizhuo] we can bypass from this executed store
 				// mark the entry as executing
+				exEn->ldSrcID = olderDInst->getID(); // [sizhuo] record this store as load src
 				exEn->state = Exe;
 				// [sizhuo] finish the load after forwarding delay
 				ldDoneCB::schedule(stldForwardDelay, this, dinst);
@@ -225,8 +244,10 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 		ComSQEntry *en = rIter->second;
 		I(en);
 		I(rIter->first < id);
-		if(en->addr == addr) {
+		// [sizhuo] XXX: bypass from same ALIGNED address
+		if(getMemOrdAlignAddr(en->addr) == getMemOrdAlignAddr(addr)) {
 			// [sizhuo] bypass from commited store, set ld as executing
+			exEn->ldSrcID = rIter->first; // [sizhuo] record this store as load src
 			exEn->state = Exe;
 			// [sizhuo] finish load after forwarding delay
 			ldDoneCB::schedule(stldForwardDelay, this, dinst);
@@ -238,48 +259,8 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 
 	// [sizhuo] now we need to truly send load to memory hierarchy
 	exEn->state = Exe;
+	exEn->ldSrcID = DInst::invalidID; // [sizhuo] load src is memory
 	MemRequest::sendReqRead(DL1, dinst->getStatsFlag(), addr, ldDoneCB::create(this, dinst));
-}
-
-void WMMLSQ::ldDone(DInst *dinst) {
-	I(dinst);
-	I(dinst->getInst()->isLoad());
-
-	// [sizhuo] get done entry
-	SpecLSQ::iterator doneIter = specLSQ.find(dinst->getID());
-	I(doneIter != specLSQ.end());
-	I(doneIter->first == dinst->getID());
-	SpecLSQEntry *doneEn = doneIter->second;
-	I(doneEn);
-	I(doneEn->dinst == dinst);
-	I(doneEn->state == Exe);
-
-	// [sizhuo] catch poisoned inst
-	if(dinst->isPoisoned()) {
-		removePoisonedEntry(doneIter);
-		return;
-	}
-
-	// [sizhuo] check re-execute bit
-	if(doneEn->needReEx) {
-		// [sizhuo] re-schedule this entry for execution
-		doneEn->needReEx = false;
-		doneEn->state = Wait;
-		scheduleLdEx(dinst);
-		return;
-	}
-
-	// [sizhuo] this load is truly done, change state
-	doneEn->state = Done;
-	// [sizhuo] call pending events next cycle
-	while(!(doneEn->pendExQ).empty()) {
-		CallbackBase *cb = (doneEn->pendExQ).front();
-		(doneEn->pendExQ).pop();
-		cb->schedule(1);
-	}
-	// [sizhuo] inform resource that this load is done at this cycle
-	// calling immediately is easy for flushing
-	dinst->getClusterResource()->executed(dinst);
 }
 
 bool WMMLSQ::retire(DInst *dinst) {
@@ -331,14 +312,15 @@ bool WMMLSQ::retire(DInst *dinst) {
 		I(insertRes.second);
 		ComSQ::iterator comIter = insertRes.first;
 		I(comIter != comSQ.end());
-		// [sizhuo] if comSQ doesn't have older store to same addr, send this one to memory
+		// [sizhuo] XXX: if comSQ doesn't have older store to same ALIGNED addr
+		// send this one to memory
 		bool noOlderSt = true;
 		while(comIter != comSQ.begin()) {
 			comIter--;
 			I(comIter != comSQ.end());
 			I(comIter->second);
 			I(comIter->first < id);
-			if(comIter->second->addr == addr) {
+			if(getMemOrdAlignAddr(comIter->second->addr) == getMemOrdAlignAddr(addr)) {
 				noOlderSt = false;
 				break;
 			}
@@ -359,6 +341,16 @@ bool WMMLSQ::retire(DInst *dinst) {
 	I((retireEn->pendRetireQ).empty() && (retireEn->pendExQ).empty());
 	specLSQEntryPool.in(retireEn);
 
+	// [sizhuo] unalignment stats
+	if(addr & ((0x01ULL << memOrdAlignShift) - 1)) {
+		if(ins->isLoad()) {
+			nUnalignLd.inc(doStats);
+		} else if(ins->isStore()) {
+			nUnalignSt.inc(doStats);
+		}
+	}
+
+	// [sizhuo] retire success
 	return true;
 }
 
@@ -374,12 +366,12 @@ void WMMLSQ::stCommited(Time_t id) {
 	I(comEn);
 	comSQ.erase(comIter);
 
-	// [sizhuo] send the current oldest entry of this addr to memory
+	// [sizhuo] send the current oldest entry of this ALIGNED addr to memory
 	const AddrType addr = comEn->addr;
 	for(ComSQ::iterator iter = comSQ.begin(); iter != comSQ.end(); iter++) {
 		ComSQEntry *en = iter->second;
 		I(en);
-		if(en->addr == addr) {
+		if(getMemOrdAlignAddr(en->addr) == getMemOrdAlignAddr(addr)) {
 			I(iter->first > id);
 			stToMemCB::scheduleAbs(stToMemPort->nextSlot(en->doStats), this, addr, iter->first, en->doStats);
 			break;
@@ -390,36 +382,3 @@ void WMMLSQ::stCommited(Time_t id) {
 	comSQEntryPool.in(comEn);
 }
 
-void WMMLSQ::reset() {
-	// [sizhuo] remove all reconcile & store & executed load
-	while(true) {
-		SpecLSQ::iterator rmIter = specLSQ.begin();
-		// [sizhuo] search through specLSQ for reconcile & store & executed load
-		// because these entries are only invoked by retire(), which will not be called in flushing mode
-		for(; rmIter != specLSQ.end(); rmIter++) {
-			SpecLSQEntry *rmEn = rmIter->second;
-			I(rmEn);
-			I(rmEn->dinst);
-			const Instruction *const rmIns = rmEn->dinst->getInst();
-			I(rmIns);
-			if(rmIns->isRecFence() || rmIns->isStore() || (rmIns->isLoad() && rmEn->state == Done)) {
-				break;
-			}
-		}
-		if(rmIter != specLSQ.end()) {
-			// [sizhuo] find a reconcile / store to remove
-			removePoisonedEntry(rmIter);
-		} else {
-			// [sizhuo] no more reconcile or store, stop
-			break;
-		}
-	}
-	// [sizhuo] recover free entry num
-	freeLdNum = maxLdNum;
-	freeStNum = maxStNum - comSQ.size();
-	I(freeStNum >= 0);
-}
-
-bool WMMLSQ::isReset() {
-	return specLSQ.empty() && freeLdNum == maxLdNum && freeStNum == (maxStNum - comSQ.size());
-}

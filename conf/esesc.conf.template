@@ -15,6 +15,9 @@ SMcoreType = 'gpuCORE'
 # [sizhuo] core count - 1, cpuMaxID will be substituted
 cpuMaxID = __CPU_MAX_ID__
 
+# [sizhuo] memory model
+memoryModel = __MEMORY_MODEL__
+
 # Target benchmark
 #benchName = "memkernels/memcpy_slow 1"
 #benchName = "memkernels/thread_ping 4 20"

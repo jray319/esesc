@@ -22,8 +22,8 @@ public:
   const uint32_t  setNum; // [sizhuo] number of cache sts
 
   const uint32_t  log2Assoc;
-  const uint64_t  log2LineSize;
-  const uint64_t  maskAssoc;
+  const uint32_t  log2LineSize;
+  const uint32_t  maskAssoc;
   const uint32_t  maskSets; // [sizhuo] mask for index calculation
   const uint32_t  log2Sets;
 	const uint32_t  maskBank;

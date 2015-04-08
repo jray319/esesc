@@ -57,8 +57,8 @@ private:
 	bool lastReplayValid;
 	AddrType lastReplayPC;
 	Instruction lastReplayInst;
-	// [sizhuo] min value of next commit inst ID
-	Time_t minComID;
+	// [sizhuo] last commit inst ID
+	Time_t lastComID;
 	// [sizhuo] debug function for flush: randomly generate exception
 	bool startExcep;
 	const TimeDelta_t excepDelay;
