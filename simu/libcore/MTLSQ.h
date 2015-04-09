@@ -146,6 +146,14 @@ protected:
 	GStatsCntr nUnalignLd;
 	GStatsCntr nUnalignSt;
 
+	// [sizhuo] stats variables
+	int32_t exLdNum; // [sizhuo] load in execution
+	int32_t doneLdNum; // [sizhuo] executed load
+	void inline incrExLdNum() {
+		exLdNum++; 
+		I(exLdNum + doneLdNum <= maxLdNum);
+	}
+
 	// [sizhuo] helper to remove poisoned entry & reset
 	void removePoisonedEntry(SpecLSQ::iterator rmIter);
 	void removePoisonedInst(DInst *dinst);
@@ -171,6 +179,13 @@ public:
 	// [sizhuo] for reset when execption happens
 	virtual void reset();
 	virtual bool isReset();
+
+	// [sizhuo] return stats to processor
+	int32_t getLdQUsage() { return maxLdNum - freeLdNum; }
+	int32_t getExLdNum() { return exLdNum; }
+	int32_t getDoneLdNum() { return doneLdNum; }
+	int32_t getStQUsage() { return maxStNum - freeStNum; }
+	int32_t getComSQUsage() { return comSQ.size(); }
 
 	// [sizhuo] creator function
 	static MTLSQ *create(GProcessor *gproc_);

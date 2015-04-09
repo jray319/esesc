@@ -26,19 +26,42 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 	, lockCheckEnabled(false)
   , retire_lock_checkCB(this)
   , clusterManager(gm, this)
-  , avgFetchWidth("P(%d)_avgFetchWidth",i)
-	, nKilled("P(%d)_killedInst", i)
-	, nExcep("P(%d)_exception", i)
+	, nActiveCyc("P(%d)_activeCyc", i)
+	, robUsage("P(%d)_robUsage", i)
+	, ldQUsage("P(%d)_ldQUsage", i)
+	, exLdNum("P(%d)_exLdNum", i)
+	, doneLdNum("P(%d)_doneLdNum", i)
+	, stQUsage("P(%d)_stQUsage", i)
+	, comSQUsage("P(%d)_comSQUsage", i)
+	, retireStallByEmpty("P(%d)_retireStallByEmpty", i)
+	, retireStallByComSQ("P(%d)_retireStallByComSQ", i)
 {
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
+
+	for(int t = 0; t < DInst::MaxReason; t++) {
+		nExcep[t] = new GStatsCntr("P(%d)_nExcepBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
+		nKilled[t] = new GStatsCntr("P(%d)_nKilledBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
+		retireStallByFlush[t] = new GStatsCntr("P(%d)_retireStallBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
+		I(nExcep[t]);
+		I(nKilled[t]);
+		I(retireStallByFlush[t]);
+	}
+
+	for(int t = 0; t < iMAX; t++) {
+    retireStallByEx[t] = new GStatsCntr("P(%d)_retireStallByEx_%s", cpu_id, Instruction::opcode2Name(static_cast<InstOpcode>(t)));
+		I(retireStallByEx[t]);
+	}
 }
 
 WMMProcessor::~WMMProcessor() {}
 
 void WMMProcessor::fetch(FlowID fid) {
   I(fid == cpu_id);
-  I(active);
   I(eint);
+
+	if(!active) {
+		return;
+	}
 
   if(!frontEnd.isBlocked()) {
 		frontEnd.fetch(eint, fid);
@@ -53,6 +76,11 @@ void WMMProcessor::issueToROB() {
 		if(dinst == 0) {
 			// [sizhuo] instQ empty, done
 			return;
+		}
+		// [sizhuo] XXX: we are in no-sampling mode, every inst should have stats flag on
+		if(!dinst->getStatsFlag()) {
+			I(0);
+			MSG("WARNING: P(%d) fetch inst has stats flag off", cpu_id);
 		}
 		// [sizhuo] try to issue the inst
 		StallCause sc = addInst(dinst);
@@ -124,13 +152,9 @@ StallCause WMMProcessor::addInst(DInst *dinst) {
 }
 
 void WMMProcessor::retireFromROB(FlowID fid) {
-	// [sizhuo] stats
-  if(!rob.empty()) {
-    robUsed.sample(rob.size(), rob.front()->getStatsFlag());
-	}
-
 	// [sizhuo] retire from ROB
-  for(uint16_t i=0 ; i<RetireWidth && !rob.empty() ; i++) {
+	int32_t n2Retire = RetireWidth;
+  for(; n2Retire > 0 && !rob.empty() ; n2Retire--) {
     DInst *dinst = rob.front();
 		I(dinst);
 
@@ -138,6 +162,8 @@ void WMMProcessor::retireFromROB(FlowID fid) {
 		GIS(lastComID >= dinst->getID(), MSG("ERROR: retire ID OOO, min %lu, real %lu", lastComID, dinst->getID()));
 
     if (!dinst->isExecuted()) {
+			// [sizhuo] stall by un-executed inst
+			retireStallByEx[dinst->getInst()->getOpcode()]->add(n2Retire, dinst->getStatsFlag());
 			return;
 		}
     I(dinst->getCluster());
@@ -145,7 +171,8 @@ void WMMProcessor::retireFromROB(FlowID fid) {
 		// [sizhuo] detect replay inst
 		// XXX: the replayed inst should not be dequeued from ROB
 		if(replayRecover && dinst->getID() == replayID) {
-			nExcep.inc(dinst->getStatsFlag()); // [sizhuo] stats
+			I(replayReason < DInst::MaxReason);
+			nExcep[replayReason]->inc(dinst->getStatsFlag()); // [sizhuo] stats
 			// [sizhuo] start flushing
 			I(!flushing);
 			flushing = true;
@@ -166,6 +193,9 @@ void WMMProcessor::retireFromROB(FlowID fid) {
 			lastReplayPC = dinst->getPC();
 			lastReplayInst.copy(dinst->getInst());
 #endif
+			// [sizhuo] retire stall by flushing
+			I(replayReason < DInst::MaxReason);
+			retireStallByFlush[replayReason]->add(n2Retire, dinst->getStatsFlag());
 			// [sizhuo] stop here, flushing work is done in subsequent cycles
 			return;
 		}
@@ -174,6 +204,10 @@ void WMMProcessor::retireFromROB(FlowID fid) {
     bool done = dinst->getCluster()->retire(dinst, false);
 		// [sizhuo] cannot retire, stop
     if( !done ) {
+			// [sizhuo] stall by commit SQ non-empty
+			I(dinst->getInst()->isLoad() || dinst->getInst()->isComFence());
+			I(mtLSQ->getComSQUsage() > 0);
+			retireStallByComSQ.add(n2Retire, dinst->getStatsFlag());
 			return;
 		}
 
@@ -188,6 +222,11 @@ void WMMProcessor::retireFromROB(FlowID fid) {
     dinst->destroy(eint);
 		rob.pop_front();
 	}
+
+	if(rob.empty() && n2Retire > 0) {
+		// [sizhuo] stall by ROB empty
+		retireStallByEmpty.add(n2Retire, true);
+	}
 }
 
 void WMMProcessor::doFlush() {
@@ -200,6 +239,7 @@ void WMMProcessor::doFlush() {
 		replayID = 0;
 		replayRecover = false;
 		flushing = false;
+		replayReason = DInst::MaxReason;
 		I(isReset());
 		// [sizhuo] for testing, generate exception
 		//ID(genExcepCB.schedule(excepDelay));
@@ -218,7 +258,8 @@ void WMMProcessor::doFlush() {
 		if(dinst == 0) {
 			break;
 		}
-		nKilled.inc(dinst->getStatsFlag()); // [sizhuo] stats
+		I(replayReason < DInst::MaxReason);
+		nKilled[replayReason]->inc(dinst->getStatsFlag()); // [sizhuo] stats
 		frontEnd.deqInst();
 		nFrontDrained++; // [sizhuo] incr counter
 		// [sizhuo] destroy the inst
@@ -238,7 +279,8 @@ void WMMProcessor::doFlush() {
 			break;
 		}
 		// [sizhuo] dinst executed, drain it
-		nKilled.inc(dinst->getStatsFlag()); // [sizhuo] stats
+		I(replayReason < DInst::MaxReason);
+		nKilled[replayReason]->inc(dinst->getStatsFlag()); // [sizhuo] stats
 		dinst->destroy(eint);
 		rob.pop_back();
 		nRobDrained++; // [sizhuo] incr counter
@@ -247,13 +289,30 @@ void WMMProcessor::doFlush() {
 
 bool WMMProcessor::advance_clock(FlowID fid) {
 	if(!active) {
-		return false;
-	}
+		if(frontEnd.empty() && rob.empty() && !replayRecover) {
+			return false;
+		} else {
+			I(0);
+			MSG("WARNING: P(%d) inactive but frontEnd.empty = %d, rob.empty = %d, replayRecover = %d", cpu_id, frontEnd.empty(), rob.empty(), replayRecover);
+		}
+	} else {
+		// [sizhuo] only do following stuff when proc is active
+		// [sizhuo] schedule deadlock check
+		if(!lockCheckEnabled) {
+			lockCheckEnabled = true;
+			retire_lock_checkCB.scheduleAbs(globalClock + 100000);
+		}
+		// [sizhuo] some black magic here...
+		if (unlikely(throttlingRatio>1)) { 
+			throttling_cntr++;
 
-	// [sizhuo] schedule deadlock check
-	if(!lockCheckEnabled) {
-		lockCheckEnabled = true;
-		retire_lock_checkCB.scheduleAbs(globalClock + 100000);
+			uint32_t skip = (uint32_t)ceil(throttlingRatio/getTurboRatio()); 
+
+			if (throttling_cntr < skip) {
+				return true;
+			}
+			throttling_cntr = 1;
+		}
 	}
 
 #ifdef DEBUG
@@ -278,7 +337,8 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 	}
 #endif
 
-	// [sizhuo] stats
+	// [sizhuo] set wall clock 
+	// (eventually this is the time when the last inst retires)
 	bool getStatsFlag = false; // [sizhuo] stats flag
   if( !rob.empty() ) {
     getStatsFlag = rob.front()->getStatsFlag();
@@ -286,26 +346,24 @@ bool WMMProcessor::advance_clock(FlowID fid) {
   clockTicks.inc(getStatsFlag);
   setWallClock(getStatsFlag);
 
-	// [sizhuo] some black magic here...
-  if (unlikely(throttlingRatio>1)) { 
-    throttling_cntr++;
+	// [sizhuo] incr active cycle count
+	nActiveCyc.inc(true);
 
-    uint32_t skip = (uint32_t)ceil(throttlingRatio/getTurboRatio()); 
-
-    if (throttling_cntr < skip) {
-      return true;
-    }
-    throttling_cntr = 1;
-  }
-
-	// [sizhuo] check active again
-	if(!active) {
-		return false;
-	}
+	// [sizhuo] sample ROB & LSQ sizes
+	robUsage.sample(true, rob.size());
+	ldQUsage.sample(true, mtLSQ->getLdQUsage());
+	exLdNum.sample(true, mtLSQ->getExLdNum());
+	doneLdNum.sample(true, mtLSQ->getDoneLdNum());
+	stQUsage.sample(true, mtLSQ->getStQUsage());
+	comSQUsage.sample(true, mtLSQ->getComSQUsage());
 
 	// [sizhuo] in replay mode, no fetch or issue
 	if(replayRecover) {
 		if(flushing) {
+			// [sizhuo] retire stall by flush
+			I(replayReason < DInst::MaxReason);
+			retireStallByFlush[replayReason]->add(RetireWidth, true);
+			// [sizhuo] do flush work
 			doFlush();
 		} else {
 			// [sizhuo] not in flushing mode, just commit good inst
@@ -356,6 +414,8 @@ void WMMProcessor::replay(DInst *target) {
 	// [sizhuo] record replay inst
 	replayID = target->getID();
 	replayRecover = true;
+	replayReason = target->getReplayReason();
+	I(replayReason != DInst::MaxReason);
 	// [sizhuo] lock front-end (but doesn't drain inst)
 	frontEnd.startFlush();
 }
@@ -366,7 +426,10 @@ void WMMProcessor::retire_lock_check()
   RetireState state;
   if (active) {
     state.committed = nCommitted.getDouble();
-		state.killed = nKilled.getDouble();
+		state.killed = 0;
+		for(int i = 0; i < DInst::MaxReason; i++) {
+			state.killed += nKilled[i]->getDouble();
+		}
   }else{
     state.committed = 0;
 		state.killed = 0;

@@ -370,6 +370,9 @@ void ExecutedCluster::executing(DInst *dinst) {
 
   // [sizhuo] dinst is issued to execution, just increase wake up time of inst depending on dinst
   window.wakeUpDeps(dinst);
+	
+	// [sizhuo] release entry in the issue window in this cluster
+  delEntry();
 }
 
 void ExecutedCluster::executed(DInst *dinst) {
@@ -383,7 +386,6 @@ void ExecutedCluster::executed(DInst *dinst) {
 	// [sizhuo] later inst should not depend on dinst any more, 
 	// otherwise they may never wake up --> deadlock
   dinst->clearRATEntry(); 
-  delEntry(); // [sizhuo] release entry in the issue window in this cluster
 }
 
 // [sizhuo] although dinst is removed from issue window after execution

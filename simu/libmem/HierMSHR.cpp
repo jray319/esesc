@@ -8,20 +8,19 @@
 #include "IndexSplitMSHRBank.h"
 
 // HierMSHR class
-HierMSHR::HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c, const char *str)
+HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, const char *str)
 	: bankNum(bkNum)
 	, bankMask(bkNum - 1)
-	, bankSize(bkSize)
 	, name(0)
 	, cache(c)
 	, bank(0)
 {
 	// [sizhuo] bank num must be power of 2
 	I((0x01L << log2i(bankNum)) == bankNum);
-	// [sizhuo] bank num & size must > 0
+	// [sizhuo] bank num & per bank size must > 0
 	I(bankNum > 0);
-	I(bankSize > 0);
-	I(uint32_t(bankSize) > bankNum); // [sizhuo] prevent reverse num & size in creation
+	I(bkUpSize > 0);
+	I(bkDownSize > 0);
 
 	name = new char[strlen(str) + 20];
 	I(name);
@@ -33,7 +32,7 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c, const char *str)
 	for(uint32_t i = 0; i < bkNum; i++) {
 		bank[i] = 0;
 		//bank[i] = new BlockMSHRBank(i, c, name);
-		bank[i] = new IndexSplitMSHRBank(i, (bankSize * 3) / 4, bankSize / 4, c, name);
+		bank[i] = new IndexSplitMSHRBank(i, bkUpSize, bkDownSize, c, name);
 		I(bank[i]);
 	}
 }

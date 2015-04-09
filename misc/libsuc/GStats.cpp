@@ -223,7 +223,7 @@ GStatsHist::GStatsHist(const char *format,...) : numSample(0), cumulative(0)
 
 void GStatsHist::reportValue() const
 {
-  I(H.empty()); // call stop before
+  //I(H.empty()); // call stop before
     
   uint32_t maxKey = 0;
 

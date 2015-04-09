@@ -49,6 +49,7 @@ private:
 	// 6. when ROB is empty & front-end is empty, finish replay recover
 	bool replayRecover; // [sizhuo] exception detected
 	Time_t replayID; // [sizhuo] ID of inst to be killed & restarted
+	DInst::ReplayReason replayReason; // [sizhuo] reason for replay
 	// we use ID because ID won't be recycled
 	bool flushing; // [sizhuo] flush the inst in ROB
 
@@ -81,15 +82,33 @@ private:
 protected:
   ClusterManager clusterManager;
 
-  GStatsAvg avgFetchWidth;
-	GStatsCntr nKilled;
-	GStatsCntr nExcep;
-
   void fetch(FlowID fid);
 	StallCause addInst(DInst *dinst);
 	void issueToROB();
 	void retireFromROB(FlowID fid);
 	bool advance_clock(FlowID fid);
+
+	// [sizhuo] number of active cycles
+	GStatsCntr nActiveCyc;
+
+	// [sizhuo] number of replay (mem dependency/consistency violation)
+	GStatsCntr *nExcep[DInst::MaxReason];
+	// [sizhuo] number of inst killed due to exception
+	GStatsCntr *nKilled[DInst::MaxReason];
+
+	// [sizhuo] stats for ROB & LSQ usage
+	GStatsHist robUsage;
+	GStatsHist ldQUsage;
+	GStatsHist exLdNum;
+	GStatsHist doneLdNum;
+	GStatsHist stQUsage;
+	GStatsHist comSQUsage;
+
+	// [sizhuo] stats for ROB retire port
+	GStatsCntr retireStallByEmpty; // [sizhuo] empty ROB
+	GStatsCntr *retireStallByEx[iMAX]; // [sizhuo] inst not finished execution
+	GStatsCntr retireStallByComSQ; // [sizhuo] commit fence in WMM/TSO OR load in SC
+	GStatsCntr *retireStallByFlush[DInst::MaxReason]; // [sizhuo] ROB is flushing poisoned inst
 
 public:
 	WMMProcessor(GMemorySystem *gm, CPU_t i);

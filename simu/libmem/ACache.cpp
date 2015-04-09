@@ -88,9 +88,14 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 
 	// [sizhuo] create MSHR
   const char* mshrSection = SescConf->getCharPtr(section,"MSHR");
-	uint32_t mshrBankSize = SescConf->getInt(mshrSection, "nSubEntries");
-	uint32_t mshrBankNum = SescConf->getInt(mshrSection, "size") / mshrBankSize;
-	mshr = new HierMSHR(mshrBankNum, mshrBankSize, cache, name);
+	SescConf->isInt(mshrSection, "bankNum");
+	SescConf->isInt(mshrSection, "upReqPerBank");
+	SescConf->isInt(mshrSection, "downReqPerBank");
+	SescConf->isPower2(mshrSection, "bankNum");
+	uint32_t mshrBankNum = SescConf->getInt(mshrSection, "bankNum");
+	int32_t mshrBankUpSize = SescConf->getInt(mshrSection, "upReqPerBank");
+	int32_t mshrBankDownSize = SescConf->getInt(mshrSection, "downReqPerBank");
+	mshr = new HierMSHR(mshrBankNum, mshrBankUpSize, mshrBankDownSize, cache, name);
 	I(mshr);
 
 	// [sizhuo] create & add lower level component

@@ -48,6 +48,8 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	, nLdLdForward("P(%d)_MTLSQ_nLdLdForward", gproc->getId())
 	, nUnalignLd("P(%d)_MTLSQ_nUnalignLd", gproc->getId())
 	, nUnalignSt("P(%d)_MTLSQ_nUnalignSt", gproc->getId())
+	, exLdNum(0)
+	, doneLdNum(0)
 {
 	SescConf->isInt("cpusimu", "maxLoads", gproc->getId());
 	SescConf->isInt("cpusimu", "maxStores", gproc->getId());
@@ -107,6 +109,10 @@ void MTLSQ::ldDone(DInst *dinst) {
 		return;
 	}
 
+	// [sizhuo] decrement number of executing loads
+	exLdNum--;
+	I(exLdNum >= 0);
+
 	// [sizhuo] check re-execute bit
 	if(doneEn->needReEx) {
 		// [sizhuo] re-schedule this entry for execution
@@ -119,6 +125,9 @@ void MTLSQ::ldDone(DInst *dinst) {
 
 	// [sizhuo] this load is truly done, change state
 	doneEn->state = Done;
+	// [sizhuo] increment done load num
+	doneLdNum++;
+	I(exLdNum + doneLdNum <= maxLdNum);
 	// [sizhuo] call pending events next cycle
 	while(!(doneEn->pendExQ).empty()) {
 		CallbackBase *cb = (doneEn->pendExQ).front();
@@ -196,8 +205,11 @@ void MTLSQ::reset() {
 	freeLdNum = maxLdNum;
 	freeStNum = maxStNum - comSQ.size();
 	I(freeStNum >= 0);
+	// [sizhuo] recover stats vars
+	exLdNum = 0;
+	doneLdNum = 0;
 }
 
 bool MTLSQ::isReset() {
-	return specLSQ.empty() && freeLdNum == maxLdNum && freeStNum == (maxStNum - comSQ.size());
+	return specLSQ.empty() && freeLdNum == maxLdNum && freeStNum == (maxStNum - comSQ.size()) && exLdNum == 0 && doneLdNum == 0;
 }

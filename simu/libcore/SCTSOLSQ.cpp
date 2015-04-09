@@ -95,7 +95,9 @@ void SCTSOLSQ::issue(DInst *dinst) {
 					// [sizhuo] stats
 					nLdReExBySt.inc(doStats);
 				} else if(killEn->state == Done) {
-					// [sizhuo] this load must be killed
+					// [sizhuo] this load must be killed & set replay reason
+					// NOTE: 1 inst may be killed multiple times, the last kill wins
+					killDInst->setReplayReason(DInst::Store);
 					gproc->replay(killDInst);
 					// [sizhuo] add to store set
 					mtStoreSet->memDepViolate(dinst, killDInst);
@@ -168,6 +170,7 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 				// [sizhuo] we can bypass from this executed load, mark as executing
 				exEn->ldSrcID = olderEn->ldSrcID; // [sizhuo] same load src ID
 				exEn->state = Exe;
+				incrExLdNum(); // [sizhuo] increment executing ld num
 				// [sizhuo] finish the load after forwarding delay
 				ldDoneCB::schedule(ldldForwardDelay, this, dinst);
 				// [sizhuo] stats
@@ -178,6 +181,7 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 				// mark the entry as executing
 				exEn->ldSrcID = olderDInst->getID(); // [sizhuo] record this store as load src
 				exEn->state = Exe;
+				incrExLdNum(); // [sizhuo] increment executing ld num
 				// [sizhuo] finish the load after forwarding delay
 				ldDoneCB::schedule(stldForwardDelay, this, dinst);
 				// [sizhuo] stats
@@ -197,6 +201,7 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 			// [sizhuo] bypass from commited store, set ld as executing
 			exEn->ldSrcID = rIter->first; // [sizhuo] record this store as load src
 			exEn->state = Exe;
+			incrExLdNum(); // [sizhuo] increment executing ld num
 			// [sizhuo] finish load after forwarding delay
 			ldDoneCB::schedule(stldForwardDelay, this, dinst);
 			// [sizhuo] stats
@@ -207,6 +212,7 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 
 	// [sizhuo] now we need to truly send load to memory hierarchy
 	exEn->state = Exe;
+	incrExLdNum(); // [sizhuo] increment executing ld num
 	exEn->ldSrcID = DInst::invalidID; // [sizhuo] load src is memory
 	MemRequest::sendReqRead(DL1, dinst->getStatsFlag(), addr, ldDoneCB::create(this, dinst));
 }
@@ -265,8 +271,9 @@ bool SCTSOLSQ::retire(DInst *dinst) {
 		I(freeLdNum <= maxLdNum);
 	}
 	
-	// [sizhuo] retire store to commited store Q
+	// [sizhuo] actions when retiring
 	if(ins->isStore()) {
+		// [sizhuo] retire store to commited store Q
 		ComSQEntry *en = comSQEntryPool.out();
 		en->clear();
 		en->addr = addr;
@@ -280,6 +287,10 @@ bool SCTSOLSQ::retire(DInst *dinst) {
 			I(comIter == comSQ.begin());
 			stToMemCB::scheduleAbs(stToMemPort->nextSlot(doStats), this, addr, id, doStats);
 		}
+	} else if(ins->isLoad()) {
+		// decrement done ld num
+		doneLdNum--;
+		I(doneLdNum >= 0);
 	}
 
 	// [sizhuo] recycle spec LSQ entry
@@ -335,7 +346,8 @@ void SCTSOLSQ::cacheInv(AddrType lineAddr, uint32_t shift) {
 		// [sizhuo] search executed load to same CACHE LINE address
 		// XXX: we use <= in comparison of load src ID
 		if((killDInst->getAddr() >> shift) == lineAddr && killIns->isLoad() && killEn->state == Done && killEn->ldSrcID <= lastComStID) {
-			// [sizhuo] this load must be killed
+			// [sizhuo] this load must be killed & set replay reason
+			killDInst->setReplayReason(DInst::CacheInv);
 			gproc->replay(killDInst);
 			// [sizhuo] stats
 			nLdKillByInv.inc(doStats);

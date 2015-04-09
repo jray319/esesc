@@ -65,7 +65,6 @@ class HierMSHR {
 private:
 	const uint32_t bankNum; // [sizhuo] number of banks
 	const uint32_t bankMask;
-	const int bankSize; // [sizhuo] number of entries in one bank
 	char *name;
 
 	CacheArray *cache; // [sizhuo] cache array
@@ -78,7 +77,7 @@ private:
 	}
 
 public:
-	HierMSHR(uint32_t bkNum, int bkSize, CacheArray *c, const char *str);
+	HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, const char *str);
 	~HierMSHR();
 
 	const char *getName() const { return name; }

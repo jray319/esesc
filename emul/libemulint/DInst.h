@@ -101,6 +101,14 @@ class DInstNext {
 
 // [sizhuo] an instruction after decode & track its dependency
 class DInst {
+public:
+	typedef enum {
+		Store,
+		Load,
+		CacheInv,
+		MaxReason
+	} ReplayReason;
+
 private:
   // In a typical RISC processor MAX_PENDING_SOURCES should be 2
   static const int32_t MAX_PENDING_SOURCES=3;
@@ -139,6 +147,10 @@ private:
 
 	// [sizhuo] newly added
 	bool poisoned; // [sizhuo] poison bit for flushed inst
+
+	ReplayReason replayReason;
+
+	static const char* replayReasonName[MaxReason]; // [sizhuo] strings of all replay reasons
 	/////////////
 
   // END Boolean flags
@@ -202,6 +214,7 @@ private:
 		frontEnd      = 0; // [sizhuo] locked front end init as NULL
 		oldMemDep     = 0;
 		youngMemDep   = 0;
+		replayReason = MaxReason;
 		//////////
 #ifdef ENABLE_CUDA
     memaccess   = GlobalMem;
@@ -523,6 +536,18 @@ public:
 		} // else: will be marked by DepWindown/Cluster/Resource
 		// [sizhuo] set poison bit
 		poisoned = true;
+	}
+
+	// [sizhuo] set/get replay reason
+	ReplayReason getReplayReason() { return replayReason; }
+	void setReplayReason(ReplayReason r) {
+		I(r < MaxReason);
+		replayReason = r;
+	}
+
+	// [sizhuo] transfer replay reason to string
+	static const char *replayReason2String(ReplayReason r) {
+		return r >= MaxReason ? 0 : replayReasonName[r];
 	}
 	
 	// [sizhuo] lock front end & return its value

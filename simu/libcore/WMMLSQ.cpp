@@ -117,7 +117,9 @@ void WMMLSQ::issue(DInst *dinst) {
 					break;
 				} else if(killEn->state == Done) {
 					if(killEn->ldSrcID < id) {
-						// [sizhuo] this load must be killed
+						// [sizhuo] this load must be killed & set replay reason
+						// NOTE: 1 inst may be killed multiple times, the last kill wins
+						killDInst->setReplayReason(ins->isStore() ? DInst::Store : DInst::Load);
 						gproc->replay(killDInst);
 						// [sizhuo] add to store set
 						mtStoreSet->memDepViolate(dinst, killDInst);
@@ -206,6 +208,7 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 					// [sizhuo] we can bypass from this executed load, mark as executing
 					exEn->ldSrcID = olderEn->ldSrcID; // [sizhuo] same load src ID
 					exEn->state = Exe;
+					incrExLdNum(); // [sizhuo] increment executing ld num
 					// [sizhuo] finish the load after forwarding delay
 					ldDoneCB::schedule(ldldForwardDelay, this, dinst);
 					// [sizhuo] stats
@@ -227,6 +230,7 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 				// mark the entry as executing
 				exEn->ldSrcID = olderDInst->getID(); // [sizhuo] record this store as load src
 				exEn->state = Exe;
+				incrExLdNum(); // [sizhuo] increment executing ld num
 				// [sizhuo] finish the load after forwarding delay
 				ldDoneCB::schedule(stldForwardDelay, this, dinst);
 				// [sizhuo] stats
@@ -248,6 +252,7 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 			// [sizhuo] bypass from commited store, set ld as executing
 			exEn->ldSrcID = rIter->first; // [sizhuo] record this store as load src
 			exEn->state = Exe;
+			incrExLdNum(); // [sizhuo] increment executing ld num
 			// [sizhuo] finish load after forwarding delay
 			ldDoneCB::schedule(stldForwardDelay, this, dinst);
 			// [sizhuo] stats
@@ -258,6 +263,7 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 
 	// [sizhuo] now we need to truly send load to memory hierarchy
 	exEn->state = Exe;
+	incrExLdNum(); // [sizhuo] increment executing ld num
 	exEn->ldSrcID = DInst::invalidID; // [sizhuo] load src is memory
 	MemRequest::sendReqRead(DL1, dinst->getStatsFlag(), addr, ldDoneCB::create(this, dinst));
 }
@@ -299,7 +305,7 @@ bool WMMLSQ::retire(DInst *dinst) {
 		I(freeLdNum > 0);
 		I(freeLdNum <= maxLdNum);
 	}
-	
+
 	// [sizhuo] actions when retiring
 	if(ins->isStore()) {
 		// [sizhuo] store: insert to commited store Q
@@ -334,6 +340,10 @@ bool WMMLSQ::retire(DInst *dinst) {
 			(retireEn->pendRetireQ).pop();
 			cb->schedule(1);
 		}
+	} else if(ins->isLoad()) {
+		// decrement done ld num
+		doneLdNum--;
+		I(doneLdNum >= 0);
 	}
 
 	// [sizhuo] recycle spec LSQ entry
