@@ -67,16 +67,18 @@ private:
 		AddrType lineAddr;
 		UpReqState state;
 		const MemRequest *mreq;
+		Time_t missStartTime; // [sizhuo] time when sending req to lower level
 
 		// [sizhuo] pending issue up/down req blocked by this req
 		PendIssueDownQ pendIssueDownQ;
 		PendIssueUpQ pendIssueUpQ;
 
-		UpReqEntry() : lineAddr(0), state(Sleep) , mreq(0) {}
+		UpReqEntry() : lineAddr(0), state(Sleep) , mreq(0), missStartTime(0) {}
 		void clear() {
 			lineAddr = 0;
 			state = Sleep;
 			mreq = 0;
+			missStartTime = 0;
 		}
 	};
 	// [sizhuo] pool of upgrade req entries
@@ -195,8 +197,12 @@ private:
 	void processPendInsertDown(); // only SetState 
 	void processPendInsertUp(); // SetState + Req
 
+	GStatsCntr *nUpInsertFail; // [sizhuo] number of failed insertion of up req to MSHR
+	GStatsCntr *nDownInsertFail; // [sizhuo] number of failed insertion of down req to MSHR
+	GStatsAvg **avgMissLat; // [sizhuo] average miss latency, for up req only
+
 public:
-	IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str);
+	IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str, GStatsCntr *upInsFail, GStatsCntr *downInsFail, GStatsAvg **missLat);
 	virtual ~IndexSplitMSHRBank();
 
 	// [sizhuo] virtual functions

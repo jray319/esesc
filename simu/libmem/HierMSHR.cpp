@@ -14,6 +14,8 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	, name(0)
 	, cache(c)
 	, bank(0)
+	, nUpInsertFail(0)
+	, nDownInsertFail(0)
 {
 	// [sizhuo] bank num must be power of 2
 	I((0x01L << log2i(bankNum)) == bankNum);
@@ -26,13 +28,29 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	I(name);
 	sprintf(name, "%s_MSHR", str);
 
+	// [sizhuo] create stats
+	nUpInsertFail = new GStatsCntr("%s:nUpInsertFail", name);
+	nDownInsertFail = new GStatsCntr("%s:nDownInsertFail", name);
+	I(nUpInsertFail);
+	I(nDownInsertFail);
+
+	for(int i = 0; i < ma_MAX; i++) {
+		avgMissLat[i] = 0;
+	}
+	avgMissLat[ma_setValid] = new GStatsAvg("%s:readMissLat", name);
+	avgMissLat[ma_setDirty] = new GStatsAvg("%s:writeMissLat", name);
+	avgMissLat[ma_setExclusive] = new GStatsAvg("%s:prefetchMissLat", name);
+	I(avgMissLat[ma_setValid]);
+	I(avgMissLat[ma_setDirty]);
+	I(avgMissLat[ma_setExclusive]);
+
 	// [sizhuo] create banks
 	bank = new MSHRBank*[bankNum];
 	I(bank);
 	for(uint32_t i = 0; i < bkNum; i++) {
 		bank[i] = 0;
 		//bank[i] = new BlockMSHRBank(i, c, name);
-		bank[i] = new IndexSplitMSHRBank(i, bkUpSize, bkDownSize, c, name);
+		bank[i] = new IndexSplitMSHRBank(i, bkUpSize, bkDownSize, c, name, nUpInsertFail, nDownInsertFail, avgMissLat);
 		I(bank[i]);
 	}
 }

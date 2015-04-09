@@ -56,6 +56,9 @@ RoundRobinClusterScheduler::RoundRobinClusterScheduler(const ResourcesPoolType o
 
   for(size_t i=0;i<res.size();i++) {
     nres[i] = res[i].size();
+		// [sizhuo] Processor class assign resource only once
+		// this may be inefficient, so we want to 1 opcode only has 1 resource
+		GI(i > 0 && i < iMAX, nres[i] == 1);
   }
 }
 

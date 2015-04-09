@@ -40,11 +40,11 @@ protected:
   // BEGIN Statistics
   GStatsCntr displaced; // [sizhuo] number of replacement
   GStatsCntr writeBack; // [sizhuo] number of write back to lower level
-  GStatsAvg avgMemLat; // [sizhuo] mem access lat, only useful for L1
+  GStatsAvg *avgMemLat[ma_MAX]; // [sizhuo] mem access lat, only for L1 & upgrade req
 	GStatsCntr *reqNum[ma_MAX]; // [sizhuo] req num
-	GStatsCntr *reqHit[ma_MAX]; // [sizhuo] hit: cache valid && enough permission
-	GStatsCntr *reqMiss[ma_MAX]; // [sizhuo] cache invalid miss
-	GStatsCntr *reqHalfMiss[ma_MAX]; // [sizhuo] cache valid, but without enough permission
+	GStatsCntr *reqHit[ma_MAX]; // [sizhuo] hit, for both up & down req, cache state compatible with req
+	GStatsCntr *reqMiss[ma_MAX]; // [sizhuo] up req: cache invalid miss, down req: incompatible
+	GStatsCntr *reqHalfMiss[ma_MAX]; // [sizhuo] only for up req: cache valid, but without enough permission
   // END Statistics
 
 private:

@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <string.h>
 
-IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str)
+IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str, GStatsCntr *upInsFail, GStatsCntr *downInsFail, GStatsAvg **missLat)
 	: bankID(id)
 	, name(0)
 	, cache(c)
@@ -23,11 +23,17 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	, pendInsertDownQ(0)
 	, pendInsertUpQ(0)
 	, callInsertQ(0)
+	, nUpInsertFail(upInsFail)
+	, nDownInsertFail(downInsFail)
+	, avgMissLat(missLat)
 {
 	I(str);
 	I(cache);
 	I(upSize > 0);
 	I(downSize > 0);
+	I(upInsFail);
+	I(downInsFail);
+	I(missLat);
 
 	name = new char[strlen(str) + 50];
 	I(name);
@@ -119,6 +125,8 @@ void IndexSplitMSHRBank::insertDownReq(AddrType lineAddr, StaticCallbackBase *cb
 		// [sizhuo] insert fail, enq to pend insert Q
 		I(pendInsertDownQ);
 		pendInsertDownQ->push(PendInsertReq(lineAddr, cb, inport, mreq));
+		// [sizhuo] increment insert fail counter
+		nDownInsertFail->inc(mreq->getStatsFlag());
 	}
 }
 
@@ -320,6 +328,8 @@ void IndexSplitMSHRBank::insertUpReq(AddrType lineAddr, StaticCallbackBase *cb, 
 		// [sizhuo] insert fail, enq to pend insert Q
 		I(pendInsertUpQ);
 		pendInsertUpQ->push(PendInsertReq(lineAddr, cb, inport, mreq));
+		// [sizhuo] increment insert fail counter
+		nUpInsertFail->inc(mreq->getStatsFlag());
 	}
 }
 
@@ -652,6 +662,8 @@ void IndexSplitMSHRBank::upReqToWait(AddrType lineAddr) {
 	I(en->mreq);
 	// [sizhuo] change state
 	en->state = Wait;
+	// [sizhuo] record time of forwarding req to lower level
+	en->missStartTime = globalClock;
 	// [sizhuo] invoke pending issue down req
 	processPendIssueDown(en->pendIssueDownQ);
 }
@@ -667,6 +679,12 @@ void IndexSplitMSHRBank::upReqToAck(AddrType lineAddr) {
 	I(en->state == Wait || en->state == Req); // Req if cache hit
 	I(en->mreq);
 	GI(en->state == Wait, (en->pendIssueDownQ).empty());
+	// [sizhuo] for Wait->Ack, sample miss latency
+	if(en->state == Wait) {
+		I(avgMissLat[en->mreq->getAction()]);
+		I(globalClock > en->missStartTime);
+		avgMissLat[en->mreq->getAction()]->sample(globalClock - en->missStartTime, en->mreq->getStatsFlag());
+	}
 	// [sizhuo] change state
 	en->state = Ack;
 }

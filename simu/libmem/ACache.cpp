@@ -34,7 +34,6 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 	// [sizhuo] stats counters
 	, displaced("%s:displaced", name)
 	, writeBack("%s:writeBack", name)
-	, avgMemLat("%s_avgMemLat", name)
 {
 	// [sizhuo] check delay
   SescConf->isGT(section, "tagDelay", 0);
@@ -109,32 +108,54 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 
 	// [sizhuo] stats counters
 	for(int i = 0; i < ma_MAX; i++) {
+		avgMemLat[i] = 0;
 		reqNum[i] = 0;
 		reqHit[i] = 0;
 		reqMiss[i] = 0;
 		reqHalfMiss[i] = 0;
 	}
 
+	if(isL1) {
+		avgMemLat[ma_setValid] = new GStatsAvg("%s:readMemLat", name);
+		avgMemLat[ma_setDirty] = new GStatsAvg("%s:writeMemLat", name);
+		avgMemLat[ma_setExclusive] = new GStatsAvg("%s:prefetchMemLat", name);
+		I(avgMemLat[ma_setValid]);
+		I(avgMemLat[ma_setDirty]);
+		I(avgMemLat[ma_setExclusive]);
+	}
+
 	reqNum[ma_setValid] = new GStatsCntr("%s:setValidsetState", name);
 	reqNum[ma_setDirty] = new GStatsCntr("%s:setDirtysetState", name);
 	reqNum[ma_setExclusive] = new GStatsCntr("%s:setExclusivesetState", name);
+	reqNum[ma_setInvalid] = new GStatsCntr("%s:setInvalidsetState", name);
+	reqNum[ma_setShared] = new GStatsCntr("%s:setSharedsetState", name);
 	I(reqNum[ma_setValid]);
 	I(reqNum[ma_setDirty]);
 	I(reqNum[ma_setExclusive]);
+	I(reqNum[ma_setInvalid]);
+	I(reqNum[ma_setShared]);
 
 	reqHit[ma_setValid] = new GStatsCntr("%s:readHit", name);
 	reqHit[ma_setDirty] = new GStatsCntr("%s:writeHit", name);
 	reqHit[ma_setExclusive] = new GStatsCntr("%s:setExclusiveHit", name);
+	reqHit[ma_setInvalid] = new GStatsCntr("%s:setInvalidHit", name);
+	reqHit[ma_setShared] = new GStatsCntr("%s:setSharedHit", name);
 	I(reqHit[ma_setValid]);
 	I(reqHit[ma_setDirty]);
 	I(reqHit[ma_setExclusive]);
+	I(reqHit[ma_setInvalid]);
+	I(reqHit[ma_setShared]);
 
 	reqMiss[ma_setValid] = new GStatsCntr("%s:readMiss", name);
 	reqMiss[ma_setDirty] = new GStatsCntr("%s:writeMiss", name);
 	reqMiss[ma_setExclusive] = new GStatsCntr("%s:setExclusiveMiss", name);
+	reqMiss[ma_setInvalid] = new GStatsCntr("%s:setInvalidMiss", name);
+	reqMiss[ma_setShared] = new GStatsCntr("%s:setSharedMiss", name);
 	I(reqMiss[ma_setValid]);
 	I(reqMiss[ma_setDirty]);
 	I(reqMiss[ma_setExclusive]);
+	I(reqMiss[ma_setInvalid]);
+	I(reqMiss[ma_setShared]);
 
 	reqHalfMiss[ma_setDirty] = new GStatsCntr("%s:writeHalfMiss", name);
 	reqHalfMiss[ma_setExclusive] = new GStatsCntr("%s:setExclusiveHalfMiss", name);
@@ -224,6 +245,10 @@ void ACache::setState(MemRequest *mreq) {
 	mreq->inport = fromDownPort;
 	I(mreq->inport);
 	fromDownPort->enqNewMsg(&(mreq->redoSetStateCB), doStats);
+
+	// [sizhuo] stats for req num
+	I(reqNum[mreq->getAction()]);
+	reqNum[mreq->getAction()]->inc(doStats);
 }
 
 void ACache::setStateAck(MemRequest *mreq) {
@@ -471,7 +496,8 @@ void ACache::doReq(MemRequest *mreq) {
 					mreq->line = 0;
 					mshr->retireUpReq(lineAddr, delay);
 					// [sizhuo] sample avg mem access latency
-					avgMemLat.sample(mreq->getTimeDelay() + delay + goUpDelay, doStats);
+					I(avgMemLat[reqAct]);
+					avgMemLat[reqAct]->sample(mreq->getTimeDelay() + delay + goUpDelay, doStats);
 					// [sizhuo] end this msg
 					mreq->pos = MemRequest::Router;
 					mreq->ack(goUpDelay + delay);
@@ -531,7 +557,8 @@ void ACache::doReqAck(MemRequest *mreq) {
 		// [sizhuo] get delay in writing tag & data
 		const TimeDelta_t delay = std::max(cache->getTagAccessTime(lineAddr, doStats), cache->getDataAccessTime(lineAddr, doStats)) - globalClock;
 		// [sizhuo] sample avg mem access latency
-		avgMemLat.sample(mreq->getTimeDelay() + delay + goUpDelay, doStats);
+		I(avgMemLat[reqAckAct]);
+		avgMemLat[reqAckAct]->sample(mreq->getTimeDelay() + delay + goUpDelay, doStats);
 		// [sizhuo] retire MSHR & release occupation on cache line & end msg
 		line->upReq = 0;
 		mshr->retireUpReq(lineAddr, delay);
@@ -642,6 +669,9 @@ void ACache::doSetState(MemRequest *mreq) {
 				mreq->convert2SetStateAck(ma_setInvalid);
 				mreq->downRespData = false; // [sizhuo] no data resp
 				router->scheduleSetStateAck(mreq, tagReadDelay + goDownDelay);
+				// [sizhuo] stats: set state hit
+				I(reqHit[reqAct]);
+				reqHit[reqAct]->inc(doStats);
 			} else {
 				if(CacheLine::compatibleDownReq(mreq->line->state, reqAct)) {
 					// [sizhuo] state & req are compatible, must be S & setShared
@@ -656,6 +686,9 @@ void ACache::doSetState(MemRequest *mreq) {
 					mreq->convert2SetStateAck(ma_setShared);
 					mreq->downRespData = false; // [sizhuo] no data resp
 					router->scheduleSetStateAck(mreq, tagReadDelay + goDownDelay);
+					// [sizhuo] stats: set state hit
+					I(reqHit[reqAct]);
+					reqHit[reqAct]->inc(doStats);
 				} else {
 					// [sizhuo] we need to do downgrade, first downgrade upper level
 					if(isL1) {
@@ -677,6 +710,9 @@ void ACache::doSetState(MemRequest *mreq) {
 							(mreq->redoSetStateCB).schedule(tagReadDelay);
 						}
 					}
+					// [sizhuo] stats: set state miss
+					I(reqMiss[reqAct]);
+					reqMiss[reqAct]->inc(doStats);
 				}
 			}
 		} else {

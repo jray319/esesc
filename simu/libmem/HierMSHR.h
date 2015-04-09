@@ -71,6 +71,11 @@ private:
 
 	MSHRBank **bank; // [sizhuo] bank array
 
+	
+	GStatsAvg *avgMissLat[ma_MAX]; // [sizhuo] average miss latency, for up req only
+	GStatsCntr *nUpInsertFail; // [sizhuo] number of failed insertion of up req to MSHR
+	GStatsCntr *nDownInsertFail; // [sizhuo] number of failed insertion of down req to MSHR
+
 	// [sizhuo] get bank id of req
 	inline uint32_t getBank(AddrType lineAddr) {
 		return lineAddr & bankMask;

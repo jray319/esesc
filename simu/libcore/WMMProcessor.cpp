@@ -80,7 +80,7 @@ void WMMProcessor::issueToROB() {
 		// [sizhuo] XXX: we are in no-sampling mode, every inst should have stats flag on
 		if(!dinst->getStatsFlag()) {
 			I(0);
-			MSG("WARNING: P(%d) fetch inst has stats flag off", cpu_id);
+			MSG("WARNING: P(%d) fetch inst %lu has stats flag off", cpu_id, dinst->getID());
 		}
 		// [sizhuo] try to issue the inst
 		StallCause sc = addInst(dinst);
