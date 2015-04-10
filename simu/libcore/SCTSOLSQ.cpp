@@ -297,6 +297,15 @@ bool SCTSOLSQ::retire(DInst *dinst) {
 	I((retireEn->pendRetireQ).empty() && (retireEn->pendExQ).empty());
 	specLSQEntryPool.in(retireEn);
 
+	// [sizhuo] unalignment stats
+	if(addr & ((0x01ULL << memOrdAlignShift) - 1)) {
+		if(ins->isLoad()) {
+			nUnalignLd.inc(doStats);
+		} else if(ins->isStore()) {
+			nUnalignSt.inc(doStats);
+		}
+	}
+
 	return true;
 }
 
