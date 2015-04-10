@@ -116,49 +116,49 @@ ACache::ACache(MemorySystem *gms, const char *section, const char *name)
 	}
 
 	if(isL1) {
-		avgMemLat[ma_setValid] = new GStatsAvg("%s:readMemLat", name);
-		avgMemLat[ma_setDirty] = new GStatsAvg("%s:writeMemLat", name);
-		avgMemLat[ma_setExclusive] = new GStatsAvg("%s:prefetchMemLat", name);
+		avgMemLat[ma_setValid] = new GStatsAvg("%s_readMemLat", name);
+		avgMemLat[ma_setDirty] = new GStatsAvg("%s_writeMemLat", name);
+		avgMemLat[ma_setExclusive] = new GStatsAvg("%s_prefetchMemLat", name);
 		I(avgMemLat[ma_setValid]);
 		I(avgMemLat[ma_setDirty]);
 		I(avgMemLat[ma_setExclusive]);
 	}
 
-	reqNum[ma_setValid] = new GStatsCntr("%s:setValidsetState", name);
-	reqNum[ma_setDirty] = new GStatsCntr("%s:setDirtysetState", name);
-	reqNum[ma_setExclusive] = new GStatsCntr("%s:setExclusivesetState", name);
-	reqNum[ma_setInvalid] = new GStatsCntr("%s:setInvalidsetState", name);
-	reqNum[ma_setShared] = new GStatsCntr("%s:setSharedsetState", name);
+	reqNum[ma_setValid] = new GStatsCntr("%s_readReq", name);
+	reqNum[ma_setDirty] = new GStatsCntr("%s_writeReq", name);
+	reqNum[ma_setExclusive] = new GStatsCntr("%s_prefetchReq", name);
+	reqNum[ma_setInvalid] = new GStatsCntr("%s_setInvalidReq", name);
+	reqNum[ma_setShared] = new GStatsCntr("%s_setSharedReq", name);
 	I(reqNum[ma_setValid]);
 	I(reqNum[ma_setDirty]);
 	I(reqNum[ma_setExclusive]);
 	I(reqNum[ma_setInvalid]);
 	I(reqNum[ma_setShared]);
 
-	reqHit[ma_setValid] = new GStatsCntr("%s:readHit", name);
-	reqHit[ma_setDirty] = new GStatsCntr("%s:writeHit", name);
-	reqHit[ma_setExclusive] = new GStatsCntr("%s:setExclusiveHit", name);
-	reqHit[ma_setInvalid] = new GStatsCntr("%s:setInvalidHit", name);
-	reqHit[ma_setShared] = new GStatsCntr("%s:setSharedHit", name);
+	reqHit[ma_setValid] = new GStatsCntr("%s_readHit", name);
+	reqHit[ma_setDirty] = new GStatsCntr("%s_writeHit", name);
+	reqHit[ma_setExclusive] = new GStatsCntr("%s_prefetchHit", name);
+	reqHit[ma_setInvalid] = new GStatsCntr("%s_setInvalidHit", name);
+	reqHit[ma_setShared] = new GStatsCntr("%s_setSharedHit", name);
 	I(reqHit[ma_setValid]);
 	I(reqHit[ma_setDirty]);
 	I(reqHit[ma_setExclusive]);
 	I(reqHit[ma_setInvalid]);
 	I(reqHit[ma_setShared]);
 
-	reqMiss[ma_setValid] = new GStatsCntr("%s:readMiss", name);
-	reqMiss[ma_setDirty] = new GStatsCntr("%s:writeMiss", name);
-	reqMiss[ma_setExclusive] = new GStatsCntr("%s:setExclusiveMiss", name);
-	reqMiss[ma_setInvalid] = new GStatsCntr("%s:setInvalidMiss", name);
-	reqMiss[ma_setShared] = new GStatsCntr("%s:setSharedMiss", name);
+	reqMiss[ma_setValid] = new GStatsCntr("%s_readMiss", name);
+	reqMiss[ma_setDirty] = new GStatsCntr("%s_writeMiss", name);
+	reqMiss[ma_setExclusive] = new GStatsCntr("%s_prefetchMiss", name);
+	reqMiss[ma_setInvalid] = new GStatsCntr("%s_setInvalidMiss", name);
+	reqMiss[ma_setShared] = new GStatsCntr("%s_setSharedMiss", name);
 	I(reqMiss[ma_setValid]);
 	I(reqMiss[ma_setDirty]);
 	I(reqMiss[ma_setExclusive]);
 	I(reqMiss[ma_setInvalid]);
 	I(reqMiss[ma_setShared]);
 
-	reqHalfMiss[ma_setDirty] = new GStatsCntr("%s:writeHalfMiss", name);
-	reqHalfMiss[ma_setExclusive] = new GStatsCntr("%s:setExclusiveHalfMiss", name);
+	reqHalfMiss[ma_setDirty] = new GStatsCntr("%s_writeHalfMiss", name);
+	reqHalfMiss[ma_setExclusive] = new GStatsCntr("%s_prefetchHalfMiss", name);
 	I(reqHalfMiss[ma_setDirty]);
 	I(reqHalfMiss[ma_setExclusive]);
 }

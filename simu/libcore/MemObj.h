@@ -138,6 +138,9 @@ public:
 		mtLSQ = q;
 		I(mtLSQ);
 	}
+
+	// [sizhuo] return log(cache line size)
+	virtual uint32_t getLog2LineSize() { return 0; }
 };
 
 class DummyMemObj : public MemObj {

@@ -212,7 +212,9 @@ void Cluster::buildUnit(const char *clusterName
 		case iSALU_COM: // [sizhuo] commit fence
       {
 				if(wmmProc) { // [sizhuo] add WMM store unit
-					r = new WMMFUStore(cluster, gen, lat, gproc->getMTLSQ(), gproc->getMTSS(), ms->getDL1(), gproc->getId());
+					SescConf->isBool("cpusimu", "storePrefetch", gproc->getId());
+					bool doStorePrefetch = SescConf->getBool("cpusimu", "storePrefetch", gproc->getId());
+					r = new WMMFUStore(cluster, gen, lat, gproc->getMTLSQ(), gproc->getMTSS(), ms->getDL1(), doStorePrefetch, gproc->getId());
 				} else if(scooreMemory){
           r = new FUSCOOREStore(cluster, gen, gproc->getSS(), lat, ms, gproc->getId(), "scoorest");
         }else{

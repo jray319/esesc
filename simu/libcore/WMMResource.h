@@ -56,8 +56,9 @@ public:
 class WMMFUStore : public WMMLSResource {
 private:
 	MemObj *DL1;
+	bool prefetch; // whether we do prefetch or not
 public:
-	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, MemObj *dcache, int32_t id);
+	WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, MemObj *dcache, bool fetch, int32_t id);
 
   StallCause canIssue(DInst  *dinst);
   void       executing(DInst *dinst);

@@ -41,7 +41,7 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 	for(int t = 0; t < DInst::MaxReason; t++) {
 		nExcep[t] = new GStatsCntr("P(%d)_nExcepBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
 		nKilled[t] = new GStatsCntr("P(%d)_nKilledBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
-		retireStallByFlush[t] = new GStatsCntr("P(%d)_retireStallBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
+		retireStallByFlush[t] = new GStatsCntr("P(%d)_retireStallByFlush_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
 		I(nExcep[t]);
 		I(nKilled[t]);
 		I(retireStallByFlush[t]);

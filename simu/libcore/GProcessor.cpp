@@ -112,14 +112,14 @@ GProcessor::GProcessor(GMemorySystem *gm, CPU_t i, size_t numFlows)
   SescConf->isBetween("cpusimu", "robSize"    , 2   , 262144, i);
 
   nStall[0] = 0 ; // crash if used
-  nStall[SmallWinStall]      = new GStatsCntr("P(%d)_ExeEngine:nSmallWinStall",i);
-  nStall[SmallROBStall]      = new GStatsCntr("P(%d)_ExeEngine:nSmallROBStall",i);
-  nStall[SmallREGStall]      = new GStatsCntr("P(%d)_ExeEngine:nSmallREGStall",i);
-  nStall[OutsLoadsStall]    = new GStatsCntr("P(%d)_ExeEngine:nOutsLoadsStall",i);
-  nStall[OutsStoresStall]   = new GStatsCntr("P(%d)_ExeEngine:nOutsStoresStall",i);
-  nStall[OutsBranchesStall] = new GStatsCntr("P(%d)_ExeEngine:nOutsBranchesStall",i);
-  nStall[ReplaysStall]      = new GStatsCntr("P(%d)_ExeEngine:nReplaysStall",i);
-  nStall[SyscallStall]      = new GStatsCntr("P(%d)_ExeEngine:nSyscallStall",i);
+  nStall[SmallWinStall]      = new GStatsCntr("P(%d)_nSmallWinStall",i);
+  nStall[SmallROBStall]      = new GStatsCntr("P(%d)_nSmallROBStall",i);
+  nStall[SmallREGStall]      = new GStatsCntr("P(%d)_nSmallREGStall",i);
+  nStall[OutsLoadsStall]    = new GStatsCntr("P(%d)_nOutsLoadsStall",i);
+  nStall[OutsStoresStall]   = new GStatsCntr("P(%d)_nOutsStoresStall",i);
+  nStall[OutsBranchesStall] = new GStatsCntr("P(%d)_nOutsBranchesStall",i);
+  nStall[ReplaysStall]      = new GStatsCntr("P(%d)_nReplaysStall",i);
+  nStall[SyscallStall]      = new GStatsCntr("P(%d)_nSyscallStall",i);
 
   I(ROB.size() == 0);
 

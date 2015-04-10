@@ -29,17 +29,17 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	sprintf(name, "%s_MSHR", str);
 
 	// [sizhuo] create stats
-	nUpInsertFail = new GStatsCntr("%s:nUpInsertFail", name);
-	nDownInsertFail = new GStatsCntr("%s:nDownInsertFail", name);
+	nUpInsertFail = new GStatsCntr("%s_nUpInsertFail", name);
+	nDownInsertFail = new GStatsCntr("%s_nDownInsertFail", name);
 	I(nUpInsertFail);
 	I(nDownInsertFail);
 
 	for(int i = 0; i < ma_MAX; i++) {
 		avgMissLat[i] = 0;
 	}
-	avgMissLat[ma_setValid] = new GStatsAvg("%s:readMissLat", name);
-	avgMissLat[ma_setDirty] = new GStatsAvg("%s:writeMissLat", name);
-	avgMissLat[ma_setExclusive] = new GStatsAvg("%s:prefetchMissLat", name);
+	avgMissLat[ma_setValid] = new GStatsAvg("%s_readMissLat", name);
+	avgMissLat[ma_setDirty] = new GStatsAvg("%s_writeMissLat", name);
+	avgMissLat[ma_setExclusive] = new GStatsAvg("%s_prefetchMissLat", name);
 	I(avgMissLat[ma_setValid]);
 	I(avgMissLat[ma_setDirty]);
 	I(avgMissLat[ma_setExclusive]);

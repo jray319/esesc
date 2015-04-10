@@ -5,9 +5,11 @@
 #include "DInst.h"
 
 WMMLSQ::WMMLSQ(GProcessor *gproc_)
-	: MTLSQ(gproc_) 
+	: MTLSQ(gproc_)
+	, log2LineSize(DL1->getLog2LineSize())
 {
-	MSG("INFO: create P(%d)_WMMLSQ", gproc->getId());
+	MSG("INFO: create P(%d)_WMMLSQ, log2LineSize %u", gproc->getId(), log2LineSize);
+	I(log2LineSize > 0);
 }
 
 StallCause WMMLSQ::addEntry(DInst *dinst) {
@@ -317,7 +319,8 @@ bool WMMLSQ::retire(DInst *dinst) {
 		I(insertRes.second);
 		ComSQ::iterator comIter = insertRes.first;
 		I(comIter != comSQ.end());
-		// [sizhuo] XXX: if comSQ doesn't have older store to same ALIGNED addr
+		I(en == (comSQ.rbegin())->second);
+		// [sizhuo] XXX: if comSQ doesn't have older store to same CACHE LINE
 		// send this one to memory
 		bool noOlderSt = true;
 		while(comIter != comSQ.begin()) {
@@ -325,12 +328,15 @@ bool WMMLSQ::retire(DInst *dinst) {
 			I(comIter != comSQ.end());
 			I(comIter->second);
 			I(comIter->first < id);
-			if(getMemOrdAlignAddr(comIter->second->addr) == getMemOrdAlignAddr(addr)) {
+			if(getLineAddr(comIter->second->addr) == getLineAddr(addr)) {
 				noOlderSt = false;
 				break;
 			}
 		}
 		if(noOlderSt) {
+			// [sizhuo] newly inserted store must be youngest, can't carry other stores to D$
+			// only set exID of itself
+			en->exID = id;
 			stToMemCB::scheduleAbs(stToMemPort->nextSlot(doStats), this, addr, id, doStats);
 		}
 	} else if(ins->isRecFence()) {
@@ -364,30 +370,75 @@ bool WMMLSQ::retire(DInst *dinst) {
 }
 
 void WMMLSQ::stCommited(Time_t id) {
-	// [sizhuo] release store entry
-	freeStNum++;
-	I(freeStNum > 0);
-	I(freeStNum <= maxStNum);
-	// [sizhuo] delete the store from ComSQ
+	// [sizhuo] find the entry with this id, i.e. the oldest store just commited to D$
 	ComSQ::iterator comIter = comSQ.find(id);
 	I(comIter != comSQ.end());
 	ComSQEntry *comEn = comIter->second;
 	I(comEn);
+	I(comEn->exID == id);
+	// [sizhuo] record the line addr
+	const AddrType lineAddr = getLineAddr(comEn->addr);
+	// [sizhuo] delete this entry & recycle it
 	comSQ.erase(comIter);
+	comSQEntryPool.in(comEn);
+	// [sizhuo] increment free entry
+	freeStNum++;
+	I(freeStNum > 0);
+	I(freeStNum <= maxStNum);
 
-	// [sizhuo] send the current oldest entry of this ALIGNED addr to memory
-	const AddrType addr = comEn->addr;
-	for(ComSQ::iterator iter = comSQ.begin(); iter != comSQ.end(); iter++) {
-		ComSQEntry *en = iter->second;
-		I(en);
-		if(getMemOrdAlignAddr(en->addr) == getMemOrdAlignAddr(addr)) {
-			I(iter->first > id);
-			stToMemCB::scheduleAbs(stToMemPort->nextSlot(en->doStats), this, addr, iter->first, en->doStats);
+	// [sizhuo] delete all other stores just commited to D$ by identifying exID
+	while(true) {
+		ComSQ::iterator iter = comSQ.begin();
+		for(; iter != comSQ.end(); iter++) {
+			I(iter->second);
+			if(iter->second->exID == id) {
+				// [sizhuo] find the store to delete, break
+				I(getLineAddr(iter->second->addr) == lineAddr);
+				I(iter->first > id);
+				break;
+			}
+		}
+		if(iter != comSQ.end()) {
+			// [sizhuo] we have store to delete & recycle & free
+			ComSQEntry *en = iter->second;
+			comSQ.erase(iter);
+			comSQEntryPool.in(en);
+			// [sizhuo] increment free entry
+			freeStNum++;
+			I(freeStNum > 0);
+			I(freeStNum <= maxStNum);
+		} else {
+			// [sizhuo] no more store to delete, stop
 			break;
 		}
 	}
 
-	// [sizhuo] recycle entry
-	comSQEntryPool.in(comEn);
+	// [sizhuo] send the current oldest entry of this CACHE LINE to memory
+	for(ComSQ::iterator exIter = comSQ.begin(); exIter != comSQ.end(); exIter++) {
+		ComSQEntry *exEn = exIter->second;
+		I(exEn);
+		if(getLineAddr(exEn->addr) == lineAddr) {
+			// [sizhuo] got the store to send to memory
+			I(exIter->first > id);
+			I(exEn->exID == DInst::invalidID);
+			// [sizhuo] set exID field to the inst ID of itself
+			const Time_t exStID = exIter->first;
+			exEn->exID = exStID;
+			// [sizhuo] set exID of all younger stores to same CACHE LINE
+			ComSQ::iterator iter = exIter;
+			iter++;
+			for(; iter != comSQ.end(); iter++) {
+				ComSQEntry *en = iter->second;
+				I(en);
+				if(getLineAddr(en->addr) == lineAddr) {
+					I(en->exID == DInst::invalidID);
+					en->exID = exStID;
+				}
+			}
+			// [sizhuo] send store to memory
+			stToMemCB::scheduleAbs(stToMemPort->nextSlot(exEn->doStats), this, exEn->addr, exStID, exEn->doStats);
+			break;
+		}
+	}
 }
 

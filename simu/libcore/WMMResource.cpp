@@ -199,11 +199,13 @@ bool WMMFULoad::retire(DInst *dinst, bool flushing) {
 }
 
 // [sizhuo] WMMFUStore class: store unit
-WMMFUStore::WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, MemObj *dcache, int32_t id)
+WMMFUStore::WMMFUStore(Cluster *cls, PortGeneric *aGen, TimeDelta_t l, MTLSQ *q, MTStoreSet *ss, MemObj *dcache, bool fetch, int32_t id)
 	: WMMLSResource(cls, aGen, l, q, ss, id)
 	, DL1(dcache)
+	, prefetch(fetch)
 {
 	I(DL1);
+	MSG("INFO: P(%d) SUNIT store prefetch %d", id, prefetch);
 }
 
 StallCause WMMFUStore::canIssue(DInst *dinst) {
@@ -266,7 +268,7 @@ void WMMFUStore::executed(DInst *dinst) {
 		return;
 	}
 
-	if(dinst->getInst()->isStoreAddress()) {
+	if(dinst->getInst()->isStoreAddress() && prefetch) {
 		// [sizhuo] do prefetch
 		I(!DL1->isBusy(dinst->getAddr())); // [sizhuo] cache always available
 		MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());

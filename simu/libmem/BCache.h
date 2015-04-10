@@ -61,6 +61,8 @@ public:
   TimeDelta_t ffwrite(AddrType addr);
 
 	bool isBusy(AddrType addr) const;
+
+	virtual uint32_t getLog2LineSize() { return cache->log2LineSize; }
 };
 
 #endif
