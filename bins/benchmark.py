@@ -177,19 +177,19 @@ splash_param['water_spatial'] = {
 		}
 
 splash_param['cholesky'] = {
-		'dev'      : 'tk14.O' ,
-		'small'    : 'tk29.O' ,
-		'medium'   : 'tk29.O' ,
-		'large'    : 'tk29.O' ,
+		'dev'      : '-p__THREAD_NUM__ < tk14.O' ,
+		'small'    : '-p__THREAD_NUM__ < tk29.O' ,
+		'medium'   : '-p__THREAD_NUM__ < tk29.O' ,
+		'large'    : '-p__THREAD_NUM__ < tk29.O' ,
 		'thread'   : lambda core : core ,
 		'template' : False
 		}
 
 splash_param['fft'] = {
-		'dev'      : '-m18 -p __THREAD_NUM__' ,
-		'small'    : '-m20 -p __THREAD_NUM__' ,
-		'medium'   : '-m22 -p __THREAD_NUM__' ,
-		'large'    : '-m22 -p __THREAD_NUM__' ,
+		'dev'      : '-m18 -p__THREAD_NUM__' ,
+		'small'    : '-m20 -p__THREAD_NUM__' ,
+		'medium'   : '-m22 -p__THREAD_NUM__' ,
+		'large'    : '-m24 -p__THREAD_NUM__' ,
 		'thread'   : lambda core : core ,
 		'template' : False
 		}
