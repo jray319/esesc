@@ -114,10 +114,10 @@ parsec3_param['x264'] = {
 splash_param = {}
 
 splash_param['barnes'] = {
-		'dev'      : '__THREAD_NUM__ < input.template' ,
-		'small'    : '__THREAD_NUM__ < input.template' ,
-		'medium'   : '__THREAD_NUM__ < input.template' ,
-		'large'    : '__THREAD_NUM__ < input.template' ,
+		'dev'      : '-f input.template' ,
+		'small'    : '-f input.template' ,
+		'medium'   : '-f input.template' ,
+		'large'    : '-f input.template' ,
 		'thread'   : lambda core : core ,
 		'template' : True
 		}

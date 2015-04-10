@@ -9,6 +9,10 @@
 #include "EmuSampler.h"
 #include <stdlib.h>
 
+WMMProcessor::SimStage WMMProcessor::simStage = WMMProcessor::Forward;
+Time_t WMMProcessor::simBeginTime = 0;
+GStatsCntr* WMMProcessor::simTime = 0;
+
 WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 	: GProcessor(gm, i, 1)
   , frontEnd(i)
@@ -38,6 +42,13 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 {
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
 
+	// [sizhuo] simTim counter
+	if(simTime == 0) {
+		simTime = new GStatsCntr("OS:simTime");
+		I(simTime);
+	}
+
+	// [sizhuo] stats counters
 	for(int t = 0; t < DInst::MaxReason; t++) {
 		nExcep[t] = new GStatsCntr("P(%d)_nExcepBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
 		nKilled[t] = new GStatsCntr("P(%d)_nKilledBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
@@ -211,6 +222,17 @@ void WMMProcessor::retireFromROB(FlowID fid) {
 			return;
 		}
 
+		// [sizhuo] check ROI end
+		if(dinst->getInst()->isRoiEnd()) {
+			// [sizhuo] switch to Done stage
+			simStage = Done;
+			// [sizhuo] set sim time counter
+			I(simTime->getSamples() == 0);
+			I(globalClock > simBeginTime);
+			simTime->add(globalClock - simBeginTime, true);
+			MSG("INFO: simulation ends @ %lu", globalClock);
+		}
+
 		// [sizhuo] stats
 		nCommitted.inc(dinst->getStatsFlag());
 		nInst[dinst->getInst()->getOpcode()]->inc(dinst->getStatsFlag());
@@ -296,12 +318,6 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 			MSG("WARNING: P(%d) inactive but frontEnd.empty = %d, rob.empty = %d, replayRecover = %d", cpu_id, frontEnd.empty(), rob.empty(), replayRecover);
 		}
 	} else {
-		// [sizhuo] only do following stuff when proc is active
-		// [sizhuo] schedule deadlock check
-		if(!lockCheckEnabled) {
-			lockCheckEnabled = true;
-			retire_lock_checkCB.scheduleAbs(globalClock + 100000);
-		}
 		// [sizhuo] some black magic here...
 		if (unlikely(throttlingRatio>1)) { 
 			throttling_cntr++;
@@ -312,6 +328,79 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 				return true;
 			}
 			throttling_cntr = 1;
+		}
+	}
+
+	// [sizhuo] fast forwarding
+	if(simStage == Forward) {
+		I(eint);
+		I(frontEnd.empty());
+		I(rob.empty());
+		I(!replayRecover);
+		DInst *dinst = eint->executeHead(fid);
+		if(dinst == 0) {
+			return true;
+		}
+		// [sizhuo] check whether inst is ROI begin
+		if(dinst->getInst()->isRoiBegin()) {
+			// [sizhuo] change stage & set sim begin time
+			simStage = Sim;
+			simBeginTime = globalClock;
+			MSG("INFO: simulation begins @ %lu", globalClock);
+		}
+		// [sizhuo] retire inst & return
+		dinst->markIssued();
+		dinst->markExecuted();
+		dinst->destroy(eint);
+		return true;
+	}
+
+	// [sizhuo] simulation done, we need to gracefully deal with remaining inst
+	if(simStage == Done) {
+		// [sizhuo] in replay mode
+		if(replayRecover) {
+			if(flushing) {
+				// [sizhuo] do flush work
+				doFlush();
+			} else {
+				// [sizhuo] not in flushing mode, just commit good inst
+				retireFromROB(fid);
+			}
+			return true;
+		}
+		// [sizhuo] rob not empty, retire inst
+		if(!rob.empty()) {
+			retireFromROB(fid);
+			return true;
+		}
+		// [sizhuo] front end not empty, just drain inst
+		if(!frontEnd.empty()) {
+			while(frontEnd.firstInst()) {
+				DInst *dinst = frontEnd.firstInst();
+				frontEnd.deqInst();
+				dinst->markIssued();
+				dinst->markExecuted();
+				dinst->destroy(eint);
+			}
+			return true;
+		}
+		// [sizhuo] now whole pipeline empty, we can directly retire inst
+		DInst *dinst = eint->executeHead(fid);
+		if(dinst == 0) {
+			return true;
+		}
+		dinst->markIssued();
+		dinst->markExecuted();
+		dinst->destroy(eint);
+		return true;
+	}
+
+	// [sizhuo] schedule deadlock check
+	if(active) {
+		// [sizhuo] only do following stuff when proc is active
+		if(!lockCheckEnabled) {
+			lockCheckEnabled = true;
+			retire_lock_checkCB.scheduleAbs(globalClock + 100000);
 		}
 	}
 
@@ -338,13 +427,10 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 #endif
 
 	// [sizhuo] set wall clock 
-	// (eventually this is the time when the last inst retires)
-	bool getStatsFlag = false; // [sizhuo] stats flag
-  if( !rob.empty() ) {
-    getStatsFlag = rob.front()->getStatsFlag();
-  }
-  clockTicks.inc(getStatsFlag);
-  setWallClock(getStatsFlag);
+	// this is the amount of time when at least 1 proc is not idling
+	bool incrClk = !frontEnd.empty() || !rob.empty() || replayRecover;
+  clockTicks.inc(incrClk);
+  setWallClock(incrClk);
 
 	// [sizhuo] incr active cycle count
 	nActiveCyc.inc(true);

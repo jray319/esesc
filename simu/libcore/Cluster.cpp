@@ -160,6 +160,8 @@ void Cluster::buildUnit(const char *clusterName
 			}
       break ;
     case iAALU:
+		case iMALU_ROI_BEGIN:
+		case iMALU_ROI_END:
     case iCALU_FPMULT:
     case iCALU_FPDIV:
     case iCALU_FPALU:

@@ -12,6 +12,12 @@
 // [sizhuo] Processor for WMM
 class WMMProcessor : public GProcessor {
 private:
+	// [sizhuo] simulation stage
+	enum SimStage {Forward, Sim, Done};
+	static SimStage simStage;
+	static Time_t simBeginTime;
+	static GStatsCntr *simTime;
+
 	// [sizhuo] for checking processor deadlock
   class RetireState {
   public:

@@ -68,6 +68,9 @@ static const char *opcode2NameTable[] = {
 	// [sizhuo] reconcile & commit fences
 	"iLALU_REC",
 	"iSALU_COM",
+	// [sizhuo] magic inst
+	"iMALU_ROI_BEGIN",
+	"iMALU_ROI_END"
 };
 
 const char *Instruction::opcode2Name(InstOpcode op) {

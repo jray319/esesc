@@ -103,6 +103,10 @@ protected:
 	// [sizhuo] LL & SC are also memory inst
   bool isMemory() const   { return opcode == iSALU_ST || opcode == iLALU_LD || opcode == iSALU_SC || opcode == iSALU_LL; }
 
+	// [szihuo] check magic inst
+	bool isRoiBegin() const { return opcode == iMALU_ROI_BEGIN; }
+	bool isRoiEnd() const { return opcode == iMALU_ROI_END; }
+
   void dump(const char *str) const;
 
 	// [sizhuo] overload == 
