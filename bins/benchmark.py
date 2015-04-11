@@ -159,28 +159,28 @@ splash_param['raytrace'] = {
 		}
 
 splash_param['water_nsquared'] = {
-		'dev'      : '__THREAD_NUM__ < input.template' ,
-		'small'    : '__THREAD_NUM__ < input.template' ,
-		'medium'   : '__THREAD_NUM__ < input.template' ,
-		'large'    : '__THREAD_NUM__ < input.template' ,
+		'dev'      : 'input.template' ,
+		'small'    : 'input.template' ,
+		'medium'   : 'input.template' ,
+		'large'    : 'input.template' ,
 		'thread'   : lambda core : core ,
 		'template' : True
 		}
 
 splash_param['water_spatial'] = {
-		'dev'      : '__THREAD_NUM__ < input.template' ,
-		'small'    : '__THREAD_NUM__ < input.template' ,
-		'medium'   : '__THREAD_NUM__ < input.template' ,
-		'large'    : '__THREAD_NUM__ < input.template' ,
+		'dev'      : 'input.template' ,
+		'small'    : 'input.template' ,
+		'medium'   : 'input.template' ,
+		'large'    : 'input.template' ,
 		'thread'   : lambda core : core ,
 		'template' : True
 		}
 
 splash_param['cholesky'] = {
-		'dev'      : '-p__THREAD_NUM__ < tk14.O' ,
-		'small'    : '-p__THREAD_NUM__ < tk29.O' ,
-		'medium'   : '-p__THREAD_NUM__ < tk29.O' ,
-		'large'    : '-p__THREAD_NUM__ < tk29.O' ,
+		'dev'      : '-p__THREAD_NUM__ tk14.O' ,
+		'small'    : '-p__THREAD_NUM__ tk29.O' ,
+		'medium'   : '-p__THREAD_NUM__ tk29.O' ,
+		'large'    : '-p__THREAD_NUM__ tk29.O' ,
 		'thread'   : lambda core : core ,
 		'template' : False
 		}

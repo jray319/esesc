@@ -525,7 +525,9 @@ void WMMProcessor::retire_lock_check()
     state.dinst_ID = rob.front()->getID();
   }
 
-  if (last_state == state && active) {
+	// [sizhuo] don't check deadlock when processor is idling
+	bool procIdle = frontEnd.empty() && rob.empty() && !replayRecover;
+  if (last_state == state && active && !procIdle) {
     I(0);
     MSG("WARNING: Lock detected in P(%d)", getId());
     if (!rob.empty()) {
