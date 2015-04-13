@@ -308,7 +308,7 @@ def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 	# copy exe
 	if os.path.isfile(name): # remove existing one
 		os.remove(name)
-	exe_path = os.path.join(bench_root_dir, name, name)
+	exe_path = os.path.join(bench_root_dir, 'parsec', name, name)
 	if not os.path.isfile(exe_path):
 		print(exe_path + " doesn't exist!")
 		return False
@@ -316,9 +316,9 @@ def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 
 	# copy input files
 	if name == 'facesim': # facesim all inputs are the same, only in dev folder
-		input_dir = os.path.join(bench_root_dir, name, 'dev')
+		input_dir = os.path.join(bench_root_dir, 'parsec', name, 'dev')
 	else:
-		input_dir = os.path.join(bench_root_dir, name, size)
+		input_dir = os.path.join(bench_root_dir, 'parsec', name, size)
 	all_inputs = copy_here(input_dir)
 	
 	# change esesc.conf
@@ -362,8 +362,8 @@ def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 		os.system(shell_cmd)
 
 	# remove input files & exe
-	remove_here(all_inputs)
-	os.remove(name)
+	#remove_here(all_inputs)
+	#os.remove(name)
 
 	# change report file mode
 	shell_cmd = 'chmod 644 esesc_' + report_file + '.*'
