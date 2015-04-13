@@ -5,7 +5,7 @@
 #include "SescConf.h"
 #include "DInst.h"
 
-const uint32_t MTLSQ::memOrdAlignShift = 2;
+const uint32_t MTLSQ::memOrdAlignShift = 2; // [sizhuo] word aligned
 
 MTLSQ* MTLSQ::create(GProcessor *gproc_) {
 	const char *memModel = SescConf->getCharPtr("cpusimu", "memModel", gproc_->getId());

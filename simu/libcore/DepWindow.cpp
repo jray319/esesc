@@ -73,8 +73,12 @@ DepWindow::DepWindow(GProcessor *gp, Cluster *aCluster, const char *clusterName)
   SescConf->isInt("cpusimu"    , "interClusterLat",Id);
   SescConf->isBetween("cpusimu" , "interClusterLat", 0, 1024,Id);
 
+	// [sizhuo] we require regFileDelay >= 1
+	// so that inst will not be issued to func unit at the same cycle when preSelect() is called
+	// This ensures we can call cluster->executing() before issuing to LSQ in WMMFUStore/WMMFULoad
+	// otherwise, inst waken up in cluster->executing() might be issued to LSQ earlier
   SescConf->isInt(clusterName    , "regFileDelay");
-  SescConf->isBetween(clusterName , "regFileDelay", 0, 1024);
+  SescConf->isBetween(clusterName , "regFileDelay", 1, 1024);
 }
 
 DepWindow::~DepWindow() {
@@ -143,16 +147,20 @@ void DepWindow::wakeUpDeps(DInst *dinst) {
 				dstReady->setWakeUpTime(wakeUpTime);
 		}
 	}
-	// [sizhuo] also increase wake up time for mem pending inst
+	// [sizhuo] increase wake up time for memory dependency
 	if(dinst->hasMemPending()) {
-		DInst *dstReady = dinst->getMemPending();
+		for(const DInstNext *it = dinst->getMemFirst();
+				 it ;
+				 it = it->getNext() ) {
+			DInst *dstReady = it->getDInst();
 
-		const Cluster *dstCluster = dstReady->getCluster();
-		I(dstCluster); // all the instructions should have a resource after rename stage
+			const Cluster *dstCluster = dstReady->getCluster();
+			I(dstCluster); // all the instructions should have a resource after rename stage
 
-		// [sizhuo] only increase wakeup time of inst in same cluster
-		if (dstCluster == srcCluster && dstReady->getWakeUpTime() < wakeUpTime)
-			dstReady->setWakeUpTime(wakeUpTime);
+			// [sizhuo] only increase wakeup time of inst in same cluster
+			if (dstCluster == srcCluster && dstReady->getWakeUpTime() < wakeUpTime)
+				dstReady->setWakeUpTime(wakeUpTime);
+		}
 	}
 }
 
@@ -175,6 +183,8 @@ void DepWindow::preSelect(DInst *dinst) {
 
   // [sizhuo] schedule the resource of dinst to call select()
   // actually it finally let this DepWindow to call select()
+	// require wakeUpTime strictly larger than current time
+	I(wakeUpTime > globalClock);
   Resource::selectCB::scheduleAbs(wakeUpTime, dinst->getClusterResource(), dinst);
 }
 
@@ -258,19 +268,40 @@ void DepWindow::executed(DInst *dinst) {
       preSelect(dstReady);
     }
   }
+	// [sizhuo] mem dep should have been resolved
+	I(!dinst->hasMemPending());
+}
 
-	// [sizhuo] resolve memory dep
-	if(dinst->hasMemPending()) {
-		DInst *dstReady = dinst->resolveMemPending();
-		I(dstReady);
+void DepWindow::resolveMemDep(DInst *dinst) {
+	// [sizhuo] should not be poisoned inst
+	I(!dinst->isPoisoned());
+
+  I(!dinst->hasDeps());
+	I(!dinst->hasMemDep());
+
+  if (!dinst->hasMemPending()) {
+    return;
+	}
+
+  I(dinst->getCluster());
+  I(srcCluster == dinst->getCluster());
+
+  const DInst *stopAtDst = 0;
+  I(dinst->isIssued());
+  while(dinst->hasMemPending()) {
+    if (stopAtDst == dinst->getMemFirstPending()) {
+			// [sizhuo] list empty, stop
+      break;
+		}
+		// [sizhuo] remove dependency to dstReady
+    DInst *dstReady = dinst->getNextMemPending();
+    I(dstReady);
     I(!dstReady->isExecuted());
 		// [sizhuo] wake up dstReady if it has no dependency now
     if (!dstReady->hasDeps() && !dstReady->hasMemDep()) {
-      // Check dstRes because dstReady may not be issued
       I(dstReady->getCluster());
       const Cluster *dstCluster = dstReady->getCluster();
       I(dstCluster);
-
 			// [sizhuo] this function is called by a callback, and wake up port is unlimited
 			// XXX: the selectCB scheduled in preSelect will be called in the same cycle...
       Time_t when = wakeUpPort->nextSlot(dinst->getStatsFlag());
@@ -278,12 +309,10 @@ void DepWindow::executed(DInst *dinst) {
         wrForwardBus.inc(dinst->getStatsFlag());
         when += InterClusterLat;
       }
-
+			// [sizhuo] wake up dstReady
       dstReady->setWakeUpTime(when);
-
       preSelect(dstReady);
     }
-	}
-	I(!dinst->hasMemPending());
+  }
 }
 

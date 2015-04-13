@@ -138,13 +138,20 @@ StallCause WMMProcessor::addInst(DInst *dinst) {
 	// [sizhuo] dependency of src regs of dinst
 	I(RAT[0] == 0); // [sizhuo] read R0 should not cause dependency
 	if( !dinst->isSrc2Ready() ) {
+		// [sizhuo] copied from OooProcessor.cpp
+		// here is some black magic I can't understand...
+		// when we add the dependency of src2??
 		dinst->dump("WARNING: rename stage src2 dependency already set");
-	}
-	if( RAT[inst->getSrc1()] ) {
-		RAT[inst->getSrc1()]->addSrc1(dinst);
-	}
-	if( RAT[inst->getSrc2()] ) {
-		RAT[inst->getSrc2()]->addSrc2(dinst);
+		if( RAT[inst->getSrc1()] ) {
+			RAT[inst->getSrc1()]->addSrc1(dinst);
+		}
+	} else {
+		if( RAT[inst->getSrc1()] ) {
+			RAT[inst->getSrc1()]->addSrc1(dinst);
+		}
+		if( RAT[inst->getSrc2()] ) {
+			RAT[inst->getSrc2()]->addSrc2(dinst);
+		}
 	}
   dinst->setRAT1Entry(&RAT[inst->getDst1()]);
   dinst->setRAT2Entry(&RAT[inst->getDst2()]);

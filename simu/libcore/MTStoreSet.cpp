@@ -22,6 +22,7 @@ const SSID_t FullMTStoreSet::invalidSSID = -1;
 FullMTStoreSet::FullMTStoreSet(int32_t cpu_id)
 	: ssit(0)
 	, lfmt(0)
+	, isWMM(!strcasecmp(SescConf->getCharPtr("cpusimu", "memModel", cpu_id), "wmm"))
 	, ssitSize(SescConf->getInt("cpusimu", "ssitSize", cpu_id))
 	, ssitMask(ssitSize - 1)
 	, lfmtSize(SescConf->getInt("cpusimu", "lfmtSize", cpu_id))
@@ -31,6 +32,7 @@ FullMTStoreSet::FullMTStoreSet(int32_t cpu_id)
 	, nextSSID(0)
 {
 	// [sizhuo] check param
+	SescConf->isCharPtr("cpusimu", "memModel", cpu_id);
 	SescConf->isInt("cpusimu", "ssitSize", cpu_id);
 	SescConf->isInt("cpusimu", "lfmtSize", cpu_id);
 	SescConf->isGT("cpusimu", "ssitSize", 0, cpu_id);
@@ -48,6 +50,8 @@ FullMTStoreSet::FullMTStoreSet(int32_t cpu_id)
 
 	// [sizhuo] clear tables & schedule periodical clear routine
 	clear();
+
+	MSG("INFO: create P(%d)_FullMTStoreSet, ssitSize %u, lfmtSize %u, isWMM %d", cpu_id, ssitSize, lfmtSize, isWMM);
 }
 
 FullMTStoreSet::~FullMTStoreSet() {
@@ -86,10 +90,13 @@ void FullMTStoreSet::insert(DInst *dinst) {
 		// [sizhuo] look up in LFMT
 		if(lfmt[id]) {
 			// [sizhuo] create mem dependency between dinst and lfmt[id]
-			lfmt[id]->addMemPending(dinst);
+			lfmt[id]->addMemDep(dinst);
 		}
-		// [sizhuo] overwrite LFMT
-		lfmt[id] = dinst;
+		// [sizhuo] store will overwrite LFMT
+		// only in WMM model, load will overwrite LFMT
+		if(dinst->getInst()->isStore() || isWMM) {
+			lfmt[id] = dinst;
+		}
 	}
 }
 

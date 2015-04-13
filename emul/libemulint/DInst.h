@@ -123,8 +123,12 @@ private:
   DInstNext *first;
 
 	// [sizhuo] newly added: store set dependency
-	DInst *oldMemDep; // [sizhuo] older inst to same addr based on store set
-	DInst *youngMemDep; // [sizhuo] younger inst with mem dependency on this inst
+	// if memPend.isUsed = true, then this inst has mem dep on older inst
+	// link list of memPend entry forms all the pending younger inst on a older inst
+	DInstNext memPend; // similar to pend[0,1,2]
+	DInstNext *memLast; // similar to last
+	DInstNext *memFirst; // similar to first
+	bool memDep; // whether this inst depends on older inst, similar to nDeps
 	/////////////
 
   FlowID fid; // [sizhuo] what is this??
@@ -212,9 +216,14 @@ private:
 		// [sizhuo] newly added fields
 		poisoned      = false; // [sizhuo] initially not poisoned
 		frontEnd      = 0; // [sizhuo] locked front end init as NULL
-		oldMemDep     = 0;
-		youngMemDep   = 0;
-		replayReason = MaxReason;
+		replayReason  = MaxReason;
+		memDep        = false;
+		memFirst      = 0;
+		memLast       = 0;
+		memPend.isUsed = false;
+#ifdef DINST_PARENT
+		memPend.setParentDInst(0);
+#endif
 		//////////
 #ifdef ENABLE_CUDA
     memaccess   = GlobalMem;
@@ -488,29 +497,57 @@ public:
     performed = true;
   }
 
+	// [sizhuo] resolve mem dep
+  DInst *getNextMemPending() {
+    I(memFirst);
+		I(memFirst->isUsed);
+		// [sizhuo] get the younger inst that depends on me
+    DInst *n = memFirst->getDInst();
+    I(n);
+    I(n->memDep);
+		// [sizhuo] resolve younger inst dependency
+    n->memDep = false;
+		// [sizhuo] move link list head ptr
+    memFirst->isUsed = false;
+    memFirst->setParentDInst(0);
+    memFirst = memFirst->getNext();
+		// [sizhuo] return younger inst
+    return n;
+  }
+
+  // [sizhuo] add younger inst to have mem dep on me
+  void addMemDep(DInst * d) {
+    I(!d->memDep);
+		// [sizhuo] set mem dep of younger inst
+    d->memDep = true;
+		// [sizhuo] set fields of d->memPend
+    DInstNext *n = &d->memPend;
+    I(!n->isUsed);
+    n->isUsed = true;
+    n->setParentDInst(this);
+		// [sizhuo] n->dinst = d is set in the construction of d
+
+		// [sizhuo] append d to the linked list
+    I(n->getDInst() == d);
+    if (memFirst == 0) {
+      memFirst = n;
+    } else {
+      memLast->nextDep = n;
+    }
+    n->nextDep = 0;
+    memLast = n;
+  }
+
 	// [sizhuo] check memory dependency
-	bool hasMemDep() { return oldMemDep != 0; }
-	bool hasMemPending() { return youngMemDep != 0; }
+	bool hasMemDep() {
+		I(memDep == memPend.isUsed);
+		return memDep;
+	}
+	bool hasMemPending() { return memFirst != 0; }
+
 	// [sizhuo] return the younger inst that depends on it
-	DInst *getMemPending() { return youngMemDep; }
-	// [sizhuo] resolve the dependency of younger inst
-	DInst *resolveMemPending() {
-		I(oldMemDep == 0);
-		I(youngMemDep);
-		I(youngMemDep->oldMemDep == this);
-		youngMemDep->oldMemDep = 0;
-		DInst *ret = youngMemDep;
-		youngMemDep = 0;
-		return ret;
-	}
-	// [sizhuo] younger dinst has mem dependency on this
-	void addMemPending(DInst *dinst) {
-		I(dinst);
-		I(dinst->oldMemDep == 0);
-		I(youngMemDep == 0);
-		dinst->oldMemDep = this;
-		youngMemDep = dinst;
-	}
+	const DInst *getMemFirstPending() const { return memFirst->getDInst(); }
+	const DInstNext *getMemFirst() const { return memFirst; }
 
 	// [sizhuo] return & set poison bit
 	bool isPoisoned() const { return poisoned; }
@@ -523,8 +560,11 @@ public:
 			getNextPending();
 		}
 		// [sizhuo] remove store set dependency
-		if(hasMemPending()) {
-			resolveMemPending();
+		while(hasMemPending()) {
+			if(getMemFirstPending() == 0) {
+				break;
+			}
+			getNextMemPending();
 		}
 		// [sizhuo] if unissued, mark issued & executed
 		// XXX: this is necessary, otherwise this inst may never become executed

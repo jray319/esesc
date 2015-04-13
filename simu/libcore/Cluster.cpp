@@ -374,6 +374,9 @@ void ExecutedCluster::executing(DInst *dinst) {
 
   // [sizhuo] dinst is issued to execution, just increase wake up time of inst depending on dinst
   window.wakeUpDeps(dinst);
+
+	// [sizhuo] resolve memory dependency since mem inst has been issued to LSQ
+	window.resolveMemDep(dinst);
 	
 	// [sizhuo] release entry in the issue window in this cluster
   delEntry();

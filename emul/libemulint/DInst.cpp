@@ -53,6 +53,10 @@ DInst::DInst()
   pend[2].init(this);
   I(MAX_PENDING_SOURCES==3);
   nDeps = 0;
+	// [sizhuo] newly added for store set dep
+	memPend.init(this);
+	memDep = false;
+	/////
 #ifdef ENABLE_CUDA
   pe_id = 0;
 #endif
@@ -138,6 +142,9 @@ void DInst::recycle() {
 void DInst::scrap(EmulInterface *eint) {
   I(nDeps == 0);   // No deps src
   I(first == 0);   // no dependent instructions
+	// [sizhuo] no store set dep
+	I(!memDep);
+	I(memFirst == 0);
 
   I(eint);
   eint->reexecuteTail(fid);

@@ -80,6 +80,9 @@ public:
   // [sizhuo] things to do when dinst finishes execution: wakeup inst depending on dinst when dinst finish execution
   void executed(DInst *dinst); 
 
+	// [sizhuo] resolve memory dependency
+	void resolveMemDep(DInst *dinst);
+
 	// [sizhuo] recover depWindow stats when flushing
 	// actually there is no state to recover
 	void reset() {}

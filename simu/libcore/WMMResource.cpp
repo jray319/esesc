@@ -140,7 +140,13 @@ void WMMFULoad::executing(DInst *dinst) {
 		return;
 	}
 
-	cluster->executing(dinst); // [sizhuo] just change wake up time
+	// [sizhuo] change wake up time & resolve memory dependency
+	// XXX: since issue to WMMLSQ can happen at same cycle
+	// executed() may be also called in same cycle
+	// we must keep executing() before scheduling issueCB
+	// XXX: regFileDelay>0 ensures that newly waken up inst will not be issued in same cycle
+	cluster->executing(dinst);
+
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
 	const Instruction *const ins = dinst->getInst();
@@ -151,6 +157,9 @@ void WMMFULoad::executing(DInst *dinst) {
 		I(ins->isLoad());
 		// [sizhuo] load: schedule call back to issue to LSQ
 		WMMLSQ::issueCB::scheduleAbs(when, mtLSQ, dinst);
+		// [sizhuo] remove from store set
+		// when ROB flushes, this is done in MTStoreSet::reset
+		mtStoreSet->remove(dinst);
 	}
 }
 
@@ -174,11 +183,6 @@ void WMMFULoad::executed(DInst *dinst) {
 		return;
 	}
 
-	// [sizhuo] remove from store set
-	// when ROB flushes, this is done in MTStoreSet::reset
-	if(dinst->getInst()->isLoad()) {
-		mtStoreSet->remove(dinst);
-	}
 	// [sizhuo] wake up inst with data dependency on dinst
   cluster->executed(dinst);
 }
@@ -243,7 +247,13 @@ void WMMFUStore::executing(DInst *dinst) {
 		return;
 	}
 
-  cluster->executing(dinst);
+	// [sizhuo] change wake up time & resolve memory dependency
+	// XXX: since issue to WMMLSQ can happen at same cycle
+	// executed() may be also called in same cycle
+	// we must keep executing() before scheduling issueCB
+	// XXX: regFileDelay>0 ensures that newly waken up inst will not be issued in same cycle
+	cluster->executing(dinst);
+
   Time_t when = gen->nextSlot(dinst->getStatsFlag())+lat;
 
 	const Instruction *const ins = dinst->getInst();
@@ -254,6 +264,9 @@ void WMMFUStore::executing(DInst *dinst) {
 		// [sizhuo] store: schedule callback to issue to LSQ
 		I(ins->isStore());
 		WMMLSQ::issueCB::scheduleAbs(when, mtLSQ, dinst);
+		// [sizhuo] remove from store set
+		// when ROB flushes, this is done in MTStoreSet::reset
+		mtStoreSet->remove(dinst);
 	}
 }
 
@@ -268,16 +281,11 @@ void WMMFUStore::executed(DInst *dinst) {
 		return;
 	}
 
+	// [sizhuo] do prefetch
 	if(dinst->getInst()->isStoreAddress() && prefetch) {
-		// [sizhuo] do prefetch
 		I(!DL1->isBusy(dinst->getAddr())); // [sizhuo] cache always available
 		MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());
-	} else if(dinst->getInst()->isStore()) {
-		// [sizhuo] remove from store set
-		// when ROB flushes, this is done in MTStoreSet::reset
-		mtStoreSet->remove(dinst);
 	}
-
 	// [sizhuo] wake up inst with data dependency on dinst
   cluster->executed(dinst);
 }
