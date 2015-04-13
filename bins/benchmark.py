@@ -203,6 +203,15 @@ splash_param['lu_cb'] = {
 		'template' : False
 		}
 
+splash_param['lu_ncb'] = {
+		'dev'      : '-p__THREAD_NUM__ -n512 -b16'  ,
+		'small'    : '-p__THREAD_NUM__ -n512 -b16'  ,
+		'medium'   : '-p__THREAD_NUM__ -n1024 -b16' ,
+		'large'    : '-p__THREAD_NUM__ -n2048 -b16' ,
+		'thread'   : lambda core : core ,
+		'template' : False
+		}
+
 splash_param['radix'] = {
 		'dev'      : '-p__THREAD_NUM__ -r4096 -n262144 -m524288'       ,
 		'small'    : '-p__THREAD_NUM__ -r4096 -n4194304 -m2147483647'  ,

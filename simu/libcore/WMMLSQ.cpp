@@ -201,6 +201,8 @@ void WMMLSQ::ldExecute(DInst *dinst) {
 		if(olderIns->isRecFence()) {
 			// [sizhuo] add event to pendRetireQ
 			(olderEn->pendRetireQ).push(scheduleLdExCB::create(this, dinst));
+			// [sizhuo] stats
+			nLdStallByRec.inc(doStats);
 			return;
 		}
 		// [sizhuo] we find inst to same ALIGNED address for bypass or stall

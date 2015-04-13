@@ -158,12 +158,8 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 		const Instruction *const olderIns = olderDInst->getInst();
 		I(!olderDInst->isPoisoned()); // [sizhuo] can't be poisoned
 		I(iter->first < id);
-		// [sizhuo] we hit reconcile fence, we should should stall until it retires
-		if(olderIns->isRecFence()) {
-			// [sizhuo] add event to pendRetireQ
-			(olderEn->pendRetireQ).push(scheduleLdExCB::create(this, dinst));
-			return;
-		}
+		// [sizhuo] we don't have reconcile in LSQ
+		I(!olderIns->isRecFence());
 		// [sizhuo] we find inst to same ALIGNED address for bypass
 		if(getMemOrdAlignAddr(olderDInst->getAddr()) == getMemOrdAlignAddr(addr)) {
 			if(olderIns->isLoad() && olderEn->state == Done) {

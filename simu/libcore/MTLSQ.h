@@ -140,6 +140,7 @@ protected:
 	
 	// [sizhuo] Stats counters
 	GStatsCntr nLdStallByLd;
+	GStatsCntr nLdStallByRec;
 	GStatsCntr nLdKillByLd;
 	GStatsCntr nLdKillBySt;
 	GStatsCntr nLdKillByInv;
