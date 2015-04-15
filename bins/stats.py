@@ -6,14 +6,12 @@ import os
 import json
 
 # check arg
-if len(sys.argv) != 3:
-	print 'Usage: ./stats.py [esesc result file] [output folder]'
+if len(sys.argv) < 2:
+	print 'Usage: ./stats.py <esesc result file> [output folder]'
 	sys.exit()
 
 if not os.path.isfile(sys.argv[1]):
 	print 'ERROR: cannot find {}'.format(sys.argv[1])
-if not os.path.isdir(sys.argv[2]):
-	print 'ERROR: cannot find {}'.format(sys.argv[2])
 
 # read file
 fp = open(sys.argv[1], 'r')
@@ -418,14 +416,18 @@ print ''
 
 
 # save data to .mat & .json files
-fileName = os.path.basename(sys.argv[1]).split('.')[0]
-jsonName = os.path.join(sys.argv[2], fileName + '.json')
-matName = os.path.join(sys.argv[2], fileName + '.mat')
-if os.path.isfile(jsonName) or os.path.isfile(matName):
-	print 'ERROR: {} or {} already exists'.format(jsonName, matName)
+if len(sys.argv) >= 3:
+	if not os.path.isdir(sys.argv[2]):
+		print 'ERROR: cannot file {}'.format(sys.argv[2])
 
-sio.savemat(matName, mdict = saveData, appendmat = False, oned_as = 'column')
+	fileName = os.path.basename(sys.argv[1]).split('.')[0]
+	jsonName = os.path.join(sys.argv[2], fileName + '.json')
+	matName = os.path.join(sys.argv[2], fileName + '.mat')
+	if os.path.isfile(jsonName) or os.path.isfile(matName):
+		print 'ERROR: {} or {} already exists'.format(jsonName, matName)
 
-fp = open(jsonName, 'w')
-json.dump(saveData, fp)
-fp.close()
+	sio.savemat(matName, mdict = saveData, appendmat = False, oned_as = 'column')
+
+	fp = open(jsonName, 'w')
+	json.dump(saveData, fp)
+	fp.close()
