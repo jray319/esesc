@@ -111,8 +111,8 @@ print '-- Overall Peformanace'
 print 'wallClock = {}, simTime = {}'.format(wallClock, simTime)
 print '{:<6s}{:<14s}{:<14s}{:<14s}'.format(' ', 'cycle', 'inst', 'IPC')
 for i in range(0, coreNum):
-	print '{:<6s}{:<14d}{:<14d}{:<14f}'.format('P({})'.format(i),
-			cycle[i], inst[i], float(inst[i]) / float(cycle[i]))
+	print '{:<6s}{:<14d}{:<14d}{:<14s}'.format('P({})'.format(i),
+			cycle[i], inst[i], 'nan' if cycle[i] <= 0 else '{:<14.2f}'.format(float(inst[i]) / float(cycle[i])))
 print ''
 
 # inst distribution
@@ -324,24 +324,34 @@ for line in resultFile:
 		else:
 			print 'ERROR: unknown issue stall type {}'.format(stallType)
 			sys.exit()
-	m = re.search(r'P\((\d+)\)_(A|B|C|L|S)UNIT_issueStallByOutWin\s*=\s*(\d+)\.0+', line)
-	if m:
-		coreId = int(m.group(1))
-		unit = m.group(2)
-		count = int(m.group(3))
-		if unit == 'A':
-			issueStallByOutWinAunit[coreId] = count
-		elif unit == 'B':
-			issueStallByOutWinBunit[coreId] = count
-		elif unit == 'C':
-			issueStallByOutWinCunit[coreId] = count
-		elif unit == 'L':
-			issueStallByOutWinLunit[coreId] = count
-		elif unit == 'S':
-			issueStallByOutWinSunit[coreId] = count
-		else:
-			print 'ERROR: unkonw cluster {}'.format(unit)
-			sys.exit()
+	else:
+		m2 = re.search(r'P\((\d+)\)_([ABCLS])UNIT_issueStallByOutWin\s*=\s*(\d+)\.0+', line)
+		if m2:
+			coreId = int(m2.group(1))
+			unit = m2.group(2)
+			count = int(m2.group(3))
+			if unit == 'A':
+				issueStallByOutWinAunit[coreId] = count
+			elif unit == 'B':
+				issueStallByOutWinBunit[coreId] = count
+			elif unit == 'C':
+				issueStallByOutWinCunit[coreId] = count
+			elif unit == 'L':
+				issueStallByOutWinLunit[coreId] = count
+			elif unit == 'S':
+				issueStallByOutWinSunit[coreId] = count
+			else:
+				print 'ERROR: unkonw cluster {}'.format(unit)
+				sys.exit()
+
+for i in range(0, coreNum):
+	if (issueStallByOutWinAunit[i] + issueStallByOutWinBunit[i] + issueStallByOutWinCunit[i]
+			+ issueStallByOutWinLunit[i] + issueStallByOutWinSunit[i]) != issueStallByOutWin[i]:
+		print 'ERROR: core {} inconsistent issueStallByOutWin'.format(i)
+		sys.exit()
+	if issueStallByReplayLd[i] + issueStallByReplaySt[i] + issueStallByReplayInv[i] != issueStallByReplay[i]:
+		print 'ERROR: core {} inconsistent issueStallByReplay'.format(i)
+		sys.exit()
 
 saveData['issueStallByOutBr'] = issueStallByOutBr
 saveData['issueStallByOutLd'] = issueStallByOutLd
