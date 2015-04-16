@@ -9,7 +9,7 @@ SCTSOLSQ::SCTSOLSQ(GProcessor *gproc_, bool sc)
 	, isSC(sc)
 	, lastComStID(DInst::invalidID)
 {
-	MSG("INFO: create P(%d)_SCTSOLSQ, isSC = %d", gproc->getId(), isSC);
+	MSG("INFO: create P(%d)_SCTSOLSQ, isSC = %d, maxLd %d, maxSt %d", gproc->getId(), isSC, maxLdNum, maxStNum);
 }
 
 StallCause SCTSOLSQ::addEntry(DInst *dinst) {

@@ -40,6 +40,12 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 	, retireStallByEmpty("P(%d)_retireStallByEmpty", i)
 	, retireStallByComSQ("P(%d)_retireStallByComSQ", i)
 {
+	// [sizhuo] issue/fetch/retire width must be equal in WMM
+	if(IssueWidth != FetchWidth || IssueWidth != RetireWidth) {
+		SescConf->notCorrect();
+	}
+
+	// [sizhuo] clear rename table
   bzero(RAT,sizeof(DInst*)*LREG_MAX);
 
 	// [sizhuo] simTim counter
@@ -62,6 +68,28 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
     retireStallByEx[t] = new GStatsCntr("P(%d)_retireStallByEx_%s", cpu_id, Instruction::opcode2Name(static_cast<InstOpcode>(t)));
 		I(retireStallByEx[t]);
 	}
+
+	for(int t = 0; t < MaxStall; t++) {
+		issueStall[t] = 0;
+	}
+  issueStall[SmallWinStall] = new GStatsCntr("P(%d)_issueStallByOutWin",i);
+  issueStall[SmallROBStall] = new GStatsCntr("P(%d)_issueStallByOutROB",i);
+  issueStall[SmallREGStall] = new GStatsCntr("P(%d)_issueStallByOutReg",i);
+  issueStall[OutsLoadsStall] = new GStatsCntr("P(%d)_issueStallByOutLd",i);
+  issueStall[OutsStoresStall] = new GStatsCntr("P(%d)_issueStallByOutSt",i);
+  issueStall[OutsBranchesStall] = new GStatsCntr("P(%d)_issueStallByOutBr",i);
+  issueStall[ReplaysStall] = new GStatsCntr("P(%d)_issueStallByReplay",i);
+  issueStall[SyscallStall] = new GStatsCntr("P(%d)_issueStallBySyscall",i);
+  issueStall[NoInstStall] = new GStatsCntr("P(%d)_issueStallByNoInst",i);
+	for(int t = 1; t < MaxStall; t++) {
+		// [sizhuo] 0 is NoStall, never should be used
+		I(issueStall[t]);
+	}
+
+	for(int t = 0; t < DInst::MaxReason; t++) {
+		issueStallByReplay[t] = new GStatsCntr("P(%d)_issueStallByReplay_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
+		I(issueStallByReplay[t]);
+	}
 }
 
 WMMProcessor::~WMMProcessor() {}
@@ -80,12 +108,13 @@ void WMMProcessor::fetch(FlowID fid) {
 }
 
 void WMMProcessor::issueToROB() {
-	int32_t nIssued = 0;
-	while(nIssued < IssueWidth) {
+	int32_t n2Issue = IssueWidth;
+	for(; n2Issue > 0; n2Issue--) {
 		// [sizhou] peek first inst in instQ
 		DInst *dinst = frontEnd.firstInst();
 		if(dinst == 0) {
-			// [sizhuo] instQ empty, done
+			// [sizhuo] instQ empty, done & incr counter for NoInstStall
+			issueStall[NoInstStall]->add(n2Issue, true);
 			return;
 		}
 		// [sizhuo] XXX: we are in no-sampling mode, every inst should have stats flag on
@@ -97,15 +126,17 @@ void WMMProcessor::issueToROB() {
 		StallCause sc = addInst(dinst);
 		if(sc != NoStall) {
 			// [sizhuo] issue fail, change stat & done
-			if(nIssued < RealisticWidth) {
-				nStall[sc]->add(RealisticWidth - nIssued, dinst->getStatsFlag());
+			issueStall[sc]->add(n2Issue, dinst->getStatsFlag());
+			// [sizhuo] for small win stall, track to the cluster
+			if(sc == SmallWinStall) {
+				(dinst->getCluster()->smallWinIssueStall).add(n2Issue, dinst->getStatsFlag());
 			}
 			return;
 		}
 		// [sizhuo] issue success, deq inst & incr counter
 		frontEnd.deqInst();
-		nIssued++;
 	}
+	I(n2Issue == 0);
 }
 
 StallCause WMMProcessor::addInst(DInst *dinst) {
@@ -452,6 +483,11 @@ bool WMMProcessor::advance_clock(FlowID fid) {
 
 	// [sizhuo] in replay mode, no fetch or issue
 	if(replayRecover) {
+		// [sizhuo] issue is stalled by replay
+		issueStall[ReplaysStall]->add(IssueWidth, true);
+		I(replayReason < DInst::MaxReason);
+		issueStallByReplay[replayReason]->add(IssueWidth, true);
+		// [sizhuo] do replay work
 		if(flushing) {
 			// [sizhuo] retire stall by flush
 			I(replayReason < DInst::MaxReason);

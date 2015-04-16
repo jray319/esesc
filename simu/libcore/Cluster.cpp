@@ -78,6 +78,7 @@ Cluster::Cluster(const char *clusterName, GProcessor *gp)
   ,rdRegPool("P(%d)_%s_rdRegPool",gp->getId(), clusterName)
   ,wrRegPool("P(%d)_%s_wrRegPool",gp->getId(), clusterName)
 	,MaxRegPool(SescConf->getInt(clusterName, "nRegs"))
+	,smallWinIssueStall("P(%d)_%s_issueStallbyWin", gp->getId(), clusterName)
 {
   bzero(res,sizeof(Resource *)*iMAX);  
 }

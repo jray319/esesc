@@ -116,6 +116,10 @@ protected:
 	GStatsCntr retireStallByComSQ; // [sizhuo] commit fence in WMM/TSO OR load in SC
 	GStatsCntr *retireStallByFlush[DInst::MaxReason]; // [sizhuo] ROB is flushing poisoned inst
 
+	// [sizhuo] stats for ROB issue port
+	GStatsCntr *issueStall[MaxStall];
+	GStatsCntr *issueStallByReplay[DInst::MaxReason];
+
 public:
 	WMMProcessor(GMemorySystem *gm, CPU_t i);
 	virtual ~WMMProcessor();

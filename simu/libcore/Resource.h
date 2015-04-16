@@ -63,6 +63,7 @@ enum StallCause {
   OutsBranchesStall,
   ReplaysStall,
   SyscallStall,
+	NoInstStall, // [sizhuo] newly added, issue stall because no inst to issue
   MaxStall,
   Suspend 
 };

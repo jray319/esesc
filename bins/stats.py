@@ -297,6 +297,15 @@ for line in resultFile:
 		else:
 			print 'ERROR: unknown issue stall type {}'.format(stallType)
 
+saveData['issueOutBr'] = issueOutBr
+saveData['issueOutLd'] = issueOutLd
+saveData['issueOutSt'] = issueOutSt
+saveData['issueSmallReg'] = issueSmallReg
+saveData['issueSmallWin'] = issueSmallWin
+saveData['issueSmallROB'] = issueSmallROB
+saveData['issueReplay'] = issueReplay
+saveData['issueSyscall'] = issueSyscall
+
 print '-- Issue Port Stall Ratio (Legacy & Inaccurate)'
 print '{:<6s}OutBr  OutLd  OutSt  SmallReg  SmallWin  SmallROB  Replay  Syscall'.format('(%)')
 for i in range(0, coreNum):

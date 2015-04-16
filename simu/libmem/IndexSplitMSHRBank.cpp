@@ -662,8 +662,9 @@ void IndexSplitMSHRBank::upReqToWait(AddrType lineAddr) {
 	I(en->mreq);
 	// [sizhuo] change state
 	en->state = Wait;
-	// [sizhuo] record time of forwarding req to lower level
+	// [sizhuo] record time & action of forwarding req to lower level
 	en->missStartTime = globalClock;
+	en->missAct = en->mreq->getAction();
 	// [sizhuo] invoke pending issue down req
 	processPendIssueDown(en->pendIssueDownQ);
 }
@@ -680,10 +681,14 @@ void IndexSplitMSHRBank::upReqToAck(AddrType lineAddr) {
 	I(en->mreq);
 	GI(en->state == Wait, (en->pendIssueDownQ).empty());
 	// [sizhuo] for Wait->Ack, sample miss latency
+	// since resp action may be different from original req
+	// we use en->missAct to determine miss type
+	// e.g. setValid --> setEx when L3 miss
 	if(en->state == Wait) {
 		I(avgMissLat[en->mreq->getAction()]);
 		I(globalClock > en->missStartTime);
-		avgMissLat[en->mreq->getAction()]->sample(globalClock - en->missStartTime, en->mreq->getStatsFlag());
+		I(en->missAct < ma_MAX);
+		avgMissLat[en->missAct]->sample(globalClock - en->missStartTime, en->mreq->getStatsFlag());
 	}
 	// [sizhuo] change state
 	en->state = Ack;

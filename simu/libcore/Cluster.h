@@ -91,6 +91,8 @@ class Cluster {
   Cluster(const char *clusterName, GProcessor *gp);
 
  public:
+	// [sizhuo] issue stall due to small win
+	GStatsCntr smallWinIssueStall;
 
   void select(DInst *dinst);
 

@@ -57,7 +57,7 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	SescConf->isInt("cpusimu", "ldldForwardDelay", gproc->getId());
 	SescConf->isInt("cpusimu", "stldForwardDelay", gproc->getId());
 	SescConf->isBetween("cpusimu", "maxLoads", 1, 256, gproc->getId());
-	SescConf->isBetween("cpusimu", "maxStores", 1, 256, gproc->getId());
+	SescConf->isBetween("cpusimu", "maxStores", 1, 1024, gproc->getId()); // [sizhuo] allow extremely large SQ
 	SescConf->isBetween("cpusimu", "ldldForwardDelay", 1, 5, gproc->getId());
 	SescConf->isBetween("cpusimu", "stldForwardDelay", 1, 5, gproc->getId());
 

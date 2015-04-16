@@ -8,7 +8,7 @@ WMMLSQ::WMMLSQ(GProcessor *gproc_)
 	: MTLSQ(gproc_)
 	, log2LineSize(DL1->getLog2LineSize())
 {
-	MSG("INFO: create P(%d)_WMMLSQ, log2LineSize %u", gproc->getId(), log2LineSize);
+	MSG("INFO: create P(%d)_WMMLSQ, log2LineSize %u, maxLd %d, maxSt %d", gproc->getId(), log2LineSize, maxLdNum, maxStNum);
 	I(log2LineSize > 0);
 }
 
