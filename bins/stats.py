@@ -12,6 +12,7 @@ if len(sys.argv) < 2:
 
 if not os.path.isfile(sys.argv[1]):
 	print 'ERROR: cannot find {}'.format(sys.argv[1])
+	sys.exit()
 
 # read file
 fp = open(sys.argv[1], 'r')
@@ -161,6 +162,7 @@ for line in resultFile:
 		else:
 			if count > 0:
 				print 'ERROR: unknow inst type {}'.format(instType)
+				sys.exit()
 
 print '-- Instruction Distribution'
 print '{:<6s}{:<6s}{:<6s}{:<6s}{:<9s}{:<10s}{:<9s}{:<11s}{:<10s}{:<9s}{:<9s}{:<9s}{:<6s}'.format('(%)', 
@@ -193,6 +195,7 @@ for line in resultFile:
 			unalignSt[coreId] = count
 		else:
 			print 'ERROR: unknow unalign type {}'.format(m.group(2))
+			sys.exit()
 
 print '-- Unaligned Memory Access'
 print '{:<6s}{:<14s}{:<14s}'.format('', 'Unalign Ld%', 'Unalign St%')
@@ -233,6 +236,7 @@ for line in resultFile:
 			retireStallByExOther[coreId] += count
 		else:
 			print 'ERROR: unkonw retire stall type {}'.format(stallType)
+			sys.exit()
 
 saveData['retireStallByExLd'] = retireStallByExLd
 saveData['retireStallByExOther'] = retireStallByExOther
@@ -263,65 +267,121 @@ for i in range(0, coreNum):
 print ''
 
 # issue port stall
-issueOutBr = [0] * coreNum
-issueOutLd = [0] * coreNum
-issueOutSt = [0] * coreNum
-issueSmallReg = [0] * coreNum
-issueSmallWin = [0] * coreNum
-issueSmallROB = [0] * coreNum
-issueReplay = [0] * coreNum
-issueSyscall = [0] * coreNum
+issueStallByOutBr = [0] * coreNum
+issueStallByOutLd = [0] * coreNum
+issueStallByOutSt = [0] * coreNum
+issueStallByOutReg = [0] * coreNum
+issueStallByOutWin = [0] * coreNum
+issueStallByOutWinAunit = [0] * coreNum
+issueStallByOutWinBunit = [0] * coreNum
+issueStallByOutWinCunit = [0] * coreNum
+issueStallByOutWinLunit = [0] * coreNum
+issueStallByOutWinSunit = [0] * coreNum
+issueStallByOutROB = [0] * coreNum
+issueStallByReplay = [0] * coreNum
+issueStallByReplayLd = [0] * coreNum
+issueStallByReplaySt = [0] * coreNum
+issueStallByReplayInv = [0] * coreNum
+issueStallBySyscall = [0] * coreNum
+issueStallByNoInst = [0] * coreNum
 
 for line in resultFile:
-	m = re.search(r'P\((\d+)\)_n(\w+)Stall\s*=\s*(\d+)\.0+', line)
+	m = re.search(r'P\((\d+)\)_issueStallBy(\w+)\s*=\s*(\d+)\.0+', line)
 	if m:
 		coreId = int(m.group(1))
 		stallType = m.group(2)
 		count = int(m.group(3))
-		if stallType == 'OutsBranches':
-			issueOutBr[coreId] = count
-		elif stallType == 'OutsLoads':
-			issueOutLd[coreId] = count
-		elif stallType == 'OutsStores':
-			issueOutSt[coreId] = count
-		elif stallType == 'SmallREG':
-			issueSmallReg[coreId] = count
-		elif stallType == 'SmallROB':
-			issueSmallROB[coreId] = count
-		elif stallType == 'SmallWin':
-			issueSmallWin[coreId] = count
+		if stallType == 'OutBr':
+			issueStallByOutBr[coreId] = count
+			if count != 0: # check count == 0
+				print 'ERROR: issueStallByOutBr[{}] = {} != 0'.format(coreId, count)
+				sys.exit()
 		elif stallType == 'Syscall':
-			issueSyscall[coreId] = count
-		elif stallType == 'Replays':
-			issueReplay[coreId] = count
+			issueStallBySyscall[coreId] = count
+			if count != 0: # check count == 0
+				print 'ERROR: issueStallBySyscall[{}] = {} != 0'.format(coreId, count)
+				sys.exit()
+		elif stallType == 'OutLd':
+			issueStallByOutLd[coreId] = count
+		elif stallType == 'OutSt':
+			issueStallByOutSt[coreId] = count
+		elif stallType == 'OutReg':
+			issueStallByOutReg[coreId] = count
+		elif stallType == 'OutROB':
+			issueStallByOutROB[coreId] = count
+		elif stallType == 'NoInst':
+			issueStallByNoInst[coreId] = count
+		elif stallType == 'OutWin':
+			issueStallByOutWin[coreId] = count
+		elif stallType == 'Replay':
+			issueStallByReplay[coreId] = count
+		elif stallType == 'Replay_Load':
+			issueStallByReplayLd[coreId] = count
+		elif stallType == 'Replay_Store':
+			issueStallByReplaySt[coreId] = count
+		elif stallType == 'Replay_CacheInv':
+			issueStallByReplayInv[coreId] = count
 		else:
 			print 'ERROR: unknown issue stall type {}'.format(stallType)
+			sys.exit()
+	m = re.search(r'P\((\d+)\)_(A|B|C|L|S)UNIT_issueStallByOutWin\s*=\s*(\d+)\.0+', line)
+	if m:
+		coreId = int(m.group(1))
+		unit = m.group(2)
+		count = int(m.group(3))
+		if unit == 'A':
+			issueStallByOutWinAunit[coreId] = count
+		elif unit == 'B':
+			issueStallByOutWinBunit[coreId] = count
+		elif unit == 'C':
+			issueStallByOutWinCunit[coreId] = count
+		elif unit == 'L':
+			issueStallByOutWinLunit[coreId] = count
+		elif unit == 'S':
+			issueStallByOutWinSunit[coreId] = count
+		else:
+			print 'ERROR: unkonw cluster {}'.format(unit)
+			sys.exit()
 
-saveData['issueOutBr'] = issueOutBr
-saveData['issueOutLd'] = issueOutLd
-saveData['issueOutSt'] = issueOutSt
-saveData['issueSmallReg'] = issueSmallReg
-saveData['issueSmallWin'] = issueSmallWin
-saveData['issueSmallROB'] = issueSmallROB
-saveData['issueReplay'] = issueReplay
-saveData['issueSyscall'] = issueSyscall
+saveData['issueStallByOutBr'] = issueStallByOutBr
+saveData['issueStallByOutLd'] = issueStallByOutLd
+saveData['issueStallByOutSt'] = issueStallByOutSt
+saveData['issueStallByOutReg'] = issueStallByOutReg
+saveData['issueStallByOutWin'] = issueStallByOutWin
+saveData['issueStallByOutWinAunit'] = issueStallByOutWinAunit
+saveData['issueStallByOutWinBunit'] = issueStallByOutWinBunit
+saveData['issueStallByOutWinCunit'] = issueStallByOutWinCunit
+saveData['issueStallByOutWinLunit'] = issueStallByOutWinLunit
+saveData['issueStallByOutWinSunit'] = issueStallByOutWinSunit
+saveData['issueStallByOutROB'] = issueStallByOutROB
+saveData['issueStallByReplay'] = issueStallByReplay
+saveData['issueStallByReplayLd'] = issueStallByReplayLd
+saveData['issueStallByReplaySt'] = issueStallByReplaySt
+saveData['issueStallByReplayInv'] = issueStallByReplayInv
+saveData['issueStallBySyscall'] = issueStallBySyscall
+saveData['issueStallByNoInst'] = issueStallByNoInst
 
-print '-- Issue Port Stall Ratio (Legacy & Inaccurate)'
-print '{:<6s}OutBr  OutLd  OutSt  SmallReg  SmallWin  SmallROB  Replay  Syscall'.format('(%)')
+print '-- Issue Port BW Distribution'
+print '{:<6s}OutBr  OutLd  OutSt  OutReg  OutWin  OutROB  Replay  Syscall  NoInst  Active'.format('(%)')
 for i in range(0, coreNum):
 	if cycle[i] <= 0:
-		print '{:<6s}{:<7s}{:<7s}{:<7s}{:<10s}{:<10s}{:<10s}{:<8s}{:<9s}'.format('P({})'.format(i),
-				'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan')
+		print '{:<6s}{:<7s}{:<7s}{:<7s}{:<8s}{:<8s}{:<8s}{:<8s}{:<9s}{:<8s}{:<8s}'.format('P({})'.format(i),
+				'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan')
 	else:
-		print '{:<6s}{:<7.2f}{:<7.2f}{:<7.2f}{:<10.2f}{:<10.2f}{:<10.2f}{:<8.2f}{:<9.2f}'.format('P({})'.format(i),
-				float(issueOutBr[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
-				float(issueOutLd[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
-				float(issueOutSt[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
-				float(issueSmallReg[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
-				float(issueSmallWin[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
-				float(issueSmallROB[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
-				float(issueReplay[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
-				float(issueSyscall[i]) / float(issueWidth) / float(cycle[i]) * 100.0)
+		print '{:<6s}{:<7.2f}{:<7.2f}{:<7.2f}{:<8.2f}{:<8.2f}{:<8.2f}{:<8.2f}{:<9.2f}{:<8.2f}{:<8.2f}'.format('P({})'.format(i),
+				float(issueStallByOutBr[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				float(issueStallByOutLd[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				float(issueStallByOutSt[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				float(issueStallByOutReg[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				float(issueStallByOutWin[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				float(issueStallByOutROB[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				float(issueStallByReplay[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				float(issueStallBySyscall[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				float(issueStallByNoInst[i]) / float(issueWidth) / float(cycle[i]) * 100.0,
+				100.0 - float(issueStallByOutBr[i] + issueStallByOutLd[i] + issueStallByOutSt[i]
+					+ issueStallByOutReg[i] + issueStallByOutWin[i] + issueStallByOutROB[i]
+					+ issueStallByReplay[i] + issueStallBySyscall[i] + issueStallByNoInst[i]
+					) / float(issueWidth) / float(cycle[i]) * 100.0)
 print ''
 
 # rob usage
@@ -383,44 +443,51 @@ print '-- Memory Access'
 print '{:<6s}{:<16s}{:<16s}{:<16s}'.format('', 'Read', 'Write', 'Prefetch')
 print ('{:<6s}' + 'ReqPKI  AvgLat  ' * 3).format('')
 for i in range(0, coreNum):
-	print ('{:<6s}' + '{:<8s}{:<8s}' * 3).format('P({})'.format(i),
-			'nan' if inst[i] <= 0 else '{:<8.1f}'.format(float(readMemNum[i]) / float(inst[i]) * 1000.0), '{:<8.1f}'.format(readMemLat[i]),
-			'nan' if inst[i] <= 0 else '{:<8.1f}'.format(float(writeMemNum[i]) / float(inst[i]) * 1000.0), '{:<8.1f}'.format(writeMemLat[i]),
-			'nan' if inst[i] <= 0 else '{:<8.1f}'.format(float(prefetchMemNum[i]) / float(inst[i]) * 1000.0), '{:<8.1f}'.format(prefetchMemLat[i]))
+	print ('{:<6s}' + '{:<8s}{:<8.1f}' * 3).format('P({})'.format(i),
+			'nan' if inst[i] <= 0 else '{:<8.1f}'.format(float(readMemNum[i]) / float(inst[i]) * 1000.0), readMemLat[i],
+			'nan' if inst[i] <= 0 else '{:<8.1f}'.format(float(writeMemNum[i]) / float(inst[i]) * 1000.0), writeMemLat[i],
+			'nan' if inst[i] <= 0 else '{:<8.1f}'.format(float(prefetchMemNum[i]) / float(inst[i]) * 1000.0), prefetchMemLat[i])
 print ''
 
 # cache miss
-# since memory will convert read req to set ex resp,
-# the avg lat in MSHR is inaccurate (because it classifies using resp action)
 readMissNum = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+readMissLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
 writeMissNum = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+writeMissLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
 prefetchMissNum = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+prefetchMissLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
 
 for line in resultFile:
-	m = re.search(r'(DL1|L2|L3)\((\d+)\)_(read|write|prefetch)(Half)?Miss\s*=\s*(\d+)\.0+', line)
+	m = re.search(r'(DL1|L2|L3)\((\d+)\)_MSHR_(read|write|prefetch)MissLat:n=(\d+)::v=(\d+\.\d+)', line)
 	if m:
 		cacheType = m.group(1)
 		coreId = int(m.group(2))
 		missType = m.group(3)
-		count = int(m.group(5))
+		num = int(m.group(4))
+		lat = float(m.group(5))
 		if missType == 'read':
-			readMissNum[cacheType][coreId] = count
+			readMissNum[cacheType][coreId] = num
+			readMissLat[cacheType][coreId] = lat
 		elif missType == 'write':
-			writeMissNum[cacheType][coreId] = count
+			writeMissNum[cacheType][coreId] = num
+			writeMissLat[cacheType][coreId] = lat
 		elif missType == 'prefetch':
-			prefetchMissNum[cacheType][coreId] = count
+			prefetchMissNum[cacheType][coreId] = num
+			prefetchMissLat[cacheType][coreId] = lat
 		else:
 			print 'ERROR: unknown miss type {}'.format(missType)
+			sys.exit()
 
 print '-- Cache Miss'
-print '{:<8s}Read  Write  Prefetch'.format('(MPKI)')
+print '{:<8s}{:<14s}{:<14s}{:<14s}'.format('', 'Read', 'Write', 'Prefetch')
+print ('{:<8s}' + 'MPKI  AvgLat  ' * 3).format('')
 for cache in ['DL1', 'L2', 'L3']:
 	for i in range(0, 1 if cache == 'L3' else coreNum):
 		instNum = float(sum(inst) if cache == 'L3' else inst[i])
-		print '{:8s}{:<6.1f}{:<7.1f}{:<8.1f}'.format('{}({})'.format(cache, i),
-				float(readMissNum[cache][i]) / instNum * 1000.0, 
-				float(writeMissNum[cache][i]) / instNum * 1000.0, 
-				float(prefetchMissNum[cache][i]) / instNum * 1000.0)
+		print ('{:8s}' + '{:<6s}{:<8.1f}' * 3).format('{}({})'.format(cache, i),
+				'nan' if instNum <= 0 else '{:<6.1f}'.format(float(readMissNum[cache][i]) / instNum * 1000.0), readMissLat[cache][i],
+				'nan' if instNum <= 0 else '{:<6.1f}'.format(float(writeMissNum[cache][i]) / instNum * 1000.0), writeMissLat[cache][i],
+				'nan' if instNum <= 0 else '{:<6.1f}'.format(float(prefetchMissNum[cache][i]) / instNum * 1000.0), prefetchMissLat[cache][i])
 print ''
 
 
@@ -428,12 +495,14 @@ print ''
 if len(sys.argv) >= 3:
 	if not os.path.isdir(sys.argv[2]):
 		print 'ERROR: cannot file {}'.format(sys.argv[2])
+		sys.exit()
 
 	fileName = os.path.basename(sys.argv[1]).split('.')[0]
 	jsonName = os.path.join(sys.argv[2], fileName + '.json')
 	matName = os.path.join(sys.argv[2], fileName + '.mat')
 	if os.path.isfile(jsonName) or os.path.isfile(matName):
 		print 'ERROR: {} or {} already exists'.format(jsonName, matName)
+		sys.exit()
 
 	sio.savemat(matName, mdict = saveData, appendmat = False, oned_as = 'column')
 
