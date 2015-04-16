@@ -314,6 +314,9 @@ def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 		print(name + " doesn't have parameter for size " + size)
 		return False
 
+	# special mem model: usqtso -- unlimit SQ
+	unlimitSQ = mem_model == 'usqtso'
+
 	# copy exe
 	if os.path.isfile(name): # remove existing one
 		os.remove(name)
@@ -342,12 +345,16 @@ def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
-			"sed 's/__MEMORY_MODEL__/" + mem_model + "/g' | " +
+			"sed 's/__MEMORY_MODEL__/" + ('tso' if mem_model == 'usqtso' else mem_model) + "/g' | " + # simulator cannot recognize usqtso
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
 			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
 			)
 	print(shell_cmd)
 	os.system(shell_cmd)
+
+	# for unlimit SQ, change simu.conf: SQ size to 1024
+	if unlimitSQ:
+		os.system("sed -i 's/^maxStores.*$/maxStores = 1024/g' simu.conf")
 
 	# special addtional work
 	if name == 'facesim': # make output dir for facesim
