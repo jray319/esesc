@@ -8,15 +8,18 @@
 const uint32_t MTLSQ::memOrdAlignShift = 2; // [sizhuo] word aligned
 
 MTLSQ* MTLSQ::create(GProcessor *gproc_) {
+	SescConf->isCharPtr("cpusimu", "memModel", gproc_->getId());
+	SescConf->isBool("cpusimu", "sctsoLdWait", gproc_->getId());
 	const char *memModel = SescConf->getCharPtr("cpusimu", "memModel", gproc_->getId());
+	const bool ldWait = SescConf->getBool("cpusimu", "sctsoLdWait", gproc_->getId());
 	MTLSQ *ret = 0;
 
 	if(!strcasecmp(memModel, "wmm")) {
 		ret = new WMMLSQ(gproc_);
 	} else if(!strcasecmp(memModel, "tso")) {
-		ret = new SCTSOLSQ(gproc_, false);
+		ret = new SCTSOLSQ(gproc_, false, ldWait);
 	} else if(!strcasecmp(memModel, "sc")) {
-		ret = new SCTSOLSQ(gproc_, true);
+		ret = new SCTSOLSQ(gproc_, true, ldWait);
 	} else {
 		SescConf->notCorrect();
 	}

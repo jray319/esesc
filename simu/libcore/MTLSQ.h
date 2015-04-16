@@ -241,7 +241,8 @@ public:
 // load is only killed by store or cache invalidation, not load
 class SCTSOLSQ : public MTLSQ {
 private:
-	bool isSC; // [sizhuo] true: SC, false: TSO
+	const bool isSC; // [sizhuo] true: SC, false: TSO
+	const bool ldWait; // [sizhuo] load will be stalled if there is older load to same addr not finished
 	Time_t lastComStID; // [sizhuo] inst ID of last store commited to memory
 
 protected:
@@ -249,7 +250,7 @@ protected:
 	virtual void stCommited(Time_t id);
 
 public:
-	SCTSOLSQ(GProcessor *gproc_, bool sc);
+	SCTSOLSQ(GProcessor *gproc_, bool sc, bool wait);
 	virtual ~SCTSOLSQ() {}
 
 	virtual StallCause addEntry(DInst *dinst);

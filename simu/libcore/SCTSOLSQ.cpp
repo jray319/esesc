@@ -4,12 +4,13 @@
 #include "SescConf.h"
 #include "DInst.h"
 
-SCTSOLSQ::SCTSOLSQ(GProcessor *gproc_, bool sc)
+SCTSOLSQ::SCTSOLSQ(GProcessor *gproc_, bool sc, bool wait)
 	: MTLSQ(gproc_)
 	, isSC(sc)
+	, ldWait(wait)
 	, lastComStID(DInst::invalidID)
 {
-	MSG("INFO: create P(%d)_SCTSOLSQ, isSC = %d, maxLd %d, maxSt %d", gproc->getId(), isSC, maxLdNum, maxStNum);
+	MSG("INFO: create P(%d)_SCTSOLSQ, isSC %d, ldWait %d, maxLd %d, maxSt %d", gproc->getId(), isSC, ldWait, maxLdNum, maxStNum);
 }
 
 StallCause SCTSOLSQ::addEntry(DInst *dinst) {
@@ -162,16 +163,27 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 		I(!olderIns->isRecFence());
 		// [sizhuo] we find inst to same ALIGNED address for bypass
 		if(getMemOrdAlignAddr(olderDInst->getAddr()) == getMemOrdAlignAddr(addr)) {
-			if(olderIns->isLoad() && olderEn->state == Done) {
-				// [sizhuo] we can bypass from this executed load, mark as executing
-				exEn->ldSrcID = olderEn->ldSrcID; // [sizhuo] same load src ID
-				exEn->state = Exe;
-				incrExLdNum(); // [sizhuo] increment executing ld num
-				// [sizhuo] finish the load after forwarding delay
-				ldDoneCB::schedule(ldldForwardDelay, this, dinst);
-				// [sizhuo] stats
-				nLdLdForward.inc(doStats);
-				return;
+			if(olderIns->isLoad()) {
+				if(olderEn->state == Done) {
+					// [sizhuo] we can bypass from this executed load, mark as executing
+					exEn->ldSrcID = olderEn->ldSrcID; // [sizhuo] same load src ID
+					exEn->state = Exe;
+					incrExLdNum(); // [sizhuo] increment executing ld num
+					// [sizhuo] finish the load after forwarding delay
+					ldDoneCB::schedule(ldldForwardDelay, this, dinst);
+					// [sizhuo] stats
+					nLdLdForward.inc(doStats);
+					return;
+				} else if(olderEn->state == Wait || olderEn->state == Exe) {
+					if(ldWait) {
+						// [sizhuo] let this load wait until older one finishes
+						(olderEn->pendExQ).push(scheduleLdExCB::create(this, dinst));
+						nLdStallByLd.inc(doStats);
+						return;
+					}
+				} else {
+					I(0);
+				}
 			} else if(olderIns->isStore()) {
 				// [sizhuo] we can bypass from this executed store
 				// mark the entry as executing
@@ -183,6 +195,8 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 				// [sizhuo] stats
 				nStLdForward.inc(doStats);
 				return;
+			} else {
+				I(0);
 			}
 		}
 	}
