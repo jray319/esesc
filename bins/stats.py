@@ -209,6 +209,7 @@ print ''
 retireStallByExLd = [0] * coreNum
 retireStallByExOther = [0] * coreNum
 retireStallByFlushInv = [0] * coreNum
+retireStallByFlushRep = [0] * coreNum
 retireStallByFlushSt = [0] * coreNum
 retireStallByFlushLd = [0] * coreNum
 retireStallByComSQ = [0] * coreNum
@@ -226,6 +227,8 @@ for line in resultFile:
 			retireStallByComSQ[coreId] = count
 		elif stallType == 'Flush_CacheInv':
 			retireStallByFlushInv[coreId] = count
+		elif stallType == 'Flush_CacheRep':
+			retireStallByFlushRep[coreId] = count
 		elif stallType == 'Flush_Load':
 			retireStallByFlushLd[coreId] = count
 		elif stallType == 'Flush_Store':
@@ -241,28 +244,30 @@ for line in resultFile:
 saveData['retireStallByExLd'] = retireStallByExLd
 saveData['retireStallByExOther'] = retireStallByExOther
 saveData['retireStallByFlushInv'] = retireStallByFlushInv
+saveData['retireStallByFlushRep'] = retireStallByFlushRep
 saveData['retireStallByFlushSt'] = retireStallByFlushSt
 saveData['retireStallByFlushLd'] = retireStallByFlushLd
 saveData['retireStallByComSQ'] = retireStallByComSQ
 saveData['retireStallByEmpty'] = retireStallByEmpty
 
 print '-- Retire Port BW Distribution'
-print '{:<6s}LdEx   OtherEx  FlushSt  FlushLd  FlushInv  ComSQ  Empty  Active'.format('(%)')
+print '{:<6s}LdEx   OtherEx  FlushSt  FlushLd  FlushInv FlushRep ComSQ  Empty  Active'.format('(%)')
 for i in range(0, coreNum):
 	if cycle[i] <= 0:
-		print '{:<6s}{:<7s}{:<9s}{:<9s}{:<9s}{:<10s}{:<7s}{:<7s}{:<8s}'.format('P({})'.format(i),
-				'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan')
+		print '{:<6s}{:<7s}{:<9s}{:<9s}{:<9s}{:<10s}{:<10s}{:<7s}{:<7s}{:<8s}'.format('P({})'.format(i),
+				'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan')
 	else:
-		print '{:<6s}{:<7.2f}{:<9.2f}{:<9.3f}{:<9.3f}{:<10.3f}{:<7.2f}{:<7.2f}{:<8.2f}'.format('P({})'.format(i),
+		print '{:<6s}{:<7.2f}{:<9.2f}{:<9.3f}{:<9.3f}{:<10.3f}{:<10.3f}{:<7.2f}{:<7.2f}{:<8.2f}'.format('P({})'.format(i),
 				float(retireStallByExLd[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByExOther[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByFlushSt[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByFlushLd[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByFlushInv[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
+				float(retireStallByFlushRep[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByComSQ[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByEmpty[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				100.0 - float(retireStallByExLd[i] + retireStallByExOther[i] + retireStallByFlushLd[i] 
-					+ retireStallByFlushInv[i] + retireStallByFlushSt[i] + retireStallByComSQ[i]
+					+ retireStallByFlushInv[i] + retireStallByFlushRep[i] + retireStallByFlushSt[i] + retireStallByComSQ[i]
 					+ retireStallByEmpty[i]) / float(retireWidth) / float(cycle[i]) * 100.0)
 print ''
 
@@ -282,6 +287,7 @@ issueStallByReplay = [0] * coreNum
 issueStallByReplayLd = [0] * coreNum
 issueStallByReplaySt = [0] * coreNum
 issueStallByReplayInv = [0] * coreNum
+issueStallByReplayRep = [0] * coreNum
 issueStallBySyscall = [0] * coreNum
 issueStallByNoInst = [0] * coreNum
 
@@ -321,6 +327,8 @@ for line in resultFile:
 			issueStallByReplaySt[coreId] = count
 		elif stallType == 'Replay_CacheInv':
 			issueStallByReplayInv[coreId] = count
+		elif stallType == 'Replay_CacheRep':
+			issueStallByReplayRep[coreId] = count
 		else:
 			print 'ERROR: unknown issue stall type {}'.format(stallType)
 			sys.exit()
@@ -349,7 +357,7 @@ for i in range(0, coreNum):
 			+ issueStallByOutWinLunit[i] + issueStallByOutWinSunit[i]) != issueStallByOutWin[i]:
 		print 'ERROR: core {} inconsistent issueStallByOutWin'.format(i)
 		sys.exit()
-	if issueStallByReplayLd[i] + issueStallByReplaySt[i] + issueStallByReplayInv[i] != issueStallByReplay[i]:
+	if issueStallByReplayLd[i] + issueStallByReplaySt[i] + issueStallByReplayInv[i] + issueStallByReplayRep[i] != issueStallByReplay[i]:
 		print 'ERROR: core {} inconsistent issueStallByReplay'.format(i)
 		sys.exit()
 
@@ -368,6 +376,7 @@ saveData['issueStallByReplay'] = issueStallByReplay
 saveData['issueStallByReplayLd'] = issueStallByReplayLd
 saveData['issueStallByReplaySt'] = issueStallByReplaySt
 saveData['issueStallByReplayInv'] = issueStallByReplayInv
+saveData['issueStallByReplayRep'] = issueStallByReplayRep
 saveData['issueStallBySyscall'] = issueStallBySyscall
 saveData['issueStallByNoInst'] = issueStallByNoInst
 
