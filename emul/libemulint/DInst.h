@@ -106,6 +106,7 @@ public:
 		Store,
 		Load,
 		CacheInv,
+		CacheRep,
 		MaxReason
 	} ReplayReason;
 

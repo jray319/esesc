@@ -68,19 +68,17 @@ private:
 		UpReqState state;
 		const MemRequest *mreq;
 		Time_t missStartTime; // [sizhuo] time when sending req to lower level
-		MsgAction missAct; // [sizhuo] since resp act may not be req act, we record it
 
 		// [sizhuo] pending issue up/down req blocked by this req
 		PendIssueDownQ pendIssueDownQ;
 		PendIssueUpQ pendIssueUpQ;
 
-		UpReqEntry() : lineAddr(0), state(Sleep) , mreq(0), missStartTime(0), missAct(ma_MAX) {}
+		UpReqEntry() : lineAddr(0), state(Sleep) , mreq(0), missStartTime(0) {}
 		void clear() {
 			lineAddr = 0;
 			state = Sleep;
 			mreq = 0;
 			missStartTime = 0;
-			missAct = ma_MAX;
 		}
 	};
 	// [sizhuo] pool of upgrade req entries

@@ -348,7 +348,7 @@ void SCTSOLSQ::stCommited(Time_t id) {
 	comSQEntryPool.in(comEn);
 }
 
-void SCTSOLSQ::cacheInv(AddrType lineAddr, uint32_t shift) {
+void SCTSOLSQ::cacheEvict(AddrType lineAddr, uint32_t shift, bool isReplace) {
 	// [sizhuo] search LSQ to kill eager loads on same CACHE LINE addr
 	for(SpecLSQ::iterator iter = specLSQ.begin(); iter != specLSQ.end(); iter++) {
 		SpecLSQEntry *killEn = iter->second;
@@ -366,10 +366,14 @@ void SCTSOLSQ::cacheInv(AddrType lineAddr, uint32_t shift) {
 		// XXX: we use <= in comparison of load src ID
 		if((killDInst->getAddr() >> shift) == lineAddr && killIns->isLoad() && killEn->state == Done && killEn->ldSrcID <= lastComStID) {
 			// [sizhuo] this load must be killed & set replay reason
-			killDInst->setReplayReason(DInst::CacheInv);
+			killDInst->setReplayReason(isReplace ? DInst::CacheRep : DInst::CacheInv);
 			gproc->replay(killDInst);
 			// [sizhuo] stats
-			nLdKillByInv.inc(doStats);
+			if(isReplace) {
+				nLdKillByRep.inc(doStats);
+			} else {
+				nLdKillByInv.inc(doStats);
+			}
 			// [sizhuo] ROB will flush, we can stop
 			break;
 		}

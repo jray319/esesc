@@ -237,6 +237,7 @@ protected:
     MemRequest *mreq = create(m,addr, doStats, cb);
     mreq->mt         = mt_req;
     mreq->ma         = ma_setValid; // For reads, MOES are valid states
+		mreq->origReqAct = ma_setValid; // [sizhuo] set original action
 		mreq->debug = dbg || mreq->debug; // [sizhuo] add debug bit
 		m->req(mreq);
   }
@@ -245,6 +246,7 @@ protected:
     MemRequest *mreq = create(m,addr,doStats, cb);
     mreq->mt         = mt_req;
     mreq->ma         = ma_setDirty; // For writes, only MO are valid states
+		mreq->origReqAct = ma_setDirty; // [sizhuo] set original action
 		mreq->debug = dbg || mreq->debug; // [sizhuo] add debug bit
 		m->req(mreq);
   }
@@ -253,6 +255,7 @@ protected:
     MemRequest *mreq = create(m,addr,doStats, cb);
     mreq->mt         = mt_req;
     mreq->ma         = ma_setExclusive; //ma_setDirty; // [sizhuo] prefetch to E
+		mreq->origReqAct = ma_setExclusive; // [sizhuo] set original action
 		mreq->debug = dbg || mreq->debug; // [sizhuo] add debug bit
 		m->req(mreq);
   }
@@ -390,6 +393,10 @@ protected:
 	const MemRequest *getSetStateAckOrig() const { return setStateAckOrig; }
 private:
 	bool debug;
+
+	// [sizhuo] original req action (read req may be changed to setEx when LLC misses)
+	MsgAction origReqAct;
+
 public:
 #ifdef DEBUG
 	void setDebug() { debug = true; }
@@ -431,6 +438,9 @@ public:
 	
 	// [sizhuo] data valid bit for setStateAck: true if carries data
 	bool downRespData;
+
+	// [sizhuo] return original req action
+	MsgAction getOrigReqAction() const { return origReqAct; }
 	/*****************************************************************/
 };
 

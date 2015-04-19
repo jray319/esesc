@@ -144,9 +144,9 @@ protected:
 	GStatsCntr nLdKillByLd;
 	GStatsCntr nLdKillBySt;
 	GStatsCntr nLdKillByInv;
+	GStatsCntr nLdKillByRep;
 	GStatsCntr nLdReExByLd;
 	GStatsCntr nLdReExBySt;
-	GStatsCntr nLdReExByInv;
 	GStatsCntr nStLdForward;
 	GStatsCntr nLdLdForward;
 
@@ -179,10 +179,11 @@ public:
 	typedef CallbackMember1<MTLSQ, DInst*, &MTLSQ::issue> issueCB;
 	// [sizhuo] retire entry from speculative LSQ
 	virtual bool retire(DInst *dinst) = 0;
-	// [sizhuo] cache invalidation may kill loads
+	// [sizhuo] cache eviction may kill loads
 	// lineAddr is the address of cache line, shift is log2(line size)
-	virtual void cacheInv(AddrType lineAddr, uint32_t shift) = 0;
-	typedef CallbackMember2<MTLSQ, AddrType, uint32_t, &MTLSQ::cacheInv> cacheInvCB;
+	// isReplay indicates whether cache evict is due to replacement
+	virtual void cacheEvict(AddrType lineAddr, uint32_t shift, bool isReplace) = 0;
+	typedef CallbackMember3<MTLSQ, AddrType, uint32_t, bool, &MTLSQ::cacheEvict> cacheEvictCB;
 	// [sizhuo] for reset when execption happens
 	virtual void reset();
 	virtual bool isReset();
@@ -232,7 +233,7 @@ public:
 	virtual StallCause addEntry(DInst *dinst);
 	virtual void issue(DInst *dinst);
 	virtual bool retire(DInst *dinst);
-	virtual void cacheInv(AddrType lineAddr, uint32_t shift) {};
+	virtual void cacheEvict(AddrType lineAddr, uint32_t shift, bool isReplace) {};
 };
 
 // [sizhuo] LSQ for SC & TSO
@@ -256,7 +257,7 @@ public:
 	virtual StallCause addEntry(DInst *dinst);
 	virtual void issue(DInst *dinst);
 	virtual bool retire(DInst *dinst);
-	virtual void cacheInv(AddrType lineAddr, uint32_t shift);
+	virtual void cacheEvict(AddrType lineAddr, uint32_t shift, bool isReplace);
 };
 
 #endif

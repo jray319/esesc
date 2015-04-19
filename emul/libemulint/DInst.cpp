@@ -44,7 +44,7 @@ Time_t DInst::currentID= 1; //0;
 // [sizhuo] 0 is invalid ID
 const Time_t DInst::invalidID = 0;
 
-const char* DInst::replayReasonName[MaxReason] = {"Store", "Load", "CacheInv"};
+const char* DInst::replayReasonName[MaxReason] = {"Store", "Load", "CacheInv", "CacheRep"};
 
 DInst::DInst()
 {

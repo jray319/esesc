@@ -458,17 +458,19 @@ void ACache::doReq(MemRequest *mreq) {
 					// [sizhuo] then forward req to lower level at the same time
 					forwardReqDown(mreq, lineAddr, maxDelay + goDownDelay);
 					// [sizhuo] for L1 D$: search LSQ to kill eager loads
+					// cache eviction is caused by replacement
 					if(isL1) {
 						I(mtLSQ);
-						MTLSQ::cacheInvCB::schedule(maxDelay + goUpDelay, mtLSQ, repLineAddr, cache->log2LineSize);
+						MTLSQ::cacheEvictCB::schedule(maxDelay + goUpDelay, mtLSQ, repLineAddr, cache->log2LineSize, true);
 					}
 				} else {
 					// [sizhuo] silently drop the line, directly go to lower level after tag write
 					forwardReqDown(mreq, lineAddr, tagWriteDelay + goDownDelay);
 					// [sizhuo] for L1 D$: search LSQ to kill eager loads
+					// cache eviction is caused by replacement
 					if(isL1) {
 						I(mtLSQ);
-						MTLSQ::cacheInvCB::schedule(tagWriteDelay + goUpDelay, mtLSQ, repLineAddr, cache->log2LineSize);
+						MTLSQ::cacheEvictCB::schedule(tagWriteDelay + goUpDelay, mtLSQ, repLineAddr, cache->log2LineSize, true);
 					}
 				}
 			} else {
@@ -496,8 +498,10 @@ void ACache::doReq(MemRequest *mreq) {
 					mreq->line = 0;
 					mshr->retireUpReq(lineAddr, delay);
 					// [sizhuo] sample avg mem access latency
-					I(avgMemLat[reqAct]);
-					avgMemLat[reqAct]->sample(mreq->getTimeDelay() + delay + goUpDelay, doStats);
+					I(mreq->getOrigReqAction() < ma_MAX);
+					I(avgMemLat[mreq->getOrigReqAction()]);
+					I(mreq->getOrigReqAction() == reqAct);
+					avgMemLat[mreq->getOrigReqAction()]->sample(mreq->getTimeDelay() + delay + goUpDelay, doStats);
 					// [sizhuo] end this msg
 					mreq->pos = MemRequest::Router;
 					mreq->ack(goUpDelay + delay);
@@ -557,8 +561,9 @@ void ACache::doReqAck(MemRequest *mreq) {
 		// [sizhuo] get delay in writing tag & data
 		const TimeDelta_t delay = std::max(cache->getTagAccessTime(lineAddr, doStats), cache->getDataAccessTime(lineAddr, doStats)) - globalClock;
 		// [sizhuo] sample avg mem access latency
-		I(avgMemLat[reqAckAct]);
-		avgMemLat[reqAckAct]->sample(mreq->getTimeDelay() + delay + goUpDelay, doStats);
+		I(mreq->getOrigReqAction() < ma_MAX);
+		I(avgMemLat[mreq->getOrigReqAction()]);
+		avgMemLat[mreq->getOrigReqAction()]->sample(mreq->getTimeDelay() + delay + goUpDelay, doStats);
 		// [sizhuo] retire MSHR & release occupation on cache line & end msg
 		line->upReq = 0;
 		mshr->retireUpReq(lineAddr, delay);
@@ -745,7 +750,16 @@ void ACache::doSetState(MemRequest *mreq) {
 			// [sizhuo] for L1 D$: search LSQ to kill eager loads
 			if(isL1 && reqAct == ma_setInvalid) {
 				I(mtLSQ);
-				MTLSQ::cacheInvCB::schedule(delay + goUpDelay, mtLSQ, lineAddr, cache->log2LineSize);
+				// [sizhuo] determine the reason of invalidation
+				// trace back to original req, compare line addr
+				// we assume line sizes are same for all caches
+				const MemRequest *origReq = mreq->getSetStateAckOrig();
+				I(origReq);
+				while(origReq->getSetStateAckOrig()) {
+					origReq = origReq->getSetStateAckOrig();
+				}
+				bool isReplace = cache->getLineAddr(origReq->getAddr()) != lineAddr;
+				MTLSQ::cacheEvictCB::schedule(delay + goUpDelay, mtLSQ, lineAddr, cache->log2LineSize, isReplace);
 			}
 		}
 	} else {
