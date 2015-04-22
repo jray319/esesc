@@ -459,3 +459,51 @@ def run_splash(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
 	return True
 ####
 
+# subroutine to run microbenchmark write
+def run_micro_write(array_size, iteration, mem_model, doPrefetch):
+	# special mem model: usqtso -- unlimit SQ
+	unlimitSQ = mem_model == 'usqtso'
+
+	# copy exe
+	if os.path.isfile('write'): # remove existing one
+		os.remove('write')
+	exe_path = os.path.join(bench_root_dir, 'micro', 'write', 'write')
+	if not os.path.isfile(exe_path):
+		print(exe_path + " doesn't exist!")
+		return False
+	shutil.copy(exe_path, '.')
+
+	# change esesc.conf
+	bench_cmd = 'write {} {}'.format(array_size, iteration)
+	report_file = 'micro_write_{}_c1_t1_pf{}'.format(mem_model, int(doPrefetch))
+
+	shell_cmd = (
+			"sed 's/__CPU_MAX_ID__/0/g' esesc.conf.template | " + 
+			"sed 's/__MEMORY_MODEL__/" + ('tso' if mem_model == 'usqtso' else mem_model) + "/g' | " + # simulator cannot recognize usqtso
+			"sed 's/__STORE_PREFETCH__/" + ('true' if doPrefetch else 'false') + "/g' | "
+			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
+			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
+			)
+	print(shell_cmd)
+	os.system(shell_cmd)
+
+	# for unlimit SQ, change simu.conf: SQ size to 1024
+	if unlimitSQ:
+		os.system("sed -i 's/^maxStores.*$/maxStores = 1024/g' simu.conf")
+
+	# run
+	log_file = report_file + '.log'
+	shell_cmd = '../main/esesc 2>&1 | tee ' + log_file
+	print(shell_cmd)
+	os.system(shell_cmd)
+
+	# remove input files & exe
+	#remove_here(all_inputs)
+	#os.remove(name)
+
+	# change report file mode
+	shell_cmd = 'chmod 644 esesc_' + report_file + '.*'
+	os.system(shell_cmd)
+
+	return True
+###
