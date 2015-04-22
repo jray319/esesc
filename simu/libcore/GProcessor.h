@@ -209,6 +209,8 @@ class GProcessor {
 #endif
     float getTurboRatio() { return EmuSampler::getTurboRatio(); };
 
+		// [sihzuo] newly added, return inst ID of ROB head
+		virtual Time_t getROBHeadID() { return DInst::invalidID; }
 };
 
 #endif   // GPROCESSOR_H

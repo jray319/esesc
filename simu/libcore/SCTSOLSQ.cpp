@@ -156,6 +156,7 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 		I(olderEn);
 		DInst *olderDInst = olderEn->dinst;
 		I(olderDInst);
+		I(olderDInst->getID() == iter->first);
 		const Instruction *const olderIns = olderDInst->getInst();
 		I(!olderDInst->isPoisoned()); // [sizhuo] can't be poisoned
 		I(iter->first < id);
@@ -165,15 +166,22 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 		if(getMemOrdAlignAddr(olderDInst->getAddr()) == getMemOrdAlignAddr(addr)) {
 			if(olderIns->isLoad()) {
 				if(olderEn->state == Done) {
-					// [sizhuo] we can bypass from this executed load, mark as executing
-					exEn->ldSrcID = olderEn->ldSrcID; // [sizhuo] same load src ID
-					exEn->state = Exe;
-					incrExLdNum(); // [sizhuo] increment executing ld num
-					// [sizhuo] finish the load after forwarding delay
-					ldDoneCB::schedule(ldldForwardDelay, this, dinst);
-					// [sizhuo] stats
-					nLdLdForward.inc(doStats);
-					return;
+					if(!olderEn->stale) {
+						// [sizhuo] we can bypass from this executed load with non-stale data
+						// mark as executing
+						exEn->ldSrcID = olderEn->ldSrcID; // [sizhuo] same load src ID
+						exEn->state = Exe;
+						exEn->forwarding = true; // [sizhuo] set forwarding bit
+						incrExLdNum(); // [sizhuo] increment executing ld num
+						// [sizhuo] finish the load after forwarding delay
+						ldDoneCB::schedule(ldldForwardDelay, this, dinst);
+						// [sizhuo] stats
+						nLdLdForward.inc(doStats);
+						return;
+					} else {
+						// [sizhuo] load with stale data, must be ROB head
+						I(olderDInst->getID() == gproc->getROBHeadID());
+					}
 				} else if(olderEn->state == Wait || olderEn->state == Exe) {
 					if(ldWait) {
 						// [sizhuo] let this load wait until older one finishes
@@ -189,6 +197,7 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 				// mark the entry as executing
 				exEn->ldSrcID = olderDInst->getID(); // [sizhuo] record this store as load src
 				exEn->state = Exe;
+				exEn->forwarding = true; // [sizhuo] set forwarding bit
 				incrExLdNum(); // [sizhuo] increment executing ld num
 				// [sizhuo] finish the load after forwarding delay
 				ldDoneCB::schedule(stldForwardDelay, this, dinst);
@@ -211,6 +220,7 @@ void SCTSOLSQ::ldExecute(DInst *dinst) {
 			// [sizhuo] bypass from commited store, set ld as executing
 			exEn->ldSrcID = rIter->first; // [sizhuo] record this store as load src
 			exEn->state = Exe;
+			exEn->forwarding = true; // [sizhuo] set forwarding bit
 			incrExLdNum(); // [sizhuo] increment executing ld num
 			// [sizhuo] finish load after forwarding delay
 			ldDoneCB::schedule(stldForwardDelay, this, dinst);
@@ -355,6 +365,7 @@ void SCTSOLSQ::cacheEvict(AddrType lineAddr, uint32_t shift, bool isReplace) {
 		I(killEn);
 		DInst *killDInst = killEn->dinst;
 		I(killDInst);
+		I(killDInst->getID() == iter->first);
 		const Instruction *const killIns = killDInst->getInst();
 		const bool doStats = killDInst->getStatsFlag();
 		I(killIns->isLoad() || killIns->isStore());
@@ -362,24 +373,40 @@ void SCTSOLSQ::cacheEvict(AddrType lineAddr, uint32_t shift, bool isReplace) {
 		if(killDInst->isPoisoned()) {
 			break;
 		}
-		// [sizhuo] search executed load to same CACHE LINE address
+		// [sizhuo] search executed/forwarding load to same CACHE LINE address
 		// XXX: we use <= in comparison of load src ID
-		if((killDInst->getAddr() >> shift) == lineAddr && killIns->isLoad() && killEn->state == Done && killEn->ldSrcID <= lastComStID) {
-			// [sizhuo] this load must be killed & set replay reason
-			killDInst->setReplayReason(isReplace ? DInst::CacheRep : DInst::CacheInv);
-			gproc->replay(killDInst);
-			// [sizhuo] stats
-			if(isReplace) {
-				nLdKillByRep.inc(doStats);
-			} else {
-				nLdKillByInv.inc(doStats);
+		if((killDInst->getAddr() >> shift) == lineAddr && killIns->isLoad() && killEn->ldSrcID <= lastComStID) {
+			if(killEn->state == Done) {
+				// [sizhuo] load is already executed, kill it unless it can immediately retire
+				if(killDInst->getID() == gproc->getROBHeadID() && (!isSC || comSQ.empty())) {
+					// [sizhuo] killDInst is at ROB head, and comSQ is empty in case of SC model
+					// killDInst can immediately retire from ROB, so we don't kill it
+					// just mark its result as stale, prevent other load from reading it
+					killEn->stale = true;
+				} else {
+					// [sizhuo] this load must be killed & set replay reason
+					killDInst->setReplayReason(isReplace ? DInst::CacheRep : DInst::CacheInv);
+					gproc->replay(killDInst);
+					// [sizhuo] stats
+					if(isReplace) {
+						nLdKillByRep.inc(doStats);
+					} else {
+						nLdKillByInv.inc(doStats);
+					}
+					// [sizhuo] ROB will flush, we can stop
+					break;
+				}
+			} else if(killEn->state == Exe && killEn->forwarding) {
+				// [sizhuo] this load should be re-executed, because forwarding source is now stale
+				killEn->needReEx = true;
+				// [sizhuo] stats
+				if(isReplace) {
+					nLdReExByRep.inc(doStats);
+				} else {
+					nLdReExByInv.inc(doStats);
+				}
 			}
-			// [sizhuo] ROB will flush, we can stop
-			break;
 		}
-		// [sizhuo] we don't re-ex load in execution
-		// because invalidation arrives earlier than load resp
-		// load must be a miss in L1$
 	}
 }
 

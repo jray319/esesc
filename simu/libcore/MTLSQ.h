@@ -62,12 +62,18 @@ protected:
 		PendQ pendRetireQ; // [sizhuo] events stalled unitl this RECONCILE fence retires
 		PendQ pendExQ; // [sizhuo] events stalled until this LOAD finishes execution
 
-		SpecLSQEntry() : dinst(0), state(Wait), ldSrcID(DInst::invalidID), needReEx(false) {}
+		// [sizhuo] for SC/TSO to kill/re-ex loads
+		bool forwarding; // [sizhuo] this load is being forwarded
+		bool stale; // [sizhuo] the load result is stale, should not forward it to other loads
+
+		SpecLSQEntry() : dinst(0), state(Wait), ldSrcID(DInst::invalidID), needReEx(false), forwarding(false), stale(false) {}
 		void clear() {
 			dinst = 0;
 			state = Wait;
 			ldSrcID = DInst::invalidID;
 			needReEx = false;
+			forwarding = false;
+			stale = false;
 			I(pendRetireQ.empty());
 			I(pendExQ.empty());
 		}
@@ -147,6 +153,8 @@ protected:
 	GStatsCntr nLdKillByRep;
 	GStatsCntr nLdReExByLd;
 	GStatsCntr nLdReExBySt;
+	GStatsCntr nLdReExByInv;
+	GStatsCntr nLdReExByRep;
 	GStatsCntr nStLdForward;
 	GStatsCntr nLdLdForward;
 

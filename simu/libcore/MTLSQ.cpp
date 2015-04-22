@@ -48,6 +48,8 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	, nLdKillByRep("P(%d)_MTLSQ_nLdKillByRep", gproc->getId())
 	, nLdReExByLd("P(%d)_MTLSQ_nLdReExByLd", gproc->getId())
 	, nLdReExBySt("P(%d)_MTLSQ_nLdReExBySt", gproc->getId())
+	, nLdReExByInv("P(%d)_MTLSQ_nLdReExByInv", gproc->getId())
+	, nLdReExByRep("P(%d)_MTLSQ_nLdReExByRep", gproc->getId())
 	, nStLdForward("P(%d)_MTLSQ_nStLdForward", gproc->getId())
 	, nLdLdForward("P(%d)_MTLSQ_nLdLdForward", gproc->getId())
 	, nUnalignLd("P(%d)_MTLSQ_nUnalignLd", gproc->getId())
@@ -116,6 +118,12 @@ void MTLSQ::ldDone(DInst *dinst) {
 	// [sizhuo] decrement number of executing loads
 	exLdNum--;
 	I(exLdNum >= 0);
+
+	// [sizhuo] clear forwarding bit
+	doneEn->forwarding = false;
+
+	// [sizhuo] haven't got data, can't be stale
+	I(!doneEn->stale);
 
 	// [sizhuo] check re-execute bit
 	if(doneEn->needReEx) {

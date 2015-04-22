@@ -129,6 +129,11 @@ public:
 	bool isFlushing() { return flushing; }
 	bool isReplayRecovering() { return replayRecover; }
 	Time_t getReplayID() { return replayID; }
+
+	virtual Time_t getROBHeadID() {
+		GI(!rob.empty(), rob.front());
+		return rob.empty() ? DInst::invalidID : (rob.front())->getID();
+	}
 };
 
 #endif /* _WMMPROCESSOR_H_ */
