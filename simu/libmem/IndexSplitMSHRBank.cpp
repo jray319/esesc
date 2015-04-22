@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <string.h>
 
-IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str, GStatsCntr *upInsFail, GStatsCntr *downInsFail, GStatsAvg **missLat)
+IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str, GStatsCntr *upInsFail, GStatsCntr *downInsFail, GStatsCntr *upIssueFail, GStatsCntr *downIssueFail, GStatsAvg **missLat)
 	: bankID(id)
 	, name(0)
 	, cache(c)
@@ -25,6 +25,8 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	, callInsertQ(0)
 	, nUpInsertFail(upInsFail)
 	, nDownInsertFail(downInsFail)
+	, nUpIssueFail(upIssueFail)
+	, nDownIssueFail(downIssueFail)
 	, avgMissLat(missLat)
 {
 	I(str);
@@ -33,6 +35,8 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	I(downSize > 0);
 	I(upInsFail);
 	I(downInsFail);
+	I(upIssueFail);
+	I(downIssueFail);
 	I(missLat);
 
 	name = new char[strlen(str) + 50];
@@ -201,6 +205,9 @@ void IndexSplitMSHRBank::issueDownReq(DownReqEntry *en, StaticCallbackBase *cb) 
 		}
 		// [sizhuo] call handler next cycle
 		cb->schedule(1);
+	} else {
+		// [sizhuo] increment fail counter
+		nDownIssueFail->inc(en->mreq->getStatsFlag());
 	}
 }
 
@@ -406,6 +413,9 @@ void IndexSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 		index2UpReq.insert(std::make_pair<AddrType, UpReqEntry*>(index, en));
 		// [sizhuo] call handler next cycle
 		cb->schedule(1);
+	} else {
+		// [sizhuo] increment fail counter
+		nUpIssueFail->inc(en->mreq->getStatsFlag());
 	}
 }
 

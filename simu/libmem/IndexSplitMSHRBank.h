@@ -199,10 +199,12 @@ private:
 
 	GStatsCntr *nUpInsertFail; // [sizhuo] number of failed insertion of up req to MSHR
 	GStatsCntr *nDownInsertFail; // [sizhuo] number of failed insertion of down req to MSHR
+	GStatsCntr *nUpIssueFail; // [sizhuo] number of failed issue of up req to MSHR
+	GStatsCntr *nDownIssueFail; // [sizhuo] number of failed issue of down req to MSHR
 	GStatsAvg **avgMissLat; // [sizhuo] average miss latency, for up req only
 
 public:
-	IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str, GStatsCntr *upInsFail, GStatsCntr *downInsFail, GStatsAvg **missLat);
+	IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str, GStatsCntr *upInsFail, GStatsCntr *downInsFail, GStatsCntr *upIssueFail, GStatsCntr *downIssueFail, GStatsAvg **missLat);
 	virtual ~IndexSplitMSHRBank();
 
 	// [sizhuo] virtual functions

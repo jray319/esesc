@@ -75,6 +75,8 @@ private:
 	GStatsAvg *avgMissLat[ma_MAX]; // [sizhuo] average miss latency, for up req only
 	GStatsCntr *nUpInsertFail; // [sizhuo] number of failed insertion of up req to MSHR
 	GStatsCntr *nDownInsertFail; // [sizhuo] number of failed insertion of down req to MSHR
+	GStatsCntr *nUpIssueFail; // [sizhuo] number of failed issue of up req to MSHR
+	GStatsCntr *nDownIssueFail; // [sizhuo] number of failed issue of down req to MSHR
 
 	// [sizhuo] get bank id of req
 	inline uint32_t getBank(AddrType lineAddr) {

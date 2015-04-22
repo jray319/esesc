@@ -31,8 +31,12 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	// [sizhuo] create stats
 	nUpInsertFail = new GStatsCntr("%s_nUpInsertFail", name);
 	nDownInsertFail = new GStatsCntr("%s_nDownInsertFail", name);
+	nUpIssueFail = new GStatsCntr("%s_nUpIssueFail", name);
+	nDownIssueFail = new GStatsCntr("%s_nDownIssueFail", name);
 	I(nUpInsertFail);
 	I(nDownInsertFail);
+	I(nUpIssueFail);
+	I(nDownIssueFail);
 
 	for(int i = 0; i < ma_MAX; i++) {
 		avgMissLat[i] = 0;
@@ -50,7 +54,7 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	for(uint32_t i = 0; i < bkNum; i++) {
 		bank[i] = 0;
 		//bank[i] = new BlockMSHRBank(i, c, name);
-		bank[i] = new IndexSplitMSHRBank(i, bkUpSize, bkDownSize, c, name, nUpInsertFail, nDownInsertFail, avgMissLat);
+		bank[i] = new IndexSplitMSHRBank(i, bkUpSize, bkDownSize, c, name, nUpInsertFail, nDownInsertFail, nUpIssueFail, nDownIssueFail, avgMissLat);
 		I(bank[i]);
 	}
 }
