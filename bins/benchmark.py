@@ -7,6 +7,7 @@ import re
 # exe & input dir (PARSEC 3.0 & launcher)
 bench_root_dir = '/home/szzhang/local-proj/mem-model/simulation/program'
 
+'''
 # params to run launcher
 launch_param = {}
 
@@ -17,6 +18,7 @@ launch_param['canneal'] = {
 		'large'  : '__THREAD_NUM__ 15000 2000 400000.nets 128' ,
 		'thread' : lambda core : core
 		}
+		'''
 
 # params to run PARSEC 3.0
 parsec3_param = {}
@@ -246,6 +248,7 @@ def copy_here(src_dir):
 				shutil.copy(src_path,dst_path)
 	return file_list
 
+'''
 # subroutine to run one benchmark in launcher
 def run_launcher(name, size, mem_model, core_num, thread_num = 0):
 	# PARSEC real thread num = input thread num + 1 (main thread)
@@ -302,10 +305,10 @@ def run_launcher(name, size, mem_model, core_num, thread_num = 0):
 
 	return True
 ####
+'''
 
 # subroutine to run PARSEC 3.0 benchmarks
-# comment is suffix of log & report files
-def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
+def run_parsec3(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
 	# check we have param for benchmark
 	if name not in parsec3_param:
 		print(name + " doesn't have parameters!")
@@ -339,13 +342,12 @@ def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = name + ' ' + parsec3_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
-	report_file = 'parsec_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num)
-	if comment != "":
-		report_file = report_file + '_' + comment
+	report_file = 'parsec_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num) + '_pf' + ('1' if doPrefetch else '0')
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
 			"sed 's/__MEMORY_MODEL__/" + ('tso' if mem_model == 'usqtso' else mem_model) + "/g' | " + # simulator cannot recognize usqtso
+			"sed 's/__STORE_PREFETCH__/" + ('true' if doPrefetch else 'false') + "/g' | "
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
 			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
 			)
@@ -389,7 +391,7 @@ def run_parsec3(name, size, mem_model, core_num, thread_num = 0, comment = ""):
 ####
 
 # subroutine to runi SPLASH2X benchmarks
-def run_splash(name, size, mem_model, core_num, thread_num = 0):
+def run_splash(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
 	# check we have param for benchmark
 	if name not in splash_param:
 		print(name + " doesn't have parameters!")
@@ -420,11 +422,12 @@ def run_splash(name, size, mem_model, core_num, thread_num = 0):
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = name + ' ' + splash_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
-	report_file = 'splash_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num)
+	report_file = 'splash_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num) + '_pf' + ('1' if doPrefetch else '0')
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
 			"sed 's/__MEMORY_MODEL__/" + ('tso' if mem_model == 'usqtso' else mem_model) + "/g' | " + # simulator cannot recognize usqtso
+			"sed 's/__STORE_PREFETCH__/" + ('true' if doPrefetch else 'false') + "/g' | "
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
 			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
 			)

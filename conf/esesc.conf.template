@@ -18,6 +18,9 @@ cpuMaxID = __CPU_MAX_ID__
 # [sizhuo] memory model
 memoryModel = __MEMORY_MODEL__
 
+# [sizhuo] do store prefetch
+doStPrefetch = __STORE_PREFETCH__
+
 # Target benchmark
 #benchName = "memkernels/memcpy_slow 1"
 #benchName = "memkernels/thread_ping 4 20"
