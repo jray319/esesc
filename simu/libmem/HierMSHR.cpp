@@ -47,7 +47,7 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	insertLat[ma_setShared] = new GStatsAvg("%s_setSharedInsertLat", name);
 	I(insertLat[ma_setValid]);
 	I(insertLat[ma_setDirty]);
-	I(insertLat[ma_Exclusive]);
+	I(insertLat[ma_setExclusive]);
 	I(insertLat[ma_setInvalid]);
 	I(insertLat[ma_setShared]);
 
@@ -69,7 +69,7 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	issueLat[ma_setShared] = new GStatsAvg("%s_setSharedIssueLat", name);
 	I(issueLat[ma_setValid]);
 	I(issueLat[ma_setDirty]);
-	I(issueLat[ma_Exclusive]);
+	I(issueLat[ma_setExclusive]);
 	I(issueLat[ma_setInvalid]);
 	I(issueLat[ma_setShared]);
 
