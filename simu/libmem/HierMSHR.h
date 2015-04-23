@@ -73,10 +73,12 @@ private:
 
 	
 	GStatsAvg *avgMissLat[ma_MAX]; // [sizhuo] average miss latency, for up req only
-	GStatsCntr *nUpInsertFail; // [sizhuo] number of failed insertion of up req to MSHR
-	GStatsCntr *nDownInsertFail; // [sizhuo] number of failed insertion of down req to MSHR
-	GStatsCntr *nUpIssueFail; // [sizhuo] number of failed issue of up req to MSHR
-	GStatsCntr *nDownIssueFail; // [sizhuo] number of failed issue of down req to MSHR
+	GStatsAvg *insertLat[ma_MAX]; // [sizhuo] latency from req created to insert into MSHR
+	GStatsCntr *insertFail[ma_MAX]; // [sizhuo] number of failed insertion of up/down req to MSHR
+	GStatsAvg *issueLat[ma_MAX]; // [sizhuo] latency from insert to issue
+
+	// [sizhuo] let IndexSplitMSHRBank to be friend class
+	friend class IndexSplitMSHRBank;
 
 	// [sizhuo] get bank id of req
 	inline uint32_t getBank(AddrType lineAddr) {

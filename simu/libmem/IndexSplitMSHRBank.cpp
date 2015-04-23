@@ -4,8 +4,9 @@
 #include <algorithm>
 #include <string.h>
 
-IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheArray *c, const char *str, GStatsCntr *upInsFail, GStatsCntr *downInsFail, GStatsCntr *upIssueFail, GStatsCntr *downIssueFail, GStatsAvg **missLat)
-	: bankID(id)
+IndexSplitMSHRBank::IndexSplitMSHRBank(HierMSHR *m, int id, int upSize, int downSize, CacheArray *c, const char *str)
+	: mshr(m)
+	, bankID(id)
 	, name(0)
 	, cache(c)
 	, pendIssueUpByReqNumQ(0)
@@ -23,21 +24,12 @@ IndexSplitMSHRBank::IndexSplitMSHRBank(int id, int upSize, int downSize, CacheAr
 	, pendInsertDownQ(0)
 	, pendInsertUpQ(0)
 	, callInsertQ(0)
-	, nUpInsertFail(upInsFail)
-	, nDownInsertFail(downInsFail)
-	, nUpIssueFail(upIssueFail)
-	, nDownIssueFail(downIssueFail)
-	, avgMissLat(missLat)
 {
+	I(m);
 	I(str);
 	I(cache);
 	I(upSize > 0);
 	I(downSize > 0);
-	I(upInsFail);
-	I(downInsFail);
-	I(upIssueFail);
-	I(downIssueFail);
-	I(missLat);
 
 	name = new char[strlen(str) + 50];
 	I(name);
@@ -119,18 +111,25 @@ void IndexSplitMSHRBank::insertDownReq(AddrType lineAddr, StaticCallbackBase *cb
 		en->lineAddr = lineAddr;
 		en->state = Inactive; // [sizhuo] start as Inactive
 		en->mreq = mreq;
+		en->insertTime = globalClock; // [sizhuo] record insert time
 		I((en->pendIssueDownQ).empty());
 		I((en->pendIssueUpQ).empty());
 		// [sizhuo] deq msg from inport
 		inport->deqDoneMsg();
+		// [sizhuo] stats: insert latency
+		I(mreq->getAction() < ma_MAX);
+		I(mshr->insertLat[mreq->getAction()]);
+		mshr->insertLat[mreq->getAction()]->sample(mreq->getTimeDelay(), mreq->getStatsFlag());
 		// [sizhuo] next cycle we schedule issue for contention
 		scheduleIssueDownReqCB::schedule(1, this, en, cb);
 	} else {
 		// [sizhuo] insert fail, enq to pend insert Q
 		I(pendInsertDownQ);
 		pendInsertDownQ->push(PendInsertReq(lineAddr, cb, inport, mreq));
-		// [sizhuo] increment insert fail counter
-		nDownInsertFail->inc(mreq->getStatsFlag());
+		// [sizhuo] stats: insert fail
+		I(mreq->getAction() < ma_MAX);
+		I(mshr->insertFail[mreq->getAction()]);
+		mshr->insertFail[mreq->getAction()]->inc(mreq->getStatsFlag());
 	}
 }
 
@@ -203,11 +202,13 @@ void IndexSplitMSHRBank::issueDownReq(DownReqEntry *en, StaticCallbackBase *cb) 
 			I(numIter->second >= 1);
 			numIter->second++;
 		}
+		// [sizhuo] stats: issue latency
+		I(en->mreq->getAction() < ma_MAX);
+		I(mshr->issueLat[en->mreq->getAction()]);
+		I(globalClock >= en->insertTime);
+		mshr->issueLat[en->mreq->getAction()]->sample(globalClock - en->insertTime, en->mreq->getStatsFlag());
 		// [sizhuo] call handler next cycle
 		cb->schedule(1);
-	} else {
-		// [sizhuo] increment fail counter
-		nDownIssueFail->inc(en->mreq->getStatsFlag());
 	}
 }
 
@@ -325,18 +326,25 @@ void IndexSplitMSHRBank::insertUpReq(AddrType lineAddr, StaticCallbackBase *cb, 
 		en->lineAddr = lineAddr;
 		en->state = Sleep; // [sizhuo] start as sleep state
 		en->mreq = mreq;
+		en->insertTime = globalClock; // [sizhuo] record insert time
 		I((en->pendIssueDownQ).empty());
 		I((en->pendIssueUpQ).empty());
 		// [sizhuo] deq msg from inport
 		inport->deqDoneMsg();
+		// [sizhuo] stats: insert latency
+		I(mreq->getOrigReqAction() < ma_MAX);
+		I(mshr->insertLat[mreq->getOrigReqAction()]);
+		mshr->insertLat[mreq->getOrigReqAction()]->sample(mreq->getTimeDelay(), mreq->getStatsFlag());
 		// [sizhuo] next cycle we schedule issue for contention
 		scheduleIssueUpReqCB::schedule(1, this, en, cb);
 	} else {
 		// [sizhuo] insert fail, enq to pend insert Q
 		I(pendInsertUpQ);
 		pendInsertUpQ->push(PendInsertReq(lineAddr, cb, inport, mreq));
-		// [sizhuo] increment insert fail counter
-		nUpInsertFail->inc(mreq->getStatsFlag());
+		// [sizhuo] stats: insert fail
+		I(mreq->getOrigReqAction() < ma_MAX);
+		I(mshr->insertFail[mreq->getOrigReqAction()]);
+		mshr->insertFail[mreq->getOrigReqAction()]->inc(mreq->getStatsFlag());
 	}
 }
 
@@ -411,11 +419,13 @@ void IndexSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 		// [sizhuo] insert to invert table: index -> up req
 		I(index2UpReq.find(index) == index2UpReq.end());
 		index2UpReq.insert(std::make_pair<AddrType, UpReqEntry*>(index, en));
+		// [sizhuo] stats: issue latency
+		I(en->mreq->getOrigReqAction() < ma_MAX);
+		I(mshr->issueLat[en->mreq->getOrigReqAction()]);
+		I(globalClock >= en->insertTime);
+		mshr->issueLat[en->mreq->getOrigReqAction()]->sample(globalClock - en->insertTime, en->mreq->getStatsFlag());
 		// [sizhuo] call handler next cycle
 		cb->schedule(1);
-	} else {
-		// [sizhuo] increment fail counter
-		nUpIssueFail->inc(en->mreq->getStatsFlag());
 	}
 }
 
@@ -696,8 +706,8 @@ void IndexSplitMSHRBank::upReqToAck(AddrType lineAddr) {
 	if(en->state == Wait) {
 		I(globalClock > en->missStartTime);
 		I(en->mreq->getOrigReqAction() < ma_MAX);
-		I(avgMissLat[en->mreq->getOrigReqAction()]);
-		avgMissLat[en->mreq->getOrigReqAction()]->sample(globalClock - en->missStartTime, en->mreq->getStatsFlag());
+		I(mshr->avgMissLat[en->mreq->getOrigReqAction()]);
+		mshr->avgMissLat[en->mreq->getOrigReqAction()]->sample(globalClock - en->missStartTime, en->mreq->getStatsFlag());
 	}
 	// [sizhuo] change state
 	en->state = Ack;
