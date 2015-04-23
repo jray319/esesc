@@ -2,8 +2,6 @@
 #include "MTStoreSet.h"
 #include "GProcessor.h"
 #include "GMemorySystem.h"
-#include "SescConf.h"
-#include "DInst.h"
 
 const uint32_t MTLSQ::memOrdAlignShift = 2; // [sizhuo] word aligned
 
@@ -30,12 +28,14 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	: gproc(gproc_)
 	, mtStoreSet(gproc->getMTSS())
 	, DL1(gproc->getMemorySystem()->getDL1())
+	, log2LineSize(DL1->getLog2LineSize())
 	, maxLdNum(SescConf->getInt("cpusimu", "maxLoads", gproc->getId()))
 	, maxStNum(SescConf->getInt("cpusimu", "maxStores", gproc->getId()))
 	, freeLdNum(maxLdNum)
 	, freeStNum(maxStNum)
 	, ldldForwardDelay(SescConf->getInt("cpusimu", "ldldForwardDelay", gproc->getId()))
 	, stldForwardDelay(SescConf->getInt("cpusimu", "stldForwardDelay", gproc->getId()))
+	, prefetch(getStPrefetchType(SescConf->getCharPtr("cpusimu", "storePrefetch", gproc->getId())))
 	, specLSQEntryPool(maxLdNum + maxStNum, "MTLSQ_specLSQEntryPool")
 	, comSQEntryPool(maxStNum, "MTLSQ_comSQEntryPool")
 	, ldExPort(0)
@@ -65,10 +65,12 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	SescConf->isBetween("cpusimu", "maxStores", 1, 1024, gproc->getId()); // [sizhuo] allow extremely large SQ
 	SescConf->isBetween("cpusimu", "ldldForwardDelay", 1, 5, gproc->getId());
 	SescConf->isBetween("cpusimu", "stldForwardDelay", 1, 5, gproc->getId());
+	SescConf->isCharPtr("cpusimu", "storePrefetch", gproc->getId());
 
 	I(gproc);
 	I(mtStoreSet);
 	I(DL1);
+	I(log2LineSize > 0);
 
 	// [sizhuo] set LSQ field in L1 D$
 	DL1->setMTLSQ(this);
@@ -224,4 +226,48 @@ void MTLSQ::reset() {
 
 bool MTLSQ::isReset() {
 	return specLSQ.empty() && freeLdNum == maxLdNum && freeStNum == (maxStNum - comSQ.size()) && exLdNum == 0 && doneLdNum == 0;
+}
+
+bool MTLSQ::matchStLine(DInst *dinst) {
+	const AddrType lineAddr = getLineAddr(dinst->getAddr());
+	const Time_t id = dinst->getID();
+
+	// [sizhuo] first search comSQ
+	for(ComSQ::iterator iter = comSQ.begin(); iter != comSQ.end(); iter++) {
+		I(iter->second);
+		I(iter->first < id);
+		// [sizhuo] dinst cannot be in comSQ, no need to check ID
+		if(getLineAddr(iter->second->addr) == lineAddr) {
+			return true;
+		}
+	}
+	// [sizhuo] next search specLSQ
+	for(SpecLSQ::iterator iter = specLSQ.begin(); iter != specLSQ.end(); iter++) {
+		I(iter->second);
+		DInst *store = iter->second->dinst;
+		I(store);
+		// [sizhuo] store might be same inst as dinst, need to check ID different
+		if(id != iter->first && store->getInst()->isStore() && getLineAddr(store->getAddr()) == lineAddr) {
+			I(dinst != store);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void MTLSQ::doPrefetch(DInst *dinst) {
+	I(dinst);
+
+	if(prefetch == All) {
+		// [sizhuo] just send prefetch to D$
+		MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());
+	} else if(prefetch == Select) {
+		// [sizhuo] only do prefetch if cache line is not in SQ
+		if(!matchStLine(dinst)) {
+			MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());
+		}
+	} else {
+		I(prefetch == None);
+	}
 }

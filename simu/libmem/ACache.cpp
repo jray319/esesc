@@ -461,7 +461,7 @@ void ACache::doReq(MemRequest *mreq) {
 					// cache eviction is caused by replacement
 					if(isL1) {
 						I(mtLSQ);
-						MTLSQ::cacheEvictCB::schedule(maxDelay + goUpDelay, mtLSQ, repLineAddr, cache->log2LineSize, true);
+						MTLSQ::cacheEvictCB::schedule(maxDelay + goUpDelay, mtLSQ, repLineAddr, true);
 					}
 				} else {
 					// [sizhuo] silently drop the line, directly go to lower level after tag write
@@ -470,7 +470,7 @@ void ACache::doReq(MemRequest *mreq) {
 					// cache eviction is caused by replacement
 					if(isL1) {
 						I(mtLSQ);
-						MTLSQ::cacheEvictCB::schedule(tagWriteDelay + goUpDelay, mtLSQ, repLineAddr, cache->log2LineSize, true);
+						MTLSQ::cacheEvictCB::schedule(tagWriteDelay + goUpDelay, mtLSQ, repLineAddr, true);
 					}
 				}
 			} else {
@@ -759,7 +759,7 @@ void ACache::doSetState(MemRequest *mreq) {
 					origReq = origReq->getSetStateAckOrig();
 				}
 				bool isReplace = cache->getLineAddr(origReq->getAddr()) != lineAddr;
-				MTLSQ::cacheEvictCB::schedule(delay + goUpDelay, mtLSQ, lineAddr, cache->log2LineSize, isReplace);
+				MTLSQ::cacheEvictCB::schedule(delay + goUpDelay, mtLSQ, lineAddr, isReplace);
 			}
 		}
 	} else {

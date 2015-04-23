@@ -10,7 +10,7 @@ SCTSOLSQ::SCTSOLSQ(GProcessor *gproc_, bool sc, bool wait)
 	, ldWait(wait)
 	, lastComStID(DInst::invalidID)
 {
-	MSG("INFO: create P(%d)_SCTSOLSQ, isSC %d, ldWait %d, maxLd %d, maxSt %d", gproc->getId(), isSC, ldWait, maxLdNum, maxStNum);
+	MSG("INFO: create P(%d)_SCTSOLSQ, isSC %d, ldWait %d, log2LineSize %u, maxLd %d, maxSt %d, prefetch %d", gproc->getId(), isSC, ldWait, log2LineSize, maxLdNum, maxStNum, prefetch);
 }
 
 StallCause SCTSOLSQ::addEntry(DInst *dinst) {
@@ -117,6 +117,8 @@ void SCTSOLSQ::issue(DInst *dinst) {
 	} else if(ins->isStore()) {
 		// [sizhuo] change state to Done, inform resource
 		issueEn->state = Done;
+		// [sizhuo] do prefetch
+		doPrefetch(dinst);
 		// [sizhuo] call immediately, easy for flushing
 		dinst->getClusterResource()->executed(dinst);
 	} else {
@@ -358,7 +360,7 @@ void SCTSOLSQ::stCommited(Time_t id) {
 	comSQEntryPool.in(comEn);
 }
 
-void SCTSOLSQ::cacheEvict(AddrType lineAddr, uint32_t shift, bool isReplace) {
+void SCTSOLSQ::cacheEvict(AddrType lineAddr, bool isReplace) {
 	// [sizhuo] search LSQ to kill eager loads on same CACHE LINE addr
 	for(SpecLSQ::iterator iter = specLSQ.begin(); iter != specLSQ.end(); iter++) {
 		SpecLSQEntry *killEn = iter->second;
@@ -375,7 +377,7 @@ void SCTSOLSQ::cacheEvict(AddrType lineAddr, uint32_t shift, bool isReplace) {
 		}
 		// [sizhuo] search executed/forwarding load to same CACHE LINE address
 		// XXX: we use <= in comparison of load src ID
-		if((killDInst->getAddr() >> shift) == lineAddr && killIns->isLoad() && killEn->ldSrcID <= lastComStID) {
+		if(getLineAddr(killDInst->getAddr()) == lineAddr && killIns->isLoad() && killEn->ldSrcID <= lastComStID) {
 			if(killEn->state == Done) {
 				// [sizhuo] load is already executed, kill it unless it can immediately retire
 				if(killDInst->getID() == gproc->getROBHeadID() && (!isSC || comSQ.empty())) {

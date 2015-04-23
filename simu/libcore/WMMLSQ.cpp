@@ -6,10 +6,8 @@
 
 WMMLSQ::WMMLSQ(GProcessor *gproc_)
 	: MTLSQ(gproc_)
-	, log2LineSize(DL1->getLog2LineSize())
 {
-	MSG("INFO: create P(%d)_WMMLSQ, log2LineSize %u, maxLd %d, maxSt %d", gproc->getId(), log2LineSize, maxLdNum, maxStNum);
-	I(log2LineSize > 0);
+	MSG("INFO: create P(%d)_WMMLSQ, log2LineSize %u, maxLd %d, maxSt %d, prefetch %d", gproc->getId(), log2LineSize, maxLdNum, maxStNum, prefetch);
 }
 
 StallCause WMMLSQ::addEntry(DInst *dinst) {
@@ -155,6 +153,8 @@ void WMMLSQ::issue(DInst *dinst) {
 	} else if(ins->isStore()) {
 		// [sizhuo] store is done, change state, inform resource
 		issueEn->state = Done;
+		// [sizhuo] do prefetch
+		doPrefetch(dinst);
 		// [sizhuo] call immediately, easy for flushing
 		dinst->getClusterResource()->executed(dinst);
 	} else {

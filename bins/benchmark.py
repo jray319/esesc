@@ -308,7 +308,7 @@ def run_launcher(name, size, mem_model, core_num, thread_num = 0):
 '''
 
 # subroutine to run PARSEC 3.0 benchmarks
-def run_parsec3(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
+def run_parsec3(name, size, mem_model, core_num, prefetch, thread_num = 0):
 	# check we have param for benchmark
 	if name not in parsec3_param:
 		print(name + " doesn't have parameters!")
@@ -342,12 +342,12 @@ def run_parsec3(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = name + ' ' + parsec3_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
-	report_file = 'parsec_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num) + '_pf' + ('1' if doPrefetch else '0')
+	report_file = 'parsec_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num) + '_pf' + prefetch
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
 			"sed 's/__MEMORY_MODEL__/" + ('tso' if mem_model == 'usqtso' else mem_model) + "/g' | " + # simulator cannot recognize usqtso
-			"sed 's/__STORE_PREFETCH__/" + ('true' if doPrefetch else 'false') + "/g' | "
+			"sed 's/__STORE_PREFETCH__/" + prefetch + "/g' | "
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
 			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
 			)
@@ -391,7 +391,7 @@ def run_parsec3(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
 ####
 
 # subroutine to runi SPLASH2X benchmarks
-def run_splash(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
+def run_splash(name, size, mem_model, core_num, prefetch, thread_num = 0):
 	# check we have param for benchmark
 	if name not in splash_param:
 		print(name + " doesn't have parameters!")
@@ -422,12 +422,12 @@ def run_splash(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
 	cpu_max_id = str(core_num - 1)
 	bench_cmd = name + ' ' + splash_param[name][size]
 	bench_cmd = re.sub('__THREAD_NUM__', str(thread_num), bench_cmd)
-	report_file = 'splash_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num) + '_pf' + ('1' if doPrefetch else '0')
+	report_file = 'splash_' + name + '_' + mem_model + '_' + size + '_c' + str(core_num) + '_t' + str(thread_num) + '_pf' + prefetch 
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/" + cpu_max_id + "/g' esesc.conf.template | " + 
 			"sed 's/__MEMORY_MODEL__/" + ('tso' if mem_model == 'usqtso' else mem_model) + "/g' | " + # simulator cannot recognize usqtso
-			"sed 's/__STORE_PREFETCH__/" + ('true' if doPrefetch else 'false') + "/g' | "
+			"sed 's/__STORE_PREFETCH__/" + prefetch + "/g' | "
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
 			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
 			)
@@ -460,7 +460,7 @@ def run_splash(name, size, mem_model, core_num, doPrefetch, thread_num = 0):
 ####
 
 # subroutine to run microbenchmark write
-def run_micro_write(array_size, iteration, mem_model, doPrefetch):
+def run_micro_write(array_size, iteration, mem_model, prefetch):
 	# special mem model: usqtso -- unlimit SQ
 	unlimitSQ = mem_model == 'usqtso'
 
@@ -475,12 +475,12 @@ def run_micro_write(array_size, iteration, mem_model, doPrefetch):
 
 	# change esesc.conf
 	bench_cmd = 'write {} {}'.format(array_size, iteration)
-	report_file = 'micro_write_{}_c1_t1_pf{}'.format(mem_model, int(doPrefetch))
+	report_file = 'micro_write_{}_c1_t1_pf{}'.format(mem_model, prefetch)
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/0/g' esesc.conf.template | " + 
 			"sed 's/__MEMORY_MODEL__/" + ('tso' if mem_model == 'usqtso' else mem_model) + "/g' | " + # simulator cannot recognize usqtso
-			"sed 's/__STORE_PREFETCH__/" + ('true' if doPrefetch else 'false') + "/g' | "
+			"sed 's/__STORE_PREFETCH__/" + prefetch + "/g' | "
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
 			"sed 's/__REPORT_FILE__/" + report_file + "/g' > esesc.conf"
 			)

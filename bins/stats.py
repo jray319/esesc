@@ -36,6 +36,10 @@ for line in resultFile:
 		if m:
 			coreNum = int(m.group(1)) + 1
 			continue
+		m = re.search(r'cpusimu\[0\]', line)
+		if m:
+			coreNum = 1
+			continue
 	if maxLd == -1:
 		m = re.search(r'maxLoads\s*=\s*(\d+)', line)
 		if m:
