@@ -459,26 +459,26 @@ def run_splash(name, size, mem_model, core_num, prefetch, thread_num = 0):
 	return True
 ####
 
-# subroutine to run microbenchmark write
-def run_micro_write(iteration, mem_model, prefetch):
+# subroutine to run microbenchmarks
+def run_micro(name, iteration, mem_model, prefetch):
 	# special mem model: usqtso -- unlimit SQ
 	unlimitSQ = mem_model == 'usqtso'
 
 	# copy exe
-	if os.path.isfile('write'): # remove existing one
-		os.remove('write')
-	exe_path = os.path.join(bench_root_dir, 'micro', 'write', 'write')
+	if os.path.isfile(name): # remove existing one
+		os.remove(name)
+	exe_path = os.path.join(bench_root_dir, 'micro', name, name)
 	if not os.path.isfile(exe_path):
 		print(exe_path + " doesn't exist!")
 		return False
 	shutil.copy(exe_path, '.')
 
 	# change esesc.conf
-	bench_cmd = 'write {}'.format(iteration)
-	report_file = 'micro_write_{}_c1_t1_pf{}'.format(mem_model, prefetch)
+	bench_cmd = '{} {}'.format(name, iteration)
+	report_file = 'micro_{}_{}_pf{}'.format(name, mem_model, prefetch)
 
 	shell_cmd = (
-			"sed 's/__CPU_MAX_ID__/0/g' esesc.conf.template | " + 
+			"sed 's/__CPU_MAX_ID__/0/g' esesc.conf.template | " +  # 1 core
 			"sed 's/__MEMORY_MODEL__/" + ('tso' if mem_model == 'usqtso' else mem_model) + "/g' | " + # simulator cannot recognize usqtso
 			"sed 's/__STORE_PREFETCH__/" + prefetch + "/g' | "
 			"sed 's/__BENCH_NAME__/" + bench_cmd + "/g' | " +
