@@ -153,8 +153,6 @@ void WMMLSQ::issue(DInst *dinst) {
 	} else if(ins->isStore()) {
 		// [sizhuo] store is done, change state, inform resource
 		issueEn->state = Done;
-		// [sizhuo] do prefetch
-		doPrefetch(dinst);
 		// [sizhuo] call immediately, easy for flushing
 		dinst->getClusterResource()->executed(dinst);
 	} else {

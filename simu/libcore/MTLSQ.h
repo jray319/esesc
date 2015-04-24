@@ -202,10 +202,8 @@ protected:
 	void removePoisonedEntry(SpecLSQ::iterator rmIter);
 	void removePoisonedInst(DInst *dinst);
 
-	// [sizhuo] search OTHER stores to same cache line
-	bool matchStLine(DInst *dinst);
-	// [sizhuo] do prefetch
-	void doPrefetch(DInst *dinst);
+	// [sizhuo] search stores to same cache line
+	bool matchStLine(AddrType byteAddr);
 
 public:
 	MTLSQ(GProcessor *gproc_);
@@ -236,6 +234,9 @@ public:
 	int32_t getDoneLdNum() { return doneLdNum; }
 	int32_t getStQUsage() { return maxStNum - freeStNum; }
 	int32_t getComSQUsage() { return comSQ.size(); }
+
+	// [sizhuo] do prefetch
+	void doPrefetch(AddrType byteAddr, bool doStats);
 
 	// [sizhuo] creator function
 	static MTLSQ *create(GProcessor *gproc_);

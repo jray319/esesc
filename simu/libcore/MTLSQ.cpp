@@ -228,15 +228,12 @@ bool MTLSQ::isReset() {
 	return specLSQ.empty() && freeLdNum == maxLdNum && freeStNum == (maxStNum - comSQ.size()) && exLdNum == 0 && doneLdNum == 0;
 }
 
-bool MTLSQ::matchStLine(DInst *dinst) {
-	const AddrType lineAddr = getLineAddr(dinst->getAddr());
-	const Time_t id = dinst->getID();
+bool MTLSQ::matchStLine(AddrType byteAddr) {
+	const AddrType lineAddr = getLineAddr(byteAddr);
 
 	// [sizhuo] first search comSQ
 	for(ComSQ::iterator iter = comSQ.begin(); iter != comSQ.end(); iter++) {
 		I(iter->second);
-		I(iter->first < id);
-		// [sizhuo] dinst cannot be in comSQ, no need to check ID
 		if(getLineAddr(iter->second->addr) == lineAddr) {
 			return true;
 		}
@@ -246,9 +243,7 @@ bool MTLSQ::matchStLine(DInst *dinst) {
 		I(iter->second);
 		DInst *store = iter->second->dinst;
 		I(store);
-		// [sizhuo] store might be same inst as dinst, need to check ID different
-		if(id != iter->first && store->getInst()->isStore() && getLineAddr(store->getAddr()) == lineAddr) {
-			I(dinst != store);
+		if(store->getInst()->isStore() && getLineAddr(store->getAddr()) == lineAddr) {
 			return true;
 		}
 	}
@@ -256,16 +251,17 @@ bool MTLSQ::matchStLine(DInst *dinst) {
 	return false;
 }
 
-void MTLSQ::doPrefetch(DInst *dinst) {
-	I(dinst);
+void MTLSQ::doPrefetch(AddrType byteAddr, bool doStats) {
 
 	if(prefetch == All) {
 		// [sizhuo] just send prefetch to D$
-		MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());
+		MemRequest::sendReqWritePrefetch(DL1, doStats, byteAddr);
 	} else if(prefetch == Select) {
 		// [sizhuo] only do prefetch if cache line is not in SQ
-		if(!matchStLine(dinst)) {
-			MemRequest::sendReqWritePrefetch(DL1, dinst->getStatsFlag(), dinst->getAddr());
+		// XXX: since prefetch begins before store inserted into LSQ
+		// so this store must not be in LSQ now
+		if(!matchStLine(byteAddr)) {
+			MemRequest::sendReqWritePrefetch(DL1, doStats, byteAddr);
 		}
 	} else {
 		I(prefetch == None);

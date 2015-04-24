@@ -460,7 +460,7 @@ def run_splash(name, size, mem_model, core_num, prefetch, thread_num = 0):
 ####
 
 # subroutine to run microbenchmark write
-def run_micro_write(array_size, iteration, mem_model, prefetch):
+def run_micro_write(iteration, mem_model, prefetch):
 	# special mem model: usqtso -- unlimit SQ
 	unlimitSQ = mem_model == 'usqtso'
 
@@ -474,7 +474,7 @@ def run_micro_write(array_size, iteration, mem_model, prefetch):
 	shutil.copy(exe_path, '.')
 
 	# change esesc.conf
-	bench_cmd = 'write {} {}'.format(array_size, iteration)
+	bench_cmd = 'write {}'.format(iteration)
 	report_file = 'micro_write_{}_c1_t1_pf{}'.format(mem_model, prefetch)
 
 	shell_cmd = (

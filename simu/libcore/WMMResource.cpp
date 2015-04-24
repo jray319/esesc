@@ -278,6 +278,11 @@ void WMMFUStore::executed(DInst *dinst) {
 		return;
 	}
 
+	if(dinst->getInst()->isStoreAddress()) {
+		// [sizhuo] get store address, let LSQ do prefetch
+		mtLSQ->doPrefetch(dinst->getAddr(), dinst->getStatsFlag());
+	}
+
 	// [sizhuo] wake up inst with data dependency on dinst
   cluster->executed(dinst);
 }

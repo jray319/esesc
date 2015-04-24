@@ -117,8 +117,6 @@ void SCTSOLSQ::issue(DInst *dinst) {
 	} else if(ins->isStore()) {
 		// [sizhuo] change state to Done, inform resource
 		issueEn->state = Done;
-		// [sizhuo] do prefetch
-		doPrefetch(dinst);
 		// [sizhuo] call immediately, easy for flushing
 		dinst->getClusterResource()->executed(dinst);
 	} else {
