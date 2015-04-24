@@ -54,6 +54,7 @@
 #include "GProcessor.h"
 #include "OoOProcessor.h"
 #include "WMMProcessor.h"
+#include "AtomicProcessor.h"
 #include "InOrderProcessor.h"
 #include "GPUSMProcessor.h"
 #include "GMemorySystem.h"
@@ -318,6 +319,9 @@ void BootLoader::createSimuInterface(const char *section, FlowID i) {
 	if(SescConf->getBool("cpusimu", "wmmProc", cpuid)) {
 		gproc = new WMMProcessor(gms, cpuid);
 		MSG("Core %d is WMM processor", cpuid);
+	} else if(SescConf->getBool("cpusimu", "atomicProc", cpuid)) {
+		gproc = new AtomicProcessor(gms, cpuid);
+		MSG("Core %d is Atomic processor", cpuid);
 	} else if(SescConf->getBool("cpusimu","inorder",cpuid)) {
     gproc =new InOrderProcessor(gms, cpuid);
 #ifdef ENABLE_CUDA
