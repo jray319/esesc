@@ -115,6 +115,7 @@ protected:
 	GStatsCntr *retireStallByEx[iMAX]; // [sizhuo] inst not finished execution
 	GStatsCntr retireStallByComSQ; // [sizhuo] commit fence in WMM/TSO OR load in SC
 	GStatsCntr *retireStallByFlush[DInst::MaxReason]; // [sizhuo] ROB is flushing poisoned inst
+	GStatsCntr *retireStallByVerify[DInst::MaxReason]; // [sizhuo] load verification
 
 	// [sizhuo] stats for ROB issue port
 	GStatsCntr *issueStall[MaxStall];

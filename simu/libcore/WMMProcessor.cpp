@@ -59,9 +59,11 @@ WMMProcessor::WMMProcessor(GMemorySystem *gm, CPU_t i)
 		nExcep[t] = new GStatsCntr("P(%d)_nExcepBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
 		nKilled[t] = new GStatsCntr("P(%d)_nKilledBy_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
 		retireStallByFlush[t] = new GStatsCntr("P(%d)_retireStallByFlush_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
+		retireStallByVerify[t] = new GStatsCntr("P(%d)_retireStallByVerify_%s", cpu_id, DInst::replayReason2String(static_cast<DInst::ReplayReason>(t)));
 		I(nExcep[t]);
 		I(nKilled[t]);
 		I(retireStallByFlush[t]);
+		I(retireStallByVerify[t]);
 	}
 
 	for(int t = 0; t < iMAX; t++) {
@@ -253,10 +255,24 @@ void WMMProcessor::retireFromROB(FlowID fid) {
     bool done = dinst->getCluster()->retire(dinst, false);
 		// [sizhuo] cannot retire, stop
     if( !done ) {
-			// [sizhuo] stall by commit SQ non-empty
-			I(dinst->getInst()->isLoad() || dinst->getInst()->isComFence());
-			I(mtLSQ->getComSQUsage() > 0);
-			retireStallByComSQ.add(n2Retire, dinst->getStatsFlag());
+			// [sizhuo] stall by commit SQ non-empty OR load verification
+			if(dinst->getInst()->isComFence()) {
+				// [sizhuo] stall by commit fence in TSO
+				I(mtLSQ->getComSQUsage() > 0);
+				retireStallByComSQ.add(n2Retire, dinst->getStatsFlag());
+			} else if(dinst->getInst()->isLoad()) {
+				if(dinst->getReplayReason() != DInst::MaxReason) {
+					// [sizhuo] stall by verification load
+					I(dinst->getReplayReason() == DInst::CacheRep || dinst->getReplayReason() == DInst::CacheInv);
+					retireStallByVerify[dinst->getReplayReason()]->add(n2Retire, dinst->getStatsFlag());
+				} else {
+					// [sizhuo] stall by pending stores in SC
+					I(mtLSQ->getComSQUsage() > 0);
+					retireStallByComSQ.add(n2Retire, dinst->getStatsFlag());
+				}
+			} else {
+				I(0);
+			}
 			return;
 		}
 

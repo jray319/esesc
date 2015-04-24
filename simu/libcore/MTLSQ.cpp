@@ -8,16 +8,18 @@ const uint32_t MTLSQ::memOrdAlignShift = 2; // [sizhuo] word aligned
 MTLSQ* MTLSQ::create(GProcessor *gproc_) {
 	SescConf->isCharPtr("cpusimu", "memModel", gproc_->getId());
 	SescConf->isBool("cpusimu", "sctsoLdWait", gproc_->getId());
+	SescConf->isBool("cpusimu", "sctsoVerifyLd", gproc_->getId());
 	const char *memModel = SescConf->getCharPtr("cpusimu", "memModel", gproc_->getId());
 	const bool ldWait = SescConf->getBool("cpusimu", "sctsoLdWait", gproc_->getId());
+	const bool verifyLd = SescConf->getBool("cpusimu", "sctsoVerifyLd", gproc_->getId());
 	MTLSQ *ret = 0;
 
 	if(!strcasecmp(memModel, "wmm")) {
 		ret = new WMMLSQ(gproc_);
 	} else if(!strcasecmp(memModel, "tso")) {
-		ret = new SCTSOLSQ(gproc_, false, ldWait);
+		ret = new SCTSOLSQ(gproc_, false, ldWait, verifyLd);
 	} else if(!strcasecmp(memModel, "sc")) {
-		ret = new SCTSOLSQ(gproc_, true, ldWait);
+		ret = new SCTSOLSQ(gproc_, true, ldWait, verifyLd);
 	} else {
 		SescConf->notCorrect();
 	}
@@ -52,6 +54,8 @@ MTLSQ::MTLSQ(GProcessor *gproc_)
 	, nLdReExByRep("P(%d)_MTLSQ_nLdReExByRep", gproc->getId())
 	, nStLdForward("P(%d)_MTLSQ_nStLdForward", gproc->getId())
 	, nLdLdForward("P(%d)_MTLSQ_nLdLdForward", gproc->getId())
+	, nVerifyLdByInv("P(%d)_MTLSQ_nVerifyLdByInv", gproc->getId())
+	, nVerifyLdByRep("P(%d)_MTLSQ_nVerifyLdByRep", gproc->getId())
 	, nUnalignLd("P(%d)_MTLSQ_nUnalignLd", gproc->getId())
 	, nUnalignSt("P(%d)_MTLSQ_nUnalignSt", gproc->getId())
 	, exLdNum(0)

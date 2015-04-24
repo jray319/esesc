@@ -460,7 +460,7 @@ def run_splash(name, size, mem_model, core_num, prefetch, thread_num = 0):
 ####
 
 # subroutine to run microbenchmarks
-def run_micro(name, iteration, mem_model, prefetch):
+def run_micro(name, iteration, mem_model, prefetch, verify_ld = False):
 	# special mem model: usqtso -- unlimit SQ
 	unlimitSQ = mem_model == 'usqtso'
 
@@ -475,7 +475,7 @@ def run_micro(name, iteration, mem_model, prefetch):
 
 	# change esesc.conf
 	bench_cmd = '{} {}'.format(name, iteration)
-	report_file = 'micro_{}_{}_pf{}'.format(name, mem_model, prefetch)
+	report_file = 'micro_{}_{}_pf{}_v{}'.format(name, mem_model, prefetch, int(verify_ld))
 
 	shell_cmd = (
 			"sed 's/__CPU_MAX_ID__/0/g' esesc.conf.template | " +  # 1 core
@@ -490,6 +490,10 @@ def run_micro(name, iteration, mem_model, prefetch):
 	# for unlimit SQ, change simu.conf: SQ size to 1024
 	if unlimitSQ:
 		os.system("sed -i 's/^maxStores.*$/maxStores = 1024/g' simu.conf")
+
+	# for load verification, change simu.conf
+	if verify_ld:
+		os.system("sed -i 's/^sctsoVerifyLd.*$/sctsoVerifyLd = true/g' simu.conf")
 
 	# run
 	log_file = report_file + '.log'

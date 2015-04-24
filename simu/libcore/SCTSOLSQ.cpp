@@ -4,13 +4,14 @@
 #include "SescConf.h"
 #include "DInst.h"
 
-SCTSOLSQ::SCTSOLSQ(GProcessor *gproc_, bool sc, bool wait)
+SCTSOLSQ::SCTSOLSQ(GProcessor *gproc_, bool sc, bool wait, bool verify)
 	: MTLSQ(gproc_)
 	, isSC(sc)
 	, ldWait(wait)
+	, verifyLd(verify)
 	, lastComStID(DInst::invalidID)
 {
-	MSG("INFO: create P(%d)_SCTSOLSQ, isSC %d, ldWait %d, log2LineSize %u, maxLd %d, maxSt %d, prefetch %d", gproc->getId(), isSC, ldWait, log2LineSize, maxLdNum, maxStNum, prefetch);
+	MSG("INFO: create P(%d)_SCTSOLSQ, isSC %d, ldWait %d, verifyLd %d, log2LineSize %u, maxLd %d, maxSt %d, prefetch %d", gproc->getId(), isSC, ldWait, verifyLd, log2LineSize, maxLdNum, maxStNum, prefetch);
 }
 
 StallCause SCTSOLSQ::addEntry(DInst *dinst) {
@@ -282,6 +283,25 @@ bool SCTSOLSQ::retire(DInst *dinst) {
 	I((retireEn->pendExQ).empty());
 	I((retireEn->pendRetireQ).empty());
 
+	// [sizhuo] check load verification
+	if(verifyLd) {
+		if(retireEn->verify != SpecLSQEntry::Good) {
+			I(ins->isLoad());
+			I(verifyLd);
+			I(dinst->getReplayReason() == DInst::CacheRep || dinst->getReplayReason() == DInst::CacheInv);
+			if(retireEn->verify == SpecLSQEntry::Need) {
+				// [sizhuo] change verify state (prevent verify multiple times)
+				retireEn->verify = SpecLSQEntry::Verifying;
+				// [sizhuo] issue verification load
+				doLdVerifyCB::scheduleAbs(ldExPort->nextSlot(doStats), this, retireEn);
+			}
+			I(retireEn->verify == SpecLSQEntry::Verifying);
+			// fail to retire
+			return false;
+		}
+	}
+	I(retireEn->verify == SpecLSQEntry::Good);
+
 	// [sizhuo] retire from spec LSQ
 	specLSQ.erase(retireIter);
 	// [sizhuo] only free load entry
@@ -386,7 +406,13 @@ void SCTSOLSQ::cacheEvict(AddrType lineAddr, bool isReplace) {
 				} else {
 					// [sizhuo] this load must be killed & set replay reason
 					killDInst->setReplayReason(isReplace ? DInst::CacheRep : DInst::CacheInv);
-					gproc->replay(killDInst);
+					if(verifyLd) {
+						// [sizhuo] we do verification load, mark entry as needing verification
+						killEn->verify = SpecLSQEntry::Need;
+					} else {
+						// [sizhuo] flush ROB when we don't do load verification
+						gproc->replay(killDInst);
+					}
 					// [sizhuo] stats
 					if(isReplace) {
 						nLdKillByRep.inc(doStats);

@@ -95,7 +95,15 @@ protected:
 		bool forwarding; // [sizhuo] this load is being forwarded
 		bool stale; // [sizhuo] the load result is stale, should not forward it to other loads
 
-		SpecLSQEntry() : dinst(0), state(Wait), ldSrcID(DInst::invalidID), needReEx(false), forwarding(false), stale(false) {}
+		// [sizhuo] load verification state
+		enum LdVerifyState {
+			Good,
+			Need,
+			Verifying
+		};
+		LdVerifyState verify;
+
+		SpecLSQEntry() : dinst(0), state(Wait), ldSrcID(DInst::invalidID), needReEx(false), forwarding(false), stale(false), verify(Good) {}
 		void clear() {
 			dinst = 0;
 			state = Wait;
@@ -103,6 +111,7 @@ protected:
 			needReEx = false;
 			forwarding = false;
 			stale = false;
+			verify = Good;
 			I(pendRetireQ.empty());
 			I(pendExQ.empty());
 		}
@@ -186,6 +195,8 @@ protected:
 	GStatsCntr nLdReExByRep;
 	GStatsCntr nStLdForward;
 	GStatsCntr nLdLdForward;
+	GStatsCntr nVerifyLdByInv;
+	GStatsCntr nVerifyLdByRep;
 
 	GStatsCntr nUnalignLd;
 	GStatsCntr nUnalignSt;
@@ -281,14 +292,43 @@ class SCTSOLSQ : public MTLSQ {
 private:
 	const bool isSC; // [sizhuo] true: SC, false: TSO
 	const bool ldWait; // [sizhuo] load will be stalled if there is older load to same addr not finished
+	const bool verifyLd; // [sizhuo] do load verification (just assume verify success)
 	Time_t lastComStID; // [sizhuo] inst ID of last store commited to memory
 
 protected:
 	virtual void ldExecute(DInst *dinst);
 	virtual void stCommited(Time_t id);
 
+	// [sizhuo] after verification load returns
+	// we always assume it success
+	void ldVerified(SpecLSQEntry *en) {
+		I(en);
+		I(en->verify == SpecLSQEntry::Verifying);
+		en->verify = SpecLSQEntry::Good;
+	}
+	typedef CallbackMember1<SCTSOLSQ, SpecLSQEntry*, &SCTSOLSQ::ldVerified> ldVerifiedCB;
+
+	// [sizhuo] issue verification load to memory
+	void doLdVerify(SpecLSQEntry *en) {
+		I(en);
+		I(en->verify == SpecLSQEntry::Verifying);
+		DInst *dinst = en->dinst;
+		const bool doStats = dinst->getStatsFlag();
+		I(dinst->getInst()->isLoad());
+		// [sizhuo] stats
+		if(dinst->getReplayReason() == DInst::CacheInv) {
+			nVerifyLdByInv.inc(doStats);
+		} else {
+			I(dinst->getReplayReason() == DInst::CacheRep);
+			nVerifyLdByRep.inc(doStats);
+		}
+		// [sizhuo] issue verification load to memory
+		MemRequest::sendReqRead(DL1, doStats, dinst->getAddr(), ldVerifiedCB::create(this, en));
+	}
+	typedef CallbackMember1<SCTSOLSQ, SpecLSQEntry*, &SCTSOLSQ::doLdVerify> doLdVerifyCB;
+
 public:
-	SCTSOLSQ(GProcessor *gproc_, bool sc, bool wait);
+	SCTSOLSQ(GProcessor *gproc_, bool sc, bool wait, bool verify);
 	virtual ~SCTSOLSQ() {}
 
 	virtual StallCause addEntry(DInst *dinst);
