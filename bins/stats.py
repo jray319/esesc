@@ -29,6 +29,7 @@ maxSt = -1
 robSize = -1
 retireWidth = -1
 issueWidth = -1
+verifyLd = -1
 
 for line in resultFile:
 	if coreNum == -1:
@@ -64,7 +65,12 @@ for line in resultFile:
 		if m:
 			issueWidth = int(m.group(1))
 			continue
-	if coreNum > 0 and maxLd > 0 and maxSt > 0 and robSize > 0 and retireWidth > 0 and issueWidth > 0:
+	if verifyLd == -1:
+		m = re.search(r'sctsoVerifyLd\s*=\s*(true|false)', line)
+		if m:
+			verifyLd = int(m.group(1) == 'true')
+			continue
+	if coreNum > 0 and maxLd > 0 and maxSt > 0 and robSize > 0 and retireWidth > 0 and issueWidth > 0 and verifyLd >= 0:
 		break;
 
 saveData['coreNum'] = coreNum
@@ -73,6 +79,7 @@ saveData['maxSt'] = maxSt
 saveData['robSize'] = robSize
 saveData['retireWidth'] = retireWidth
 saveData['issueWidth'] = issueWidth
+saveData['verifyLd'] = verifyLd
 
 print ''
 
@@ -168,6 +175,19 @@ for line in resultFile:
 				print 'ERROR: unknow inst type {}'.format(instType)
 				sys.exit()
 
+saveData['nRALU'] = nRALU
+saveData['nAALU'] = nAALU
+saveData['nBALU'] = nBALU
+saveData['nLALU_LD'] = nLALU_LD
+saveData['nLALU_REC'] = nLALU_REC
+saveData['nSALU_ST'] = nSALU_ST
+saveData['nSALU_ADDR'] = nSALU_ADDR
+saveData['nSALU_COM'] = nSALU_COM
+saveData['nCALU_3C'] = nCALU_3C
+saveData['nCALU_5C'] = nCALU_5C
+saveData['nCALU_7C'] = nCALU_7C
+saveData['nMALU'] = nMALU
+
 print '-- Instruction Distribution'
 print '{:<6s}{:<6s}{:<6s}{:<6s}{:<9s}{:<10s}{:<9s}{:<11s}{:<10s}{:<9s}{:<9s}{:<9s}{:<6s}'.format('(%)', 
 'RALU', 'AALU', 'BALU', 'LALU_LD', 'LALU_REC', 'SALU_ST', 'SALU_ADDR', 'SALU_COM', 'CALU_3C', 'CALU_5C', 'CALU_7C', 'MALU')
@@ -201,6 +221,9 @@ for line in resultFile:
 			print 'ERROR: unknow unalign type {}'.format(m.group(2))
 			sys.exit()
 
+saveData['unalignLd'] = unalignLd
+saveData['unalignSt'] = unalignSt
+
 print '-- Unaligned Memory Access'
 print '{:<6s}{:<14s}{:<14s}'.format('', 'Unalign Ld%', 'Unalign St%')
 for i in range(0, coreNum):
@@ -218,6 +241,10 @@ retireStallByFlushSt = [0] * coreNum
 retireStallByFlushLd = [0] * coreNum
 retireStallByComSQ = [0] * coreNum
 retireStallByEmpty = [0] * coreNum
+retireStallByVerifyInv = [0] * coreNum
+retireStallByVerifyRep = [0] * coreNum
+retireStallByVerifyLd = [0] * coreNum
+retireStallByVerifySt = [0] * coreNum
 
 for line in resultFile:
 	m = re.search(r'P\((\d+)\)_retireStallBy(\w+)\s*=\s*(\d+)\.0+', line)
@@ -237,6 +264,14 @@ for line in resultFile:
 			retireStallByFlushLd[coreId] = count
 		elif stallType == 'Flush_Store':
 			retireStallByFlushSt[coreId] = count
+		elif stallType == 'Verify_CacheInv':
+			retireStallByVerifyInv[coreId] = count
+		elif stallType == 'Verify_CacheRep':
+			retireStallByVerifyRep[coreId] = count
+		elif stallType == 'Verify_Load':
+			retireStallByVerifyLd[coreId] = count
+		elif stallType == 'Verify_Store':
+			retireStallByVerifySt[coreId] = count
 		elif stallType == 'Ex_iLALU_LD':
 			retireStallByExLd[coreId] = count
 		elif re.match(r'Ex_i', stallType):
@@ -244,6 +279,14 @@ for line in resultFile:
 		else:
 			print 'ERROR: unkonw retire stall type {}'.format(stallType)
 			sys.exit()
+
+for i in range(0, coreNum):
+	if retireStallByVerifyLd[i] != 0 or retireStallByVerifySt[i] != 0:
+		print "ERROR: core {} has retire stall by verification loads caused by Ld/St".format(i)
+		sys.exit()
+	if verifyLd <= 0 and (retireStallByVerifyRep[i] != 0 or retireStallByVerifyInv[i] != 0):
+		print "ERROR: core {} has retire stall by verification loads caused by inv/rep".format(i)
+		sys.exit()
 
 saveData['retireStallByExLd'] = retireStallByExLd
 saveData['retireStallByExOther'] = retireStallByExOther
@@ -253,25 +296,30 @@ saveData['retireStallByFlushSt'] = retireStallByFlushSt
 saveData['retireStallByFlushLd'] = retireStallByFlushLd
 saveData['retireStallByComSQ'] = retireStallByComSQ
 saveData['retireStallByEmpty'] = retireStallByEmpty
+saveData['retireStallByVerifyInv'] = retireStallByVerifyInv
+saveData['retireStallByVerifyRep'] = retireStallByVerifyRep
 
 print '-- Retire Port BW Distribution'
-print '{:<6s}LdEx   OtherEx  FlushSt  FlushLd  FlushInv FlushRep ComSQ  Empty  Active'.format('(%)')
+print '{:<6s}LdEx   OtherEx  FlushSt  FlushLd  FlushInv  FlushRep  VerifyInv  VerifyRep  ComSQ  Empty  Active'.format('(%)')
 for i in range(0, coreNum):
 	if cycle[i] <= 0:
-		print '{:<6s}{:<7s}{:<9s}{:<9s}{:<9s}{:<10s}{:<10s}{:<7s}{:<7s}{:<8s}'.format('P({})'.format(i),
-				'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan')
+		print '{:<6s}{:<7s}{:<9s}{:<9s}{:<9s}{:<10s}{:<10s}{:<11s}{:<11s}{:<7s}{:<7s}{:<8s}'.format('P({})'.format(i),
+				'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan', 'nan')
 	else:
-		print '{:<6s}{:<7.2f}{:<9.2f}{:<9.3f}{:<9.3f}{:<10.3f}{:<10.3f}{:<7.2f}{:<7.2f}{:<8.2f}'.format('P({})'.format(i),
+		print '{:<6s}{:<7.2f}{:<9.2f}{:<9.3f}{:<9.3f}{:<10.3f}{:<10.3f}{:<11.3f}{:<11.3f}{:<7.2f}{:<7.2f}{:<8.2f}'.format('P({})'.format(i),
 				float(retireStallByExLd[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByExOther[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByFlushSt[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByFlushLd[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByFlushInv[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByFlushRep[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
+				float(retireStallByVerifyInv[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
+				float(retireStallByVerifyRep[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByComSQ[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				float(retireStallByEmpty[i]) / float(retireWidth) / float(cycle[i]) * 100.0,
 				100.0 - float(retireStallByExLd[i] + retireStallByExOther[i] + retireStallByFlushLd[i] 
-					+ retireStallByFlushInv[i] + retireStallByFlushRep[i] + retireStallByFlushSt[i] + retireStallByComSQ[i]
+					+ retireStallByFlushInv[i] + retireStallByFlushRep[i] + retireStallByFlushSt[i] 
+					+ retireStallByVerifyInv[i] + retireStallByVerifyRep[i] + retireStallByComSQ[i]
 					+ retireStallByEmpty[i]) / float(retireWidth) / float(cycle[i]) * 100.0)
 print ''
 
@@ -501,6 +549,14 @@ for line in resultFile:
 			print 'ERROR: unknown miss type {}'.format(missType)
 			sys.exit()
 
+for cache in ['DL1', 'L2', 'L3']:
+	saveData['readMissNum{}'.format(cache)] = readMissNum[cache]
+	saveData['readMissLat{}'.format(cache)] = readMissLat[cache]
+	saveData['writeMissNum{}'.format(cache)] = writeMissNum[cache]
+	saveData['writeMissLat{}'.format(cache)] = writeMissLat[cache]
+	saveData['prefetchMissNum{}'.format(cache)] = prefetchMissNum[cache]
+	saveData['prefetchMissLat{}'.format(cache)] = prefetchMissLat[cache]
+
 print '-- Cache Miss'
 print '{:<8s}{:<14s}{:<14s}{:<14s}'.format('', 'Read', 'Write', 'Prefetch')
 print ('{:<8s}' + 'MPKI  AvgLat  ' * 3).format('')
@@ -513,6 +569,133 @@ for cache in ['DL1', 'L2', 'L3']:
 				'nan' if instNum <= 0 else '{:<6.1f}'.format(float(prefetchMissNum[cache][i]) / instNum * 1000.0), prefetchMissLat[cache][i])
 print ''
 
+# LSQ
+excepByRep = [0] * coreNum
+excepByInv = [0] * coreNum
+excepByLd = [0] * coreNum
+excepBySt = [0] * coreNum
+ldVioByRep = [0] * coreNum # violation is LdKillBy
+ldVioByInv = [0] * coreNum
+ldVioByLd = [0] * coreNum
+ldVioBySt = [0] * coreNum
+ldReExByRep = [0] * coreNum
+ldReExByInv = [0] * coreNum
+ldReExByLd = [0] * coreNum
+ldReExBySt = [0] * coreNum
+ldStallByLd = [0] * coreNum
+ldStallByRec = [0] * coreNum
+verifyLdByInv = [0] * coreNum
+verifyLdByRep = [0] * coreNum
+stForward = [0] * coreNum
+ldForward = [0] * coreNum
+exLdHist = [[0] * (maxLd + 1)] * coreNum
+doneLdHist = [[0] * (maxLd + 1)] * coreNum
+ldQUsage = [[0] * (maxLd + 1)] * coreNum
+stQUsage = [[0] * (maxSt + 1)] * coreNum
+comSQUsage = [[0] * (maxSt + 1)] * coreNum
+
+for line in resultFile:
+	m = re.search(r'P\((\d+)\)_MTLSQ_n(\w+)\s*=\s*(\d+)\.0+', line)
+	if m:
+		coreId = int(m.group(1))
+		cntType = m.group(2)
+		count = int(m.group(3))
+		if cntType == 'LdKillByRep':
+			ldVioByRep[coreId] = count
+		elif cntType == 'LdKillByInv':
+			ldVioByInv[coreId] = count
+		elif cntType == 'LdKillByLd':
+			ldVioByLd[coreId] = count
+		elif cntType == 'LdKillBySt':
+			ldVioBySt[coreId] = count
+		elif cntType == 'LdReExByRep':
+			ldReExByRep[coreId] = count
+		elif cntType == 'LdReExByInv':
+			ldReExByInv[coreId] = count
+		elif cntType == 'LdReExByLd':
+			ldReExByLd[coreId] = count
+		elif cntType == 'LdReExBySt':
+			ldReExBySt[coreId] = count
+		elif cntType == 'LdStallByLd':
+			ldStallByLd[coreId] = count
+		elif cntType == 'LdStallByRec':
+			ldStallByRec[coreId] = count
+		elif cntType == 'VerifyLdByRep':
+			verifyLdByRep[coreId] = count
+		elif cntType == 'VerifyLdByInv':
+			verifyLdByInv[coreId] = count
+		elif cntType == 'VerifyByLd' or cntType == 'VerifyBySt':
+			if count != 0:
+				print 'ERROR: {} > 0'.format(line)
+				sys.exit()
+		elif cntType == 'LdLdForward':
+			ldForward[coreId] = count
+		elif cntType == 'StLdForward':
+			stForward[coreId] = count
+		elif cntType != 'UnalignLd' and cntType != 'UnalignSt':
+			print 'ERROR: unkown count type {}'.format(cntType)
+			sys.exit()
+		continue
+	m = re.search(r'P\((\d+)\)_nExcepBy_(\w+)\s*=\s*(\d+)\.0+', line)
+	if m:
+		coreId = int(m.group(1))
+		excepType = m.group(2)
+		count = int(m.group(3))
+		if excepType == 'CacheRep':
+			excepByRep[coreId] = count
+		elif excepType == 'CacheInv':
+			excepByInv[coreId] = count
+		elif excepType == 'Load':
+			excepByLd[coreId] = count
+		elif excepType == 'Store':
+			excepBySt[coreId] = count
+		else:
+			print 'ERROR: unkown exception type {}'.format(excepType)
+			sys.exit()
+		continue
+	m = re.search(r'P\((\d+)\)_(ldQUsage|exLdNum|doneLdNum|stQUsage|comSQUsage)\((\d+)\)\s*=\s*(\d+)\.0+', line)
+	if m:
+		coreId = int(m.group(1))
+		histType = m.group(2)
+		key = int(m.group(3))
+		val = int(m.group(4))
+		if histType == 'ldQUsage':
+			ldQUsage[coreId][key] = val
+		elif histType == 'exLdNum':
+			exLdHist[coreId][key] = val
+		elif histType == 'doneLdNum':
+			doneLdHist[coreId][key] = val
+		elif histType == 'stQUsage':
+			stQUsage[coreId][key] = val
+		elif histType == 'comSQUsage':
+			comSQUsage[coreId][key] = val
+		else:
+			print 'ERROR: unkown LSQ hist type {}'.format(histType)
+			sys.exit()
+
+saveData['excepByRep'] = excepByRep
+saveData['excepByInv'] = excepByInv
+saveData['excepByLd'] = excepByLd
+saveData['excepBySt'] = excepBySt
+saveData['ldVioByRep'] = ldVioByRep
+saveData['ldVioByInv'] = ldVioByInv
+saveData['ldVioByLd'] = ldVioByLd
+saveData['ldVioBySt'] = ldVioBySt
+saveData['ldReExByRep'] = ldReExByRep
+saveData['ldReExByInv'] = ldReExByInv
+saveData['ldReExByLd'] = ldReExByLd
+saveData['ldReExBySt'] = ldReExBySt
+saveData['ldStallByLd'] = ldStallByLd
+saveData['ldStallByRec'] = ldStallByRec
+saveData['verifyLdByRep'] = verifyLdByRep
+saveData['verifyLdByInv'] = verifyLdByInv
+saveData['ldForward'] = ldForward
+saveData['stForward'] = stForward
+saveData['exLdHist'] = exLdHist
+saveData['doneLdHist'] = doneLdHist
+saveData['ldQUsage'] = ldQUsage
+saveData['stQUsage'] = stQUsage
+saveData['comSQUsage'] = comSQUsage
 
 # save data to .mat & .json files
 if len(sys.argv) >= 3:
