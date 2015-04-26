@@ -15,7 +15,10 @@ MTLSQ* MTLSQ::create(GProcessor *gproc_) {
 	MTLSQ *ret = 0;
 
 	if(!strcasecmp(memModel, "wmm")) {
-		ret = new WMMLSQ(gproc_);
+		ret = new WMMLSQ(gproc_, true);
+	} else if(!strcasecmp(memModel, "rcm")) {
+		// [sizhuo] new model: don't order loads on same addr
+		ret = new WMMLSQ(gproc_, false);
 	} else if(!strcasecmp(memModel, "tso")) {
 		ret = new SCTSOLSQ(gproc_, false, ldWait, verifyLd);
 	} else if(!strcasecmp(memModel, "sc")) {

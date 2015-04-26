@@ -257,12 +257,12 @@ void WMMProcessor::retireFromROB(FlowID fid) {
     if( !done ) {
 			// [sizhuo] stall by commit SQ non-empty OR load verification
 			if(dinst->getInst()->isComFence()) {
-				// [sizhuo] stall by commit fence in TSO
+				// [sizhuo] stall by commit fence in TSO/WMM
 				I(mtLSQ->getComSQUsage() > 0);
 				retireStallByComSQ.add(n2Retire, dinst->getStatsFlag());
 			} else if(dinst->getInst()->isLoad()) {
 				if(dinst->getReplayReason() != DInst::MaxReason) {
-					// [sizhuo] stall by verification load
+					// [sizhuo] stall by verification load in SC/TSO
 					I(dinst->getReplayReason() == DInst::CacheRep || dinst->getReplayReason() == DInst::CacheInv);
 					retireStallByVerify[dinst->getReplayReason()]->add(n2Retire, dinst->getStatsFlag());
 				} else {

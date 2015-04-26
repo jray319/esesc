@@ -87,7 +87,7 @@ private:
 	SSID_t *ssit; // [sizhuo] Store Set Id Table
 	DInst **lfmt; // [sizhuo] Last Fetched Memory inst Table
 	static const SSID_t invalidSSID; // [sizhuo] -1 is invalid SSID
-	const bool isWMM; // [sizhuo] whether memory model is WMM
+	const bool orderLdLd; // [sizhuo] ordering loads to same addr
 	const uint32_t ssitSize;
 	const uint32_t ssitMask;
 	const uint32_t lfmtSize;

@@ -4,10 +4,11 @@
 #include "SescConf.h"
 #include "DInst.h"
 
-WMMLSQ::WMMLSQ(GProcessor *gproc_)
+WMMLSQ::WMMLSQ(GProcessor *gproc_, bool ldOrder)
 	: MTLSQ(gproc_)
+	, orderLdLd(ldOrder)
 {
-	MSG("INFO: create P(%d)_WMMLSQ, log2LineSize %u, maxLd %d, maxSt %d, prefetch %d", gproc->getId(), log2LineSize, maxLdNum, maxStNum, prefetch);
+	MSG("INFO: create P(%d)_WMMLSQ, orderLdLd %d, log2LineSize %u, maxLd %d, maxSt %d, prefetch %d", gproc->getId(), orderLdLd, log2LineSize, maxLdNum, maxStNum, prefetch);
 }
 
 StallCause WMMLSQ::addEntry(DInst *dinst) {
@@ -76,73 +77,76 @@ void WMMLSQ::issue(DInst *dinst) {
 
 	// [sizhuo] search younger entry (with higer ID) to find eager load to kill
 	// TODO: if we are clever enough, load can bypass from younger load instead of killing
-	SpecLSQ::iterator iter = issueIter;
-	iter++;
-	for(; iter != specLSQ.end(); iter++) {
-		I(iter->first > id);
-		SpecLSQEntry *killEn = iter->second;
-		I(killEn);
-		DInst *killDInst = killEn->dinst;
-		I(killDInst);
-		I(!killDInst->isPoisoned()); // [sizhuo] can't be poisoned
-		const Instruction *const killIns = killDInst->getInst();
-		const bool doStats = killDInst->getStatsFlag();
-		// [sizhuo] we hit a reconcile fence we can stop
-		if(killIns->isRecFence()) {
-			break;
-		}
-		// XXX: [sizhuo] search load to same ALIGNED address that reads across the issuing inst
-		// XXX: we decide kill/re-ex based on load source ID
-		if(getMemOrdAlignAddr(killDInst->getAddr()) == getMemOrdAlignAddr(addr)) {
-			if(killIns->isLoad()) {
-				if(killEn->state == Wait) {
-					// [sizhuo] younger loads on same aligned addr cannot read across this one
-					// they are either stalled or killed, so stop here
-					break;
-				} else if(killEn->state == Exe) {
-					if(killEn->ldSrcID < id) {
-						// [sizhuo] we don't need to kill it, just let it re-execute
-						killEn->needReEx = true;
-						// [sizhuo] don't add to store set
-						// because SC impl only adds when ROB flush
-						// [sizhuo] stats
-						if(ins->isStore()) {
-							nLdReExBySt.inc(doStats);
-						} else {
-							nLdReExByLd.inc(doStats);
+	// store will always do the search, load will only do it only when orderLdLd == true
+	if(ins->isStore() || orderLdLd) {
+		SpecLSQ::iterator iter = issueIter;
+		iter++;
+		for(; iter != specLSQ.end(); iter++) {
+			I(iter->first > id);
+			SpecLSQEntry *killEn = iter->second;
+			I(killEn);
+			DInst *killDInst = killEn->dinst;
+			I(killDInst);
+			I(!killDInst->isPoisoned()); // [sizhuo] can't be poisoned
+			const Instruction *const killIns = killDInst->getInst();
+			const bool doStats = killDInst->getStatsFlag();
+			// [sizhuo] we hit a reconcile fence we can stop
+			if(killIns->isRecFence()) {
+				break;
+			}
+			// XXX: [sizhuo] search load to same ALIGNED address that reads across the issuing inst
+			// XXX: we decide kill/re-ex based on load source ID
+			if(getMemOrdAlignAddr(killDInst->getAddr()) == getMemOrdAlignAddr(addr)) {
+				if(killIns->isLoad()) {
+					if(killEn->state == Wait) {
+						// [sizhuo] younger loads on same aligned addr cannot read across this one
+						// they are either stalled or killed, so stop here
+						break;
+					} else if(killEn->state == Exe) {
+						if(killEn->ldSrcID < id) {
+							// [sizhuo] we don't need to kill it, just let it re-execute
+							killEn->needReEx = true;
+							// [sizhuo] don't add to store set
+							// because SC impl only adds when ROB flush
+							// [sizhuo] stats
+							if(ins->isStore()) {
+								nLdReExBySt.inc(doStats);
+							} else {
+								nLdReExByLd.inc(doStats);
+							}
 						}
-					}
-					// [sizhuo] younger loads on same aligned addr cannot read across this one
-					// they are either stalled or killed, so stop here
-					break;
-				} else if(killEn->state == Done) {
-					if(killEn->ldSrcID < id) {
-						// [sizhuo] this load must be killed & set replay reason
-						// NOTE: 1 inst may be killed multiple times, the last kill wins
-						killDInst->setReplayReason(ins->isStore() ? DInst::Store : DInst::Load);
-						gproc->replay(killDInst);
-						// [sizhuo] add to store set
-						mtStoreSet->memDepViolate(dinst, killDInst);
-						// [sizhuo] stats
-						if(ins->isStore()) {
-							nLdKillBySt.inc(doStats);
+						// [sizhuo] younger loads on same aligned addr cannot read across this one
+						// they are either stalled or killed, so stop here
+						break;
+					} else if(killEn->state == Done) {
+						if(killEn->ldSrcID < id) {
+							// [sizhuo] this load must be killed & set replay reason
+							// NOTE: 1 inst may be killed multiple times, the last kill wins
+							killDInst->setReplayReason(ins->isStore() ? DInst::Store : DInst::Load);
+							gproc->replay(killDInst);
+							// [sizhuo] add to store set
+							mtStoreSet->memDepViolate(dinst, killDInst);
+							// [sizhuo] stats
+							if(ins->isStore()) {
+								nLdKillBySt.inc(doStats);
+							} else {
+								nLdKillByLd.inc(doStats);
+							}
+							break; // [sizhuo] ROB will flush, we can stop
 						} else {
-							nLdKillByLd.inc(doStats);
+							// [sizhuo] if bypass & kill are at same alignment
+							// then we can stop here
+							// but generally we should continue the search
 						}
-						break; // [sizhuo] ROB will flush, we can stop
 					} else {
-						// [sizhuo] if bypass & kill are at same alignment
-						// then we can stop here
-						// but generally we should continue the search
+						I(0);
 					}
 				} else {
-					I(0);
+					I(killIns->isStore());
+					// [sizhuo] if bypass & kill are at same alignment
+					// then we can stop here
+					// but generally we should continue the search
 				}
-			} else {
-				I(killIns->isStore());
-				// [sizhuo] if bypass & kill are at same alignment
-				// then we can stop here
-				// but generally we should continue the search
 			}
 		}
 	}
