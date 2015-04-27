@@ -349,6 +349,10 @@ void ACache::doReq(MemRequest *mreq) {
 					// [sizhuo] we need to replace this line, first invalidate upper level
 					// incr displace counter
 					displaced.inc(doStats);
+					// [sizhuo] inform MSHR that we are replacing a line
+					// XXX: this must be done in the same cycle when req is issued in MSHR
+					// in order to stall later req on replaced cache line
+					mshr->upReqReplace(lineAddr, mreq->line->lineAddr);
 					// [sizhuo] handle replacement
 					if(!isL1) {
 						// [sizhuo] non-L1$ has upper level caches, need invalidation

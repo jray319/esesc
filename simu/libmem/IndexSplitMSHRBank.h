@@ -211,6 +211,9 @@ public:
 	virtual void retireDownReq(AddrType lineAddr);
 
 	virtual void addUpReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *inport, const MemRequest *mreq);
+	virtual void upReqReplace(AddrType lineAddr, AddrType repLineAddr) {
+		// [sizhuo] do nothing, because we only allow 1 up req per cache set
+	}
 	virtual void upReqToWait(AddrType lineAddr);
 	virtual void upReqToAck(AddrType lineAddr);
 	virtual void retireUpReq(AddrType lineAddr);

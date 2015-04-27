@@ -46,6 +46,8 @@ public:
 	// when req is inserted to MSHR, inport is dequeued
 	// when req is ready for process, callback cb will be scheduled 
 	virtual void addUpReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *inport, const MemRequest *mreq) = 0;
+	// [sizhuo] upgrade req replaces an cache line
+	virtual void upReqReplace(AddrType lineAddr, AddrType repLineAddr) = 0;
 	// [sizhuo] upgrade req goes to lower level, invoke pending req
 	virtual void upReqToWait(AddrType lineAddr) = 0;
 	// [sizhuo] change upgrade req to Ack state
@@ -103,6 +105,9 @@ public:
 
 	void addUpReq(AddrType lineAddr, StaticCallbackBase *cb, CacheInport *port, const MemRequest *mreq) {
 		bank[getBank(lineAddr)]->addUpReq(lineAddr, cb, port, mreq);
+	}
+	void upReqReplace(AddrType lineAddr, AddrType repLineAddr) {
+		bank[getBank(lineAddr)]->upReqReplace(lineAddr, repLineAddr);
 	}
 	void upReqToWait(AddrType lineAddr, TimeDelta_t lat) {
 		MSHRBank::upReqToWaitCB::schedule(lat, bank[getBank(lineAddr)], lineAddr);
