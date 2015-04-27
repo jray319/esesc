@@ -520,6 +520,64 @@ for i in range(0, coreNum):
 			'nan' if inst[i] <= 0 else '{:<8.1f}'.format(float(prefetchMemNum[i]) / float(inst[i]) * 1000.0), prefetchMemLat[i])
 print ''
 
+# MSHR contention
+readInsertLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+writeInsertLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+prefetchInsertLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+readIssueLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+writeIssueLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+prefetchIssueLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
+
+for line in resultFile:
+	m = re.search(r'(DL1|L2|L3)\((\d+)\)_MSHR_(read|write|prefetch)(Insert|Issue)Lat:n=\d+::v=(\d+\.\d+)', line)
+	if m:
+		cacheType = m.group(1)
+		coreId = int(m.group(2))
+		reqType = m.group(3)
+		action = m.group(4)
+		lat = float(m.group(5))
+		if action == 'Insert':
+			if reqType == 'read':
+				readInsertLat[cacheType][coreId] = lat
+			elif reqType == 'write':
+				writeInsertLat[cacheType][coreId] = lat
+			elif reqType == 'prefetch':
+				prefetchInsertLat[cacheType][coreId] = lat
+			else:
+				print 'ERROR: unknown req type {}'.format(reqType)
+				sys.exit()
+		elif action == 'Issue':
+			if reqType == 'read':
+				readIssueLat[cacheType][coreId] = lat
+			elif reqType == 'write':
+				writeIssueLat[cacheType][coreId] = lat
+			elif reqType == 'prefetch':
+				prefetchIssueLat[cacheType][coreId] = lat
+			else:
+				print 'ERROR: unknown req type {}'.format(reqType)
+				sys.exit()
+		else:
+			print 'ERROR: unknown action {}'.format(action)
+			sys.exit()
+
+for cache in ['DL1', 'L2', 'L3']:
+	saveData['readInsertLat{}'.format(cache)] = readInsertLat[cache]
+	saveData['readIssueLat{}'.format(cache)] = readIssueLat[cache]
+	saveData['writeInsertLat{}'.format(cache)] = writeInsertLat[cache]
+	saveData['writeIssueLat{}'.format(cache)] = writeIssueLat[cache]
+	saveData['prefetchInsertLat{}'.format(cache)] = prefetchInsertLat[cache]
+	saveData['prefetchIssueLat{}'.format(cache)] = prefetchIssueLat[cache]
+
+print '-- Memory Access Latency Distribution'
+print ('{:<6s}' + '{:<23s}' * 3).format('', 'Read', 'Write', 'Prefetch')
+print ('{:<6s}' + 'Insert  Issue  Handle  ' * 3).format('')
+for i in range(0, coreNum):
+	print ('{:<6s}' + '{:<8.1f}{:<7.1f}{:<8.1f}' * 3).format('P({})'.format(i),
+			readInsertLat['DL1'][i], readIssueLat['DL1'][i], readMemLat[i] - readInsertLat['DL1'][i] - readIssueLat['DL1'][i],
+			writeInsertLat['DL1'][i], writeIssueLat['DL1'][i], writeMemLat[i] - writeInsertLat['DL1'][i] - writeIssueLat['DL1'][i],
+			prefetchInsertLat['DL1'][i], prefetchIssueLat['DL1'][i], prefetchMemLat[i] - prefetchInsertLat['DL1'][i] - prefetchIssueLat['DL1'][i])
+print ''
+
 # cache miss
 readMissNum = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
 readMissLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
