@@ -1,6 +1,8 @@
 #ifndef INDEX_SPLIT_MSHR_BANK_H
 #define INDEX_SPLIT_MSHR_BANK_H
 
+#if 0
+
 #include "HierMSHR.h"
 #include "pool.h"
 
@@ -219,5 +221,7 @@ public:
 	virtual void retireUpReq(AddrType lineAddr);
 	////////
 };
+
+#endif
 
 #endif

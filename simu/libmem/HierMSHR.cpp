@@ -29,9 +29,12 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	// [sizhuo] create stats
 	for(int i = 0; i < ma_MAX; i++) {
 		avgMissLat[i] = 0;
-		insertLat[i] = 0;
 		insertFail[i] = 0;
-		issueLat[i] = 0;
+		handleLat[i] = 0;
+		for(int j = 0; j < MSHRBank::MaxIssueSC; j++) {
+			issueFail[i][j] = 0;
+			issueStall[i][j] = 0;
+		}
 	}
 	avgMissLat[ma_setValid] = new GStatsAvg("%s_readMissLat", name);
 	avgMissLat[ma_setDirty] = new GStatsAvg("%s_writeMissLat", name);
@@ -40,38 +43,38 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	I(avgMissLat[ma_setDirty]);
 	I(avgMissLat[ma_setExclusive]);
 
-	insertLat[ma_setValid] = new GStatsAvg("%s_readInsertLat", name);
-	insertLat[ma_setDirty] = new GStatsAvg("%s_writeInsertLat", name);
-	insertLat[ma_setExclusive] = new GStatsAvg("%s_prefetchInsertLat", name);
-	insertLat[ma_setInvalid] = new GStatsAvg("%s_setInvalidInsertLat", name);
-	insertLat[ma_setShared] = new GStatsAvg("%s_setSharedInsertLat", name);
-	I(insertLat[ma_setValid]);
-	I(insertLat[ma_setDirty]);
-	I(insertLat[ma_setExclusive]);
-	I(insertLat[ma_setInvalid]);
-	I(insertLat[ma_setShared]);
+	char msgStr[ma_MAX][50];
+	for(int i = 0; i < ma_MAX; i++) {
+		msgStr[i][0] = 0;
+	}
+	sprintf(msgStr[ma_setValid], "read");
+	sprintf(msgStr[ma_setDirty], "write");
+	sprintf(msgStr[ma_setExclusive], "prefetch");
+	sprintf(msgStr[ma_setInvalid], "setInvalid");
+	sprintf(msgStr[ma_setShared], "setShared");
 
-	insertFail[ma_setValid] = new GStatsCntr("%s_readInsertFail", name);
-	insertFail[ma_setDirty] = new GStatsCntr("%s_writeInsertFail", name);
-	insertFail[ma_setExclusive] = new GStatsCntr("%s_prefetchInsertFail", name);
-	insertFail[ma_setInvalid] = new GStatsCntr("%s_setInvalidInsertFail", name);
-	insertFail[ma_setShared] = new GStatsCntr("%s_setSharedInsertFail", name);
-	I(insertFail[ma_setValid]);
-	I(insertFail[ma_setDirty]);
-	I(insertFail[ma_setExclusive]);
-	I(insertFail[ma_setInvalid]);
-	I(insertFail[ma_setShared]);
+	char issueSCStr[MSHRBank::MaxIssueSC][50];
+	sprintf(issueSCStr[MSHRBank::Insert], "Insert");
+	sprintf(issueSCStr[MSHRBank::Downgrade], "Downgrade");
+	sprintf(issueSCStr[MSHRBank::Upgrade], "Upgrade");
+	sprintf(issueSCStr[MSHRBank::Replace], "Replace");
+	sprintf(issueSCStr[MSHRBank::ReqNum], "ReqNum");
 
-	issueLat[ma_setValid] = new GStatsAvg("%s_readIssueLat", name);
-	issueLat[ma_setDirty] = new GStatsAvg("%s_writeIssueLat", name);
-	issueLat[ma_setExclusive] = new GStatsAvg("%s_prefetchIssueLat", name);
-	issueLat[ma_setInvalid] = new GStatsAvg("%s_setInvalidIssueLat", name);
-	issueLat[ma_setShared] = new GStatsAvg("%s_setSharedIssueLat", name);
-	I(issueLat[ma_setValid]);
-	I(issueLat[ma_setDirty]);
-	I(issueLat[ma_setExclusive]);
-	I(issueLat[ma_setInvalid]);
-	I(issueLat[ma_setShared]);
+	for(int i = 0; i < ma_MAX; i++) {
+		if(msgStr[i][0] != 0) {
+			insertFail[i] = new GStatsCntr("%s_%sInsertFail", name, msgStr[i]);
+			I(insertFail[i]);
+			handleLat[i] = new GStatsAvg("%s_%sHandleLat", name, msgStr[i]);
+			I(handleLat[i]);
+
+			for(int j = 0; j < MSHRBank::MaxIssueSC; j++) {
+				issueFail[i][j] = new GStatsCntr("%s_%sIssueFailBy_%s", name, msgStr[i], issueSCStr[j]);
+				I(issueFail[i][j]);
+				issueStall[i][j] = new GStatsCntr("%s_%sIssueStallBy_%s", name, msgStr[i], issueSCStr[j]);
+				I(issueStall[i][j]);
+			}
+		}
+	}
 
 	// [sizhuo] create banks
 	bank = new MSHRBank*[bankNum];

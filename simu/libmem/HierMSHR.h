@@ -29,6 +29,15 @@ protected:
 	} DownReqState;
 
 public:
+	typedef enum {
+		Insert,
+		Downgrade,
+		Upgrade,
+		Replace,
+		ReqNum,
+		MaxIssueSC
+	} IssueStallCause;
+
 	MSHRBank() {}
 	virtual ~MSHRBank() {}
 
@@ -75,9 +84,11 @@ private:
 
 	
 	GStatsAvg *avgMissLat[ma_MAX]; // [sizhuo] average miss latency, for up req only
-	GStatsAvg *insertLat[ma_MAX]; // [sizhuo] latency from req created to insert into MSHR
 	GStatsCntr *insertFail[ma_MAX]; // [sizhuo] number of failed insertion of up/down req to MSHR
-	GStatsAvg *issueLat[ma_MAX]; // [sizhuo] latency from insert to issue
+	GStatsCntr *issueFail[ma_MAX][MSHRBank::MaxIssueSC];
+	GStatsCntr *issueStall[ma_MAX][MSHRBank::MaxIssueSC]; // [sizhuo] latency from insert to issue
+	GStatsAvg *handleLat[ma_MAX]; // [sizhuo] latency of handling each req
+
 
 	// [sizhuo] let MSHRBank to be friend class
 	friend class IndexSplitMSHRBank;

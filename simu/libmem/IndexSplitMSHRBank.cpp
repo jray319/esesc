@@ -1,3 +1,6 @@
+#if 0
+
+
 #include "IndexSplitMSHRBank.h"
 #include "CacheInport.h"
 #include "Snippets.h"
@@ -570,3 +573,6 @@ void IndexSplitMSHRBank::retireUpReq(AddrType lineAddr) {
 	processPendIssueUp(en->pendIssueUpQ);
 	processPendInsertUp();
 }
+
+
+#endif

@@ -111,15 +111,14 @@ void FullSplitMSHRBank::insertDownReq(AddrType lineAddr, StaticCallbackBase *cb,
 		en->lineAddr = lineAddr;
 		en->state = Inactive; // [sizhuo] start as Inactive
 		en->mreq = mreq;
-		en->insertTime = globalClock; // [sizhuo] record insert time
+		en->doStats = mreq->getStatsFlag(); // [sizhuo] record stats flag
+		en->action = mreq->getAction(); // [sizhuo] record action
+		en->lastTime = globalClock; // [sizhuo] record insert time
+		en->issueSC = Insert; // [sizhuo] set stall cause
 		I((en->pendIssueDownQ).empty());
 		I((en->pendIssueUpQ).empty());
 		// [sizhuo] deq msg from inport
 		inport->deqDoneMsg();
-		// [sizhuo] stats: insert latency
-		I(mreq->getAction() < ma_MAX);
-		I(mshr->insertLat[mreq->getAction()]);
-		mshr->insertLat[mreq->getAction()]->sample(mreq->getTimeDelay(), mreq->getStatsFlag());
 		// [sizhuo] next cycle we schedule issue for contention
 		// cut down combinational path
 		scheduleIssueDownReqCB::schedule(1, this, en, cb);
@@ -144,6 +143,15 @@ void FullSplitMSHRBank::issueDownReq(DownReqEntry *en, StaticCallbackBase *cb) {
 	const AddrType lineAddr = en->lineAddr;
 
 	bool success = false;
+
+	// [sizhuo] stats on issue stall
+	I(en->action < ma_MAX);
+	I(en->issueSC < MaxIssueSC);
+	I(mshr->issueStall[en->action][en->issueSC]);
+	mshr->issueStall[en->action][en->issueSC]->add(globalClock - en->lastTime, en->doStats);
+
+	// [sizhuo] record issue time
+	en->lastTime = globalClock;
 
 	// [sizhuo] we can issue when 
 	// 1. no existing downgrade req operates on same cache line
@@ -175,6 +183,8 @@ void FullSplitMSHRBank::issueDownReq(DownReqEntry *en, StaticCallbackBase *cb) {
 					ID(GMSG(mreq->isDebug(), "fail reason: active up req upgrading (%lx, %lx, %d, %d)", upReq->lineAddr, upReq->repLineAddr, upReq->repAddrValid, upReq->state));
 					// [sizhuo] fail, add to the pendQ of upIter
 					(upReq->pendIssueDownQ).push(PendIssueDownReq(en, cb));
+					// [sizhuo] set issue stall cause
+					en->issueSC = Upgrade;
 				}
 			}
 		} else {
@@ -187,6 +197,8 @@ void FullSplitMSHRBank::issueDownReq(DownReqEntry *en, StaticCallbackBase *cb) {
 			ID(GMSG(mreq->isDebug(), "fail reason: active up req replacing (%lx, %lx, %d, %d)", repReq->lineAddr, repReq->repLineAddr, repReq->repAddrValid, repReq->state));
 			// [sizhuo] fail, add to the pendQ of repIter
 			(repReq->pendIssueDownQ).push(PendIssueDownReq(en, cb));
+			// [sizhuo] set issue stall cause
+			en->issueSC = Replace;
 		}
 	} else {
 		I(downIter->second);
@@ -196,12 +208,15 @@ void FullSplitMSHRBank::issueDownReq(DownReqEntry *en, StaticCallbackBase *cb) {
 		ID(GMSG(mreq->isDebug(), "fail reason: active down req (%lx, %d)", downIter->second->lineAddr, downIter->second->state));
 		// [sizhuo] fail, add to the pendQ of downIter
 		(downIter->second->pendIssueDownQ).push(PendIssueDownReq(en, cb));
+		// [sizhuo] set issue stall cause
+		en->issueSC = Downgrade;
 	}
 
 	if(success) {
 		// [sizhuo] success, change to active state
 		I(en->state == Inactive);
 		en->state = Active;
+		en->issueSC = MaxIssueSC; // [sizhuo] clear issue stall cause
 		I((en->pendIssueDownQ).empty());
 		I((en->pendIssueUpQ).empty());
 		// [sizhuo] insert to invert table: line addr -> down req
@@ -216,13 +231,13 @@ void FullSplitMSHRBank::issueDownReq(DownReqEntry *en, StaticCallbackBase *cb) {
 			I(numIter->second >= 1);
 			numIter->second++;
 		}
-		// [sizhuo] stats: issue latency
-		I(en->mreq->getAction() < ma_MAX);
-		I(mshr->issueLat[en->mreq->getAction()]);
-		I(globalClock >= en->insertTime);
-		mshr->issueLat[en->mreq->getAction()]->sample(globalClock - en->insertTime, en->mreq->getStatsFlag());
 		// XXX: [sizhuo] call handler NOW: atomically issue & occupy the cache line
 		cb->call();
+	} else {
+		// [sizhuo] stats: issue fail
+		I(en->issueSC < MaxIssueSC);
+		I(mshr->issueFail[en->action][en->issueSC]);
+		mshr->issueFail[en->action][en->issueSC]->inc(en->doStats);
 	}
 }
 
@@ -238,6 +253,7 @@ void FullSplitMSHRBank::insertUpReq(AddrType lineAddr, StaticCallbackBase *cb, C
 	I(inport);
 	I(mreq);
 	ID(GMSG(mreq->isDebug(), "%s: insertUpReq", name));
+	I(mreq->getAction() == mreq->getOrigReqAction());
 
 	bool success = false;
 
@@ -262,16 +278,15 @@ void FullSplitMSHRBank::insertUpReq(AddrType lineAddr, StaticCallbackBase *cb, C
 		en->lineAddr = lineAddr;
 		en->state = Sleep; // [sizhuo] start as sleep state
 		en->mreq = mreq;
-		en->insertTime = globalClock; // [sizhuo] record insert time
+		en->doStats = mreq->getStatsFlag(); // [sizhuo] record stats flag
+		en->action = mreq->getAction(); // [sizhuo] record action
+		en->lastTime = globalClock; // [sizhuo] record insert time
+		en->issueSC = Insert; // [sizhuo] set stall cause
 		I((en->pendIssueDownQ).empty());
 		I((en->pendIssueUpWaitQ).empty());
 		I((en->pendIssueUpRetireQ).empty());
 		// [sizhuo] deq msg from inport
 		inport->deqDoneMsg();
-		// [sizhuo] stats: insert latency
-		I(mreq->getOrigReqAction() < ma_MAX);
-		I(mshr->insertLat[mreq->getOrigReqAction()]);
-		mshr->insertLat[mreq->getOrigReqAction()]->sample(mreq->getTimeDelay(), mreq->getStatsFlag());
 		// [sizhuo] next cycle we schedule issue for contention
 		// cut down combinational path
 		scheduleIssueUpReqCB::schedule(1, this, en, cb);
@@ -280,9 +295,9 @@ void FullSplitMSHRBank::insertUpReq(AddrType lineAddr, StaticCallbackBase *cb, C
 		I(pendInsertUpQ);
 		pendInsertUpQ->push(PendInsertReq(lineAddr, cb, inport, mreq));
 		// [sizhuo] stats: insert fail
-		I(mreq->getOrigReqAction() < ma_MAX);
-		I(mshr->insertFail[mreq->getOrigReqAction()]);
-		mshr->insertFail[mreq->getOrigReqAction()]->inc(mreq->getStatsFlag());
+		I(mreq->getAction() < ma_MAX);
+		I(mshr->insertFail[mreq->getAction()]);
+		mshr->insertFail[mreq->getAction()]->inc(mreq->getStatsFlag());
 	}
 }
 
@@ -297,6 +312,15 @@ void FullSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 	const AddrType index = cache->getIndex(lineAddr);
 
 	bool success = false;
+
+	// [sizhuo] stats on issue stall
+	I(en->action < ma_MAX);
+	I(en->issueSC < MaxIssueSC);
+	I(mshr->issueStall[en->action][en->issueSC]);
+	mshr->issueStall[en->action][en->issueSC]->add(globalClock - en->lastTime, en->doStats);
+
+	// [sizhuo] record issue time
+	en->lastTime = globalClock;
 
 	// [sizhuo] we can issue when
 	// 1. no existing up req in same cache set
@@ -330,6 +354,8 @@ void FullSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 					// [sizhuo] fail, add to pendIssueUpByReqNumQ
 					I(pendIssueUpByReqNumQ);
 					pendIssueUpByReqNumQ->push(PendIssueUpReq(en, cb));
+					// [sizhuo] set issue stall cause
+					en->issueSC = ReqNum;
 				}
 			} else {
 				DownReqEntry *downReq = downIter->second;
@@ -340,6 +366,8 @@ void FullSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 				ID(GMSG(mreq->isDebug(), "fail reason: active down req (%lx, %d)", downReq->lineAddr, downReq->state));
 				// [sizhuo] fail, add to pendQ of dowIter
 				(downReq->pendIssueUpQ).push(PendIssueUpReq(en, cb));
+				// [sizhuo] set issue stall cause
+				en->issueSC = Downgrade;
 			}
 		} else {
 			UpReqEntry *repReq = repIter->second;
@@ -351,6 +379,8 @@ void FullSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 			ID(GMSG(mreq->isDebug(), "fail reason: active up req replacing (%lx, %lx, %d, %d)", repReq->lineAddr, repReq->repLineAddr, repReq->repAddrValid, repReq->state));
 			// [sizhuo] fail, add to pend wait Q of repIter
 			(repReq->pendIssueUpWaitQ).push(PendIssueUpReq(en, cb));
+			// [sizhuo] set issue stall cause
+			en->issueSC = Replace;
 		}
 	} else {
 		UpReqEntry *upReq = upIter->second;
@@ -360,6 +390,8 @@ void FullSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 		ID(GMSG(mreq->isDebug(), "fail reason: active up req upgrading (%lx, %lx, %d, %d)", upReq->lineAddr, upReq->repLineAddr, upReq->repAddrValid, upReq->state));
 		// [sizhuo] fail, add to pend retire Q of upIter
 		(upReq->pendIssueUpRetireQ).push(PendIssueUpReq(en, cb));
+		// [sizhuo] set issue stall cause
+		en->issueSC = Upgrade;
 	}
 
 	if(success) {
@@ -367,6 +399,7 @@ void FullSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 		I(en->state == Sleep);
 		I(!en->repAddrValid && en->repLineAddr == 0);
 		en->state = Req;
+		en->issueSC = MaxIssueSC; // [sizhuo] clear issue stall cause
 		I((en->pendIssueDownQ).empty());
 		I((en->pendIssueUpWaitQ).empty());
 		I((en->pendIssueUpRetireQ).empty());
@@ -381,14 +414,14 @@ void FullSplitMSHRBank::issueUpReq(UpReqEntry *en, StaticCallbackBase *cb) {
 			I(numIter->second >= 1);
 			numIter->second++;
 		}
-		// [sizhuo] stats: issue latency
-		I(en->mreq->getOrigReqAction() < ma_MAX);
-		I(mshr->issueLat[en->mreq->getOrigReqAction()]);
-		I(globalClock >= en->insertTime);
-		mshr->issueLat[en->mreq->getOrigReqAction()]->sample(globalClock - en->insertTime, en->mreq->getStatsFlag());
 		// XXX: [sizhuo] call handler NOW: atomically issue & occupy the cache line
 		// if this req replaces an addr, later req can see it
 		cb->call();
+	} else {
+		// [sizhuo] stats: issue fail
+		I(en->issueSC < MaxIssueSC);
+		I(mshr->issueFail[en->action][en->issueSC]);
+		mshr->issueFail[en->action][en->issueSC]->inc(en->doStats);
 	}
 }
 
@@ -513,6 +546,10 @@ void FullSplitMSHRBank::retireDownReq(AddrType lineAddr) {
 	I(en);
 	I(en->lineAddr == lineAddr);
 	I(en->mreq);
+	// [sizhuo] stats: handle latency
+	I(en->action < ma_MAX);
+	I(mshr->handleLat[en->action]);
+	mshr->handleLat[en->action]->sample(globalClock - en->lastTime, en->doStats);
 	// [sizhuo] reset entry state
 	en->clear();
 	// [sizhuo] remove from invert table
@@ -615,9 +652,9 @@ void FullSplitMSHRBank::upReqToAck(AddrType lineAddr) {
 	// e.g. setValid --> setEx when L3 miss
 	if(en->state == Wait) {
 		I(globalClock > en->missStartTime);
-		I(en->mreq->getOrigReqAction() < ma_MAX);
-		I(mshr->avgMissLat[en->mreq->getOrigReqAction()]);
-		mshr->avgMissLat[en->mreq->getOrigReqAction()]->sample(globalClock - en->missStartTime, en->mreq->getStatsFlag());
+		I(en->action < ma_MAX);
+		I(mshr->avgMissLat[en->action]);
+		mshr->avgMissLat[en->action]->sample(globalClock - en->missStartTime, en->doStats);
 	}
 	// [sizhuo] change state
 	en->state = Ack;
@@ -634,6 +671,10 @@ void FullSplitMSHRBank::retireUpReq(AddrType lineAddr) {
 	I(en->state == Ack);
 	I(en->mreq);
 	I(!en->repAddrValid && en->repLineAddr == 0);
+	// [sizhuo] stats: handle latency
+	I(en->action < ma_MAX);
+	I(mshr->handleLat[en->action]);
+	mshr->handleLat[en->action]->sample(globalClock - en->lastTime, en->doStats);
 	// [sizhuo] clear entry
 	en->clear();
 	// [sizhuo] remove from invert table

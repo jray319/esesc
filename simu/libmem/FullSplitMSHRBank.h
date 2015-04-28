@@ -70,8 +70,12 @@ private:
 		bool repAddrValid; // [sizhuo] whether the above rep addr is valid
 		UpReqState state;
 		const MemRequest *mreq;
+
+		bool doStats; // [sizhuo] req stats flag
+		MsgAction action; // [sizhuo] orig action of the req
 		Time_t missStartTime; // [sizhuo] time when sending req to lower level
-		Time_t insertTime; // [sizhuo] time when entry is created
+		Time_t lastTime; // [sizhuo] last time when entry is inserted / try to issue / issued
+		IssueStallCause issueSC; // [sizhuo] issue stall cause
 
 		// [sizhuo] down req blocked by this one 
 		// because down req has same req addr, or addr is being replaced by this one
@@ -84,15 +88,30 @@ private:
 		// flush when this entry goes to wait state
 		PendIssueUpQ pendIssueUpWaitQ;
 
-		UpReqEntry() : lineAddr(0), repLineAddr(0), repAddrValid(false), state(Sleep) , mreq(0), missStartTime(0), insertTime(0) {}
+		UpReqEntry() 
+			: lineAddr(0)
+			, repLineAddr(0)
+			, repAddrValid(false)
+			, state(Sleep)
+			, mreq(0)
+			, doStats(true)
+			, action(ma_MAX)
+			, missStartTime(0)
+			, lastTime(0)
+			, issueSC(MaxIssueSC) 
+		{}
 		void clear() {
 			lineAddr = 0;
 			repLineAddr = 0;
 			repAddrValid = false;
 			state = Sleep;
 			mreq = 0;
+
+			doStats = true;
+			action = ma_MAX;
 			missStartTime = 0;
-			insertTime = 0;
+			lastTime = 0;
+			issueSC = MaxIssueSC;
 		}
 	};
 	// [sizhuo] pool of upgrade req entries
@@ -112,18 +131,34 @@ private:
 		AddrType lineAddr;
 		DownReqState state;
 		const MemRequest *mreq;
-		Time_t insertTime; // [sizhuo] time when entry is created
+
+		bool doStats; // [sizhuo] req stats flag
+		MsgAction action; // [sizhuo] orig action of the req
+		Time_t lastTime; // [sizhuo] last time when entry is inserted / try to issue / issued
+		IssueStallCause issueSC; // [sizhuo] issue stall cause
 
 		// [sizhuo] pending issue up/down req blocked by this req
 		PendIssueDownQ pendIssueDownQ;
 		PendIssueUpQ pendIssueUpQ;
 
-		DownReqEntry() : lineAddr(0), state(Inactive), mreq(0), insertTime(0) {}
+		DownReqEntry() 
+			: lineAddr(0)
+			, state(Inactive)
+			, mreq(0)
+			, doStats(true)
+			, action(ma_MAX)
+			, lastTime(0)
+			, issueSC(MaxIssueSC) 
+		{}
 		void clear() {
 			lineAddr = 0;
 			state = Inactive;
 			mreq = 0;
-			insertTime = 0;
+
+			doStats = true;
+			action = ma_MAX;
+			lastTime = 0;
+			issueSC = MaxIssueSC;
 		}
 	};
 	// [sizhuo] pool of downgrade req entries
