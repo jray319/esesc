@@ -310,10 +310,9 @@ void ACache::doReq(MemRequest *mreq) {
 
 	if(mreq->pos == MemRequest::Inport) {
 		if(!mreq->isRetrying()) {
-			// [sizhuo] new req from inport, add it to MSHR
+			// [sizhuo] new req from inport, add it to MSHR, wait until add success
+			mreq->setRetrying(); // [sizhuo] set retry before calling MSHR
 			mshr->addUpReq(lineAddr, &(mreq->redoReqCB), mreq->inport, mreq);
-			// [sizhuo] wait until add success
-			mreq->setRetrying();
 			return;
 		}
 		// [sizhuo] add MSHR success, set pos & clear retry bit

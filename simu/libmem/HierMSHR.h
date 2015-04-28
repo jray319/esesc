@@ -79,8 +79,9 @@ private:
 	GStatsCntr *insertFail[ma_MAX]; // [sizhuo] number of failed insertion of up/down req to MSHR
 	GStatsAvg *issueLat[ma_MAX]; // [sizhuo] latency from insert to issue
 
-	// [sizhuo] let IndexSplitMSHRBank to be friend class
+	// [sizhuo] let MSHRBank to be friend class
 	friend class IndexSplitMSHRBank;
+	friend class FullSplitMSHRBank;
 
 	// [sizhuo] get bank id of req
 	inline uint32_t getBank(AddrType lineAddr) {

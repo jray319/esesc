@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <string.h>
 
-//#include "BlockMSHRBank.h"
 #include "IndexSplitMSHRBank.h"
+#include "FullSplitMSHRBank.h"
 
 // HierMSHR class
 HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, const char *str)
@@ -78,8 +78,7 @@ HierMSHR::HierMSHR(uint32_t bkNum, int bkUpSize, int bkDownSize, CacheArray *c, 
 	I(bank);
 	for(uint32_t i = 0; i < bkNum; i++) {
 		bank[i] = 0;
-		//bank[i] = new BlockMSHRBank(i, c, name);
-		bank[i] = new IndexSplitMSHRBank(this, i, bkUpSize, bkDownSize, c, name);
+		bank[i] = new FullSplitMSHRBank(this, i, bkUpSize, bkDownSize, c, name);
 		I(bank[i]);
 	}
 }

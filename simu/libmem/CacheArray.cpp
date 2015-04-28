@@ -38,6 +38,7 @@ CacheLine* LRUCacheArray::downReqOccupyLine(AddrType lineAddr, const MemRequest 
 	CacheLine *line = 0;
 	for(CacheSet::iterator iter = tags[index].begin(); iter != tags[index].end(); iter++) {
 		if((*iter)->lineAddr == lineAddr && (*iter)->state != CacheLine::I) {
+			// [sizhuo] MSHR ensures that this line can only be occupied by up req in Wait state
 			line = *iter;
 			I(line->downReq == 0);
 			line->downReq = mreq;
@@ -51,9 +52,12 @@ CacheLine* LRUCacheArray::upReqOccupyLine(AddrType lineAddr, const MemRequest *m
 	const AddrType index = getIndex(lineAddr);
 	CacheLine *line = 0;
 
+	// [sizhuo] MSHR ensures that the occupied line in this function will not be occupied by other req
+
 	// [sizhuo] find hit line
 	for(CacheSet::iterator iter = tags[index].begin(); iter != tags[index].end(); iter++) {
 		if((*iter)->lineAddr == lineAddr && (*iter)->state != CacheLine::I) {
+			// [sizhuo] MSHR ensures that this line is not being replaced/downgraded by other req
 			line = (*iter);
 			// [sizhuo] promote line to MRU
 			tags[index].erase(iter);
