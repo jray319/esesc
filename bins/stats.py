@@ -520,64 +520,6 @@ for i in range(0, coreNum):
 			'nan' if inst[i] <= 0 else '{:<8.1f}'.format(float(prefetchMemNum[i]) / float(inst[i]) * 1000.0), prefetchMemLat[i])
 print ''
 
-# MSHR contention
-readInsertLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
-writeInsertLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
-prefetchInsertLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
-readIssueLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
-writeIssueLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
-prefetchIssueLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
-
-for line in resultFile:
-	m = re.search(r'(DL1|L2|L3)\((\d+)\)_MSHR_(read|write|prefetch)(Insert|Issue)Lat:n=\d+::v=(\d+\.\d+)', line)
-	if m:
-		cacheType = m.group(1)
-		coreId = int(m.group(2))
-		reqType = m.group(3)
-		action = m.group(4)
-		lat = float(m.group(5))
-		if action == 'Insert':
-			if reqType == 'read':
-				readInsertLat[cacheType][coreId] = lat
-			elif reqType == 'write':
-				writeInsertLat[cacheType][coreId] = lat
-			elif reqType == 'prefetch':
-				prefetchInsertLat[cacheType][coreId] = lat
-			else:
-				print 'ERROR: unknown req type {}'.format(reqType)
-				sys.exit()
-		elif action == 'Issue':
-			if reqType == 'read':
-				readIssueLat[cacheType][coreId] = lat
-			elif reqType == 'write':
-				writeIssueLat[cacheType][coreId] = lat
-			elif reqType == 'prefetch':
-				prefetchIssueLat[cacheType][coreId] = lat
-			else:
-				print 'ERROR: unknown req type {}'.format(reqType)
-				sys.exit()
-		else:
-			print 'ERROR: unknown action {}'.format(action)
-			sys.exit()
-
-for cache in ['DL1', 'L2', 'L3']:
-	saveData['readInsertLat{}'.format(cache)] = readInsertLat[cache]
-	saveData['readIssueLat{}'.format(cache)] = readIssueLat[cache]
-	saveData['writeInsertLat{}'.format(cache)] = writeInsertLat[cache]
-	saveData['writeIssueLat{}'.format(cache)] = writeIssueLat[cache]
-	saveData['prefetchInsertLat{}'.format(cache)] = prefetchInsertLat[cache]
-	saveData['prefetchIssueLat{}'.format(cache)] = prefetchIssueLat[cache]
-
-print '-- Memory Access Latency Distribution'
-print ('{:<6s}' + '{:<23s}' * 3).format('', 'Read', 'Write', 'Prefetch')
-print ('{:<6s}' + 'Insert  Issue  Handle  ' * 3).format('')
-for i in range(0, coreNum):
-	print ('{:<6s}' + '{:<8.1f}{:<7.1f}{:<8.1f}' * 3).format('P({})'.format(i),
-			readInsertLat['DL1'][i], readIssueLat['DL1'][i], readMemLat[i] - readInsertLat['DL1'][i] - readIssueLat['DL1'][i],
-			writeInsertLat['DL1'][i], writeIssueLat['DL1'][i], writeMemLat[i] - writeInsertLat['DL1'][i] - writeIssueLat['DL1'][i],
-			prefetchInsertLat['DL1'][i], prefetchIssueLat['DL1'][i], prefetchMemLat[i] - prefetchInsertLat['DL1'][i] - prefetchIssueLat['DL1'][i])
-print ''
-
 # cache miss
 readMissNum = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
 readMissLat = {'DL1': [0] * coreNum, 'L2': [0] * coreNum, 'L3': [0]}
@@ -625,6 +567,87 @@ for cache in ['DL1', 'L2', 'L3']:
 				'nan' if instNum <= 0 else '{:<6.1f}'.format(float(readMissNum[cache][i]) / instNum * 1000.0), readMissLat[cache][i],
 				'nan' if instNum <= 0 else '{:<6.1f}'.format(float(writeMissNum[cache][i]) / instNum * 1000.0), writeMissLat[cache][i],
 				'nan' if instNum <= 0 else '{:<6.1f}'.format(float(prefetchMissNum[cache][i]) / instNum * 1000.0), prefetchMissLat[cache][i])
+print ''
+
+# MSHR contention
+
+for cache in ['DL1', 'L2', 'L3']:
+	core = coreNum if cache != 'L3' else 1
+	for act in ['read', 'write', 'prefetch']:
+		saveData['{}HandleLat{}'.format(act, cache)] = [0] * core
+		saveData['{}HandleNum{}'.format(act, cache)] = [0] * core
+		saveData['{}InsertFail{}'.format(act, cache)] = [0] * core
+		for sc in ['Insert', 'Downgrade', 'Upgrade', 'Replace', 'ReqNum']:
+			saveData['{}Issue{}Stall{}'.format(act, sc, cache)] = [0] * core
+			saveData['{}Issue{}Fail{}'.format(act, sc, cache)] = [0] * core
+
+for line in resultFile:
+	m = re.search(r'(DL1|L2|L3)\((\d+)\)_MSHR_(read|write|prefetch)IssueStallBy_(Insert|Upgrade|Downgrade|Replace|ReqNum)\s*=\s*(\d+)\.0+', line)
+	if m:
+		cache = m.group(1)
+		coreId = int(m.group(2))
+		act = m.group(3)
+		sc = m.group(4)
+		stall = int(m.group(5))
+		saveData['{}Issue{}Stall{}'.format(act, sc, cache)][coreId] = stall
+		continue
+	m = re.search(r'(DL1|L2|L3)\((\d+)\)_MSHR_(read|write|prefetch)IssueFailBy_(Insert|Upgrade|Downgrade|Replace|ReqNum)\s*=\s*(\d+)\.0+', line)
+	if m:
+		cache = m.group(1)
+		coreId = int(m.group(2))
+		act = m.group(3)
+		sc = m.group(4)
+		num = int(m.group(5))
+		saveData['{}Issue{}Fail{}'.format(act, sc, cache)][coreId] = num
+		continue
+	m = re.search(r'(DL1|L2|L3)\((\d+)\)_MSHR_(read|write|prefetch)InsertFail\s*=\s*(\d+)\.0+', line)
+	if m:
+		cache = m.group(1)
+		coreId = int(m.group(2))
+		act = m.group(3)
+		num = int(m.group(4))
+		saveData['{}InsertFail{}'.format(act, cache)][coreId] = num
+		continue
+	m = re.search(r'(DL1|L2|L3)\((\d+)\)_MSHR_(read|write|prefetch)HandleLat:n=(\d+)::v=(\d+\.\d+)', line)
+	if m:
+		cache = m.group(1)
+		coreId = int(m.group(2))
+		act = m.group(3)
+		num = int(m.group(4))
+		lat = float(m.group(5))
+		saveData['{}HandleLat{}'.format(act, cache)][coreId] = lat
+		saveData['{}HandleNum{}'.format(act, cache)][coreId] = num
+
+for act in ['read', 'write', 'prefetch']:
+	for i in range(0, coreNum):
+		if saveData['{}HandleNumDL1'.format(act)][i] != saveData['{}MemNum'.format(act)][i]:
+			print 'ERROR: {}HandleNumDL1[{}] != {}MemNum[{}]'.format(act, i, act, i)
+			sys.exit()
+		if saveData['{}HandleNumL2'.format(act)][i] != saveData['{}MissNumDL1'.format(act)][i]:
+			print 'ERROR: {}HandleNumL2[{}] != {}MissNumDL1[{}]'.format(act, i, act, i)
+			sys.exit()
+	if saveData['{}HandleNumL3'.format(act)][0] != sum(saveData['{}MissNumL2'.format(act)]):
+		print 'ERROR: {}HandleNumL3 != {}MissNumL2'.format(act, act)
+		sys.exit()
+
+print '-- Memory Access Latency Distribution'
+print ('{:<6s}' + '{:<45s}' * 3).format('', 'Read', 'Write', 'Prefetch')
+print ('{:<6s}' + 'Handle  Ins   Down  Up    Rep   ReqN  Other  ' * 3).format('')
+for i in range(0, coreNum):
+	printStr = '{:<6s}'.format('P({})'.format(i))
+	for act in ['read', 'write', 'prefetch']:
+		printStr += '{:<8.1f}'.format(saveData['{}HandleLatDL1'.format(act)][i])
+		issueStallSum = 0.0
+		for sc in ['Insert', 'Downgrade', 'Upgrade', 'Replace', 'ReqNum']:
+			num = saveData['{}HandleNumDL1'.format(act)][i]
+			if num > 0:
+				lat = float(saveData['{}Issue{}StallDL1'.format(act, sc)][i]) / float(num)
+				printStr += '{:<6.1f}'.format(lat)
+				issueStallSum += lat
+			else:
+				printStr += ('{:<6s}'.format('nan'))
+		printStr += '{:<7.1f}'.format(saveData['{}MemLat'.format(act)][i] - issueStallSum - saveData['{}HandleLatDL1'.format(act)][i])
+	print printStr
 print ''
 
 # LSQ
