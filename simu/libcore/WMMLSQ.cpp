@@ -115,9 +115,7 @@ void WMMLSQ::issue(DInst *dinst) {
 								nLdReExByLd.inc(doStats);
 							}
 						}
-						// [sizhuo] younger loads on same aligned addr cannot read across this one
-						// they are either stalled or killed, so stop here
-						break;
+						// [sizhuo] if we don't force Ld-Ld ordering, we should continue search
 					} else if(killEn->state == Done) {
 						if(killEn->ldSrcID < id) {
 							// [sizhuo] this load must be killed & set replay reason
