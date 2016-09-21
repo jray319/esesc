@@ -128,16 +128,11 @@ protected:
   public:
     AddrType addr;
     bool doStats;
-    // [sizhuo] for store coalesce in WMM
-    // if multiple stores are sent to cache together
-    // this is the ID of the oldest store
-    Time_t exID;
 
-    ComSQEntry() : addr(0), doStats(true), exID(DInst::invalidID) {}
+    ComSQEntry() : addr(0), doStats(true) {}
     void clear() {
       addr = 0;
       doStats = true;
-      exID = DInst::invalidID;
     }
   };
 
@@ -195,6 +190,7 @@ protected:
   GStatsCntr nLdReExByRep;
   GStatsCntr nStLdForward;
   GStatsCntr nLdLdForward;
+  GStatsCntr nStEarlyRetire;
   GStatsCntr nVerifyLdByInv;
   GStatsCntr nVerifyLdByRep;
 
@@ -278,6 +274,8 @@ private:
 protected:
   virtual void ldExecute(DInst *dinst);
   virtual void stCommited(Time_t id);
+
+  SpecLSQ::iterator findStToRetire();
 
 public:
   WMMLSQ(GProcessor *gproc_, bool ldldOrder, bool ldstOrder);

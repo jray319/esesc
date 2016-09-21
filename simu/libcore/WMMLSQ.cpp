@@ -107,8 +107,10 @@ void WMMLSQ::issue(DInst *dinst) {
       DInst *killDInst = killEn->dinst;
       I(killDInst);
       if(killDInst->isPoisoned()) {
-        // [sizhuo] can't be poisoned XXX I don't know why I have this comment before
+        // [sizhuo] can't be poisoned
+        // because we poison all instructions in ROB together when the replayed inst reaches ROB head
         // anyway, we can stop the search
+        I(0);
         break;
       }
       const Instruction *const killIns = killDInst->getInst();
@@ -312,9 +314,22 @@ bool WMMLSQ::retire(DInst *dinst) {
   SpecLSQ::iterator retireIter = specLSQ.find(dinst->getID());
   SpecLSQEntry *retireEn = 0;
   if(retireIter == specLSQ.end()) {
-    // [sizhuo] for store, since we may retire it early, it may not in spec LSQ
+    // [sizhuo] this store is not in spec LSQ, because we have retired it early
     I(ins->isStore());
-    // TODO try to find a younger store to retire
+    nStEarlyRetire.inc(dinst->getStatsFlag());
+    // [sizhuo] try to find a younger store to retire
+    retireIter = findStToRetire();
+    if(retireIter != specLSQ.end()) {
+      retireEn = retireIter->second;
+      I(retireEn);
+      I(retireEn->dinst->getInst()->isStore());
+      I(retireEn->state == Done);
+      // [sizhuo] pend Q must be empty
+      I((retireEn->pendExQ).empty());
+      I((retireEn->pendRetireQ).empty());
+    } else {
+      retireEn = 0;
+    }
   } else {
     retireEn = retireIter->second; // [sizhuo] set valid retire entry
     I(retireIter == specLSQ.begin());
@@ -325,7 +340,7 @@ bool WMMLSQ::retire(DInst *dinst) {
     // [sizhuo] pend ex Q must be empty
     I((retireEn->pendExQ).empty());
     // [sizhuo] load/store: pend retire Q must be empty
-    GI(dinst->getInst()->isLoad() || dinst->getInst()->isStore(), (retireEn->pendRetireQ).empty());
+    GI(ins->isLoad() || ins->isStore(), (retireEn->pendRetireQ).empty());
   }
 
   // [sizhuo] retire from spec LSQ
@@ -342,11 +357,23 @@ bool WMMLSQ::retire(DInst *dinst) {
 
   // [sizhuo] actions when retiring
   if(ins->isStore() && retireEn) {
-    // XXX the retired specLSQ entry may be different from dinst
+    // [sizhuo] XXX the retired specLSQ entry may be different from dinst
     // it could be some younger store, so get info from retireEn->dinst instead of dinst
+    I(retireEn->dinst->getInst()->isStore());
     const Time_t id = retireEn->dinst->getID();
     const AddrType addr = retireEn->dinst->getAddr();
     const bool doStats = retireEn->dinst->getStatsFlag();
+    // [sizhuo] check whether comSQ already has store to same CACHE LINE
+    // we do this check before insertion of current store
+    bool noOlderSt = true;
+    for(ComSQ::iterator iter = comSQ.begin(); iter != comSQ.end(); iter++) {
+      I(iter->second);
+      if(getLineAddr(iter->second->addr) == getLineAddr(addr)) {
+        I(iter->first != id);
+        noOlderSt = false;
+        break;
+      }
+    }
     // [sizhuo] insert to comSQ
     ComSQEntry *en = comSQEntryPool.out();
     en->clear();
@@ -354,26 +381,8 @@ bool WMMLSQ::retire(DInst *dinst) {
     en->doStats = doStats;
     std::pair<ComSQ::iterator, bool> insertRes = comSQ.insert(std::make_pair<Time_t, ComSQEntry*>(id, en));
     I(insertRes.second);
-    ComSQ::iterator comIter = insertRes.first;
-    I(comIter != comSQ.end());
-    I(en == (comSQ.rbegin())->second);
-    // [sizhuo] XXX: if comSQ doesn't have older store to same CACHE LINE
-    // send this one to memory
-    bool noOlderSt = true;
-    while(comIter != comSQ.begin()) {
-      comIter--;
-      I(comIter != comSQ.end());
-      I(comIter->second);
-      I(comIter->first < id);
-      if(getLineAddr(comIter->second->addr) == getLineAddr(addr)) {
-        noOlderSt = false;
-        break;
-      }
-    }
+    // [sizhuo] if comSQ doesn't have other store to same CACHE LINE, send this one to memory
     if(noOlderSt) {
-      // [sizhuo] newly inserted store must be youngest, can't carry other stores to D$
-      // only set exID of itself
-      en->exID = id;
       stToMemCB::scheduleAbs(stToMemPort->nextSlot(doStats), this, addr, id, doStats);
     }
   } else if(ins->isRecFence()) {
@@ -410,31 +419,19 @@ bool WMMLSQ::retire(DInst *dinst) {
 }
 
 void WMMLSQ::stCommited(Time_t id) {
-  // [sizhuo] find the entry with this id, i.e. the oldest store just commited to D$
+  // [sizhuo] find the line addr of this id
   ComSQ::iterator comIter = comSQ.find(id);
   I(comIter != comSQ.end());
-  ComSQEntry *comEn = comIter->second;
-  I(comEn);
-  I(comEn->exID == id);
-  // [sizhuo] record the line addr
-  const AddrType lineAddr = getLineAddr(comEn->addr);
-  // [sizhuo] delete this entry & recycle it
-  comSQ.erase(comIter);
-  comSQEntryPool.in(comEn);
-  // [sizhuo] increment free entry
-  freeStNum++;
-  I(freeStNum > 0);
-  I(freeStNum <= maxStNum);
+  I(comIter->second);
+  const AddrType lineAddr = getLineAddr(comIter->second->addr);
 
-  // [sizhuo] delete all other stores just commited to D$ by identifying exID
+  // [sizhuo] delete all other stores to same CACHE LINE
   while(true) {
     ComSQ::iterator iter = comSQ.begin();
     for(; iter != comSQ.end(); iter++) {
       I(iter->second);
-      if(iter->second->exID == id) {
+      if(getLineAddr(iter->second->addr) == lineAddr) {
         // [sizhuo] find the store to delete, break
-        I(getLineAddr(iter->second->addr) == lineAddr);
-        I(iter->first > id);
         break;
       }
     }
@@ -449,34 +446,6 @@ void WMMLSQ::stCommited(Time_t id) {
       I(freeStNum <= maxStNum);
     } else {
       // [sizhuo] no more store to delete, stop
-      break;
-    }
-  }
-
-  // [sizhuo] send the current oldest entry of this CACHE LINE to memory
-  for(ComSQ::iterator exIter = comSQ.begin(); exIter != comSQ.end(); exIter++) {
-    ComSQEntry *exEn = exIter->second;
-    I(exEn);
-    if(getLineAddr(exEn->addr) == lineAddr) {
-      // [sizhuo] got the store to send to memory
-      I(exIter->first > id);
-      I(exEn->exID == DInst::invalidID);
-      // [sizhuo] set exID field to the inst ID of itself
-      const Time_t exStID = exIter->first;
-      exEn->exID = exStID;
-      // [sizhuo] set exID of all younger stores to same CACHE LINE
-      ComSQ::iterator iter = exIter;
-      iter++;
-      for(; iter != comSQ.end(); iter++) {
-        ComSQEntry *en = iter->second;
-        I(en);
-        if(getLineAddr(en->addr) == lineAddr) {
-          I(en->exID == DInst::invalidID);
-          en->exID = exStID;
-        }
-      }
-      // [sizhuo] send store to memory
-      stToMemCB::scheduleAbs(stToMemPort->nextSlot(exEn->doStats), this, exEn->addr, exStID, exEn->doStats);
       break;
     }
   }
@@ -522,3 +491,61 @@ void WMMLSQ::reset() {
   doneLdNum = 0;
 }
 
+MTLSQ::SpecLSQ::iterator WMMLSQ::findStToRetire() {
+  // [sizhuo] find the first store such that
+  // 1. no older Reconcile
+  // 2. all older loads and stores have resolved their addr & data
+  // 3. all older inst has no replay reason
+  // 4. all older loads to same addr are Done
+  // (5. all older inst are not poisoned -- this should never happen)
+  //
+  // Given the fact that all older loads and stores have resolved addr
+  // there cannot be any violation on memory dependency among these loads/stores
+
+  std::map<AddrType, bool> activeLdAddr; // [sizhuo] set of load addr that are still executing
+  for(SpecLSQ::iterator iter = specLSQ.begin(); iter != specLSQ.end(); iter++) {
+    const SpecLSQEntry *en = iter->second;
+    // [sizhuo] 2. load/store with unresolved addr/data
+    if(!en) {
+      break;
+    }
+    DInst *dinst = en->dinst;
+    I(dinst);
+    const Instruction *ins = dinst->getInst();
+    I(ins);
+    // [sizhuo] 5. inst is poisoned
+    // actually should not happen, because this func is not called after inst are poisoned
+    if(dinst->isPoisoned()) {
+      I(0);
+      break;
+    }
+    // [sizhuo] 1. reconcile encounter, no store returned
+    if(ins->isRecFence()) {
+      break;
+    }
+    // [sizhuo] 3. load is replayed, so no store returned
+    if(dinst->getReplayReason() != DInst::MaxReason) {
+      I(ins->isLoad());
+      break;
+    }
+    // [sizhuo] current mem inst won't stop us from searching for store to retire
+    AddrType alignAddr = getMemOrdAlignAddr(dinst->getAddr());
+    if(ins->isLoad() && en->state != Done) {
+      // [sizhuo] add not finished load addr to set
+      activeLdAddr.insert(std::make_pair<AddrType, bool>(alignAddr, true));
+    } else if(ins->isStore()) {
+      I(en->state == Done);
+      if(activeLdAddr.find(alignAddr) == activeLdAddr.end()) {
+        // [sizhuo] 4. store addr does not match any unfinished load addr
+        // so this store can be retired, return it
+        return iter;
+      }
+      // [sizhuo] otherwise: store cannot be retured
+      // but we don't need to add this addr to set again
+      // we can continue the search
+    }
+  }
+
+  // [sizhuo] fail to find such store
+  return specLSQ.end();
+}
