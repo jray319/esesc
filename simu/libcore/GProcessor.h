@@ -211,6 +211,10 @@ class GProcessor {
 
 		// [sihzuo] newly added, return inst ID of ROB head
 		virtual Time_t getROBHeadID() { return DInst::invalidID; }
+
+    // [sizhuo] for LSQ early retire St
+    // check whether there is unresolved control inst older than store (ID = id)
+    virtual bool allOlderCtrlDone(Time_t id) { return false; }
 };
 
 #endif   // GPROCESSOR_H

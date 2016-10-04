@@ -669,7 +669,10 @@ verifyLdByInv = [0] * coreNum
 verifyLdByRep = [0] * coreNum
 stForward = [0] * coreNum
 ldForward = [0] * coreNum
-stEarlyRetire = [0] * coreNum
+stEarlyRetireTime = [0] * coreNum
+stEarlyRetireNum = [0] * coreNum
+stEarlyRetireByOldSt = [0] * coreNum
+stEarlyRetireByStall = [0] * coreNum
 exLdHist = [[0] * (maxLd + 1)] * coreNum
 doneLdHist = [[0] * (maxLd + 1)] * coreNum
 ldQUsage = [[0] * (maxLd + 1)] * coreNum
@@ -714,11 +717,21 @@ for line in resultFile:
             ldForward[coreId] = count
         elif cntType == 'StLdForward':
             stForward[coreId] = count
-        elif cntType == 'StEarlyRetire':
-            stEarlyRetire[coreId] = count
+        elif cntType == 'StEarlyRetireByStall':
+            stEarlyRetireByStall[coreId] = count
+        elif cntType == 'StEarlyRetireByOldSt':
+            stEarlyRetireByOldSt[coreId] = count
         elif cntType != 'UnalignLd' and cntType != 'UnalignSt':
             print 'ERROR: unkown count type {}'.format(cntType)
             sys.exit()
+        continue
+    m = re.search(r'P\((\d+)\)_MTLSQ_stEarlyRetireTime:n=(\d+)::v=(\d+\.\d+)', line)
+    if m:
+        coreId = int(m.group(1))
+        count = int(m.group(2))
+        time = float(m.group(3))
+        stEarlyRetireTime[coreId] = time
+        stEarlyRetireNum[coreId] = count
         continue
     m = re.search(r'P\((\d+)\)_nExcepBy_(\w+)\s*=\s*(\d+)\.0+', line)
     if m:
@@ -775,7 +788,10 @@ saveData['verifyLdByRep'] = verifyLdByRep
 saveData['verifyLdByInv'] = verifyLdByInv
 saveData['ldForward'] = ldForward
 saveData['stForward'] = stForward
-saveData['stEarlyRetire'] = stEarlyRetire
+saveData['stEarlyRetireTime'] = stEarlyRetireTime
+saveData['stEarlyRetireNum'] = stEarlyRetireNum
+saveData['stEarlyRetireByOldSt'] = stEarlyRetireByOldSt
+saveData['stEarlyRetireByStall'] = stEarlyRetireByStall
 saveData['exLdHist'] = exLdHist
 saveData['doneLdHist'] = doneLdHist
 saveData['ldQUsage'] = ldQUsage

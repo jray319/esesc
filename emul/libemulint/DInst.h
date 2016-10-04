@@ -102,13 +102,13 @@ class DInstNext {
 // [sizhuo] an instruction after decode & track its dependency
 class DInst {
 public:
-	typedef enum {
-		Store,
-		Load,
-		CacheInv,
-		CacheRep,
-		MaxReason
-	} ReplayReason;
+  typedef enum {
+    Store,
+    Load,
+    CacheInv,
+    CacheRep,
+    MaxReason
+  } ReplayReason;
 
 private:
   // In a typical RISC processor MAX_PENDING_SOURCES should be 2
@@ -123,14 +123,14 @@ private:
   DInstNext *last;
   DInstNext *first;
 
-	// [sizhuo] newly added: store set dependency
-	// if memPend.isUsed = true, then this inst has mem dep on older inst
-	// link list of memPend entry forms all the pending younger inst on a older inst
-	DInstNext memPend; // similar to pend[0,1,2]
-	DInstNext *memLast; // similar to last
-	DInstNext *memFirst; // similar to first
-	bool memDep; // whether this inst depends on older inst, similar to nDeps
-	/////////////
+  // [sizhuo] newly added: store set dependency
+  // if memPend.isUsed = true, then this inst has mem dep on older inst
+  // link list of memPend entry forms all the pending younger inst on a older inst
+  DInstNext memPend; // similar to pend[0,1,2]
+  DInstNext *memLast; // similar to last
+  DInstNext *memFirst; // similar to first
+  bool memDep; // whether this inst depends on older inst, similar to nDeps
+  /////////////
 
   FlowID fid; // [sizhuo] what is this??
 
@@ -150,13 +150,13 @@ private:
   uint32_t pe_id;
 #endif
 
-	// [sizhuo] newly added
-	bool poisoned; // [sizhuo] poison bit for flushed inst
+  // [sizhuo] newly added
+  bool poisoned; // [sizhuo] poison bit for flushed inst
 
-	ReplayReason replayReason;
+  ReplayReason replayReason;
 
-	static const char* replayReasonName[MaxReason]; // [sizhuo] strings of all replay reasons
-	/////////////
+  static const char* replayReasonName[MaxReason]; // [sizhuo] strings of all replay reasons
+  /////////////
 
   // END Boolean flags
 
@@ -178,9 +178,10 @@ private:
   FetchEngine *fetch;
   Time_t fetchTime;
 
-	// [sizhuo] newly added
-	FrontEnd *frontEnd; // [sizhuo] front end that this inst has blocked
-	/////////////
+  // [sizhuo] newly added
+  FrontEnd *frontEnd; // [sizhuo] front end that this inst has blocked
+  Time_t earlyRetireTime; // [sizhuo] time when store is retired early
+  /////////////
 
   // [sizhuo] number of older inst that this inst depends on
   char nDeps;              // 0, 1 or 2 for RISC processors
@@ -214,18 +215,19 @@ private:
     replay        = false;
     performed     = false;
 
-		// [sizhuo] newly added fields
-		poisoned      = false; // [sizhuo] initially not poisoned
-		frontEnd      = 0; // [sizhuo] locked front end init as NULL
-		replayReason  = MaxReason;
-		memDep        = false;
-		memFirst      = 0;
-		memLast       = 0;
-		memPend.isUsed = false;
+    // [sizhuo] newly added fields
+    poisoned      = false; // [sizhuo] initially not poisoned
+    frontEnd      = 0; // [sizhuo] locked front end init as NULL
+    earlyRetireTime = 0; // [sizhuo] normally impossible for any inst to retire at time 0
+    replayReason  = MaxReason;
+    memDep        = false;
+    memFirst      = 0;
+    memLast       = 0;
+    memPend.isUsed = false;
 #ifdef DINST_PARENT
-		memPend.setParentDInst(0);
+    memPend.setParentDInst(0);
 #endif
-		//////////
+    //////////
 #ifdef ENABLE_CUDA
     memaccess   = GlobalMem;
 #endif
@@ -247,9 +249,9 @@ public:
 
   DInst *clone();
 
-	// [sizhuo] newly added: invalid inst ID -- 0
-	static const Time_t invalidID;
-	/////
+  // [sizhuo] newly added: invalid inst ID -- 0
+  static const Time_t invalidID;
+  /////
 
   bool getStatsFlag() const { return keepStats; }
 
@@ -353,14 +355,14 @@ public:
   // i.e. remove the data dependency of younger inst on me
   DInst *getNextPending() {
     I(first);
-	// [sizhuo] inform the first one in linked list
-	// thus, the closest inst is informed first (FIFO order of add/remove dependency)
+  // [sizhuo] inform the first one in linked list
+  // thus, the closest inst is informed first (FIFO order of add/remove dependency)
     DInst *n = first->getDInst();
 
     I(n);
 
     I(n->nDeps > 0);
-	// [sizhuo] the younger inst n won't depend on en anymore
+  // [sizhuo] the younger inst n won't depend on en anymore
     n->nDeps--;
 
     first->isUsed = false;
@@ -373,17 +375,17 @@ public:
   // [sizhuo] src1 of younger inst d is my result
   void addSrc1(DInst * d) {
     I(d->nDeps < MAX_PENDING_SOURCES);
-	// inst d depends on one more inst
+  // inst d depends on one more inst
     d->nDeps++;
 
-	// [sizhuo] set fields of d->pend[0]
+  // [sizhuo] set fields of d->pend[0]
     DInstNext *n = &d->pend[0];
     I(!n->isUsed);
     n->isUsed = true;
     n->setParentDInst(this);
-	// [sizhuo] n->dinst = d is set in the default construction of d
+  // [sizhuo] n->dinst = d is set in the default construction of d
 
-	// [sizhuo] append d to the fan-out linked list
+  // [sizhuo] append d to the fan-out linked list
     I(n->getDInst() == d);
     if (first == 0) {
       first = n;
@@ -498,37 +500,37 @@ public:
     performed = true;
   }
 
-	// [sizhuo] resolve mem dep
+  // [sizhuo] resolve mem dep
   DInst *getNextMemPending() {
     I(memFirst);
-		I(memFirst->isUsed);
-		// [sizhuo] get the younger inst that depends on me
+    I(memFirst->isUsed);
+    // [sizhuo] get the younger inst that depends on me
     DInst *n = memFirst->getDInst();
     I(n);
     I(n->memDep);
-		// [sizhuo] resolve younger inst dependency
+    // [sizhuo] resolve younger inst dependency
     n->memDep = false;
-		// [sizhuo] move link list head ptr
+    // [sizhuo] move link list head ptr
     memFirst->isUsed = false;
     memFirst->setParentDInst(0);
     memFirst = memFirst->getNext();
-		// [sizhuo] return younger inst
+    // [sizhuo] return younger inst
     return n;
   }
 
   // [sizhuo] add younger inst to have mem dep on me
   void addMemDep(DInst * d) {
     I(!d->memDep);
-		// [sizhuo] set mem dep of younger inst
+    // [sizhuo] set mem dep of younger inst
     d->memDep = true;
-		// [sizhuo] set fields of d->memPend
+    // [sizhuo] set fields of d->memPend
     DInstNext *n = &d->memPend;
     I(!n->isUsed);
     n->isUsed = true;
     n->setParentDInst(this);
-		// [sizhuo] n->dinst = d is set in the construction of d
+    // [sizhuo] n->dinst = d is set in the construction of d
 
-		// [sizhuo] append d to the linked list
+    // [sizhuo] append d to the linked list
     I(n->getDInst() == d);
     if (memFirst == 0) {
       memFirst = n;
@@ -539,61 +541,65 @@ public:
     memLast = n;
   }
 
-	// [sizhuo] check memory dependency
-	bool hasMemDep() {
-		I(memDep == memPend.isUsed);
-		return memDep;
-	}
-	bool hasMemPending() { return memFirst != 0; }
+  // [sizhuo] check memory dependency
+  bool hasMemDep() {
+    I(memDep == memPend.isUsed);
+    return memDep;
+  }
+  bool hasMemPending() { return memFirst != 0; }
 
-	// [sizhuo] return the younger inst that depends on it
-	const DInst *getMemFirstPending() const { return memFirst->getDInst(); }
-	const DInstNext *getMemFirst() const { return memFirst; }
+  // [sizhuo] return the younger inst that depends on it
+  const DInst *getMemFirstPending() const { return memFirst->getDInst(); }
+  const DInstNext *getMemFirst() const { return memFirst; }
 
-	// [sizhuo] return & set poison bit
-	bool isPoisoned() const { return poisoned; }
-	void markPoisoned() {
-		// [sizhuo] remove dependency
-		while(hasPending()) {
-			if(getFirstPending() == 0) {
-				break;
-			}
-			getNextPending();
-		}
-		// [sizhuo] remove store set dependency
-		while(hasMemPending()) {
-			if(getMemFirstPending() == 0) {
-				break;
-			}
-			getNextMemPending();
-		}
-		// [sizhuo] if unissued, mark issued & executed
-		// XXX: this is necessary, otherwise this inst may never become executed
-		// XXX: this is justified, because this inst will never be invoked
-		if(!issued) {
-			I(!executed);
-			issued = true;
-			executed = true;
-		} // else: will be marked by DepWindown/Cluster/Resource
-		// [sizhuo] set poison bit
-		poisoned = true;
-	}
+  // [sizhuo] return & set poison bit
+  bool isPoisoned() const { return poisoned; }
+  void markPoisoned() {
+    // [sizhuo] remove dependency
+    while(hasPending()) {
+      if(getFirstPending() == 0) {
+        break;
+      }
+      getNextPending();
+    }
+    // [sizhuo] remove store set dependency
+    while(hasMemPending()) {
+      if(getMemFirstPending() == 0) {
+        break;
+      }
+      getNextMemPending();
+    }
+    // [sizhuo] if unissued, mark issued & executed
+    // XXX: this is necessary, otherwise this inst may never become executed
+    // XXX: this is justified, because this inst will never be invoked
+    if(!issued) {
+      I(!executed);
+      issued = true;
+      executed = true;
+    } // else: will be marked by DepWindown/Cluster/Resource
+    // [sizhuo] set poison bit
+    poisoned = true;
+  }
 
-	// [sizhuo] set/get replay reason
-	ReplayReason getReplayReason() { return replayReason; }
-	void setReplayReason(ReplayReason r) {
-		I(r < MaxReason);
-		replayReason = r;
-	}
+  // [sizhuo] set/get replay reason
+  ReplayReason getReplayReason() { return replayReason; }
+  void setReplayReason(ReplayReason r) {
+    I(r < MaxReason);
+    replayReason = r;
+  }
 
-	// [sizhuo] transfer replay reason to string
-	static const char *replayReason2String(ReplayReason r) {
-		return r >= MaxReason ? 0 : replayReasonName[r];
-	}
-	
-	// [sizhuo] lock front end & return its value
-	void lockFrontEnd(FrontEnd *fe) { frontEnd = fe; }
-	FrontEnd *getFrontEnd() { return frontEnd; }
+  // [sizhuo] transfer replay reason to string
+  static const char *replayReason2String(ReplayReason r) {
+    return r >= MaxReason ? 0 : replayReasonName[r];
+  }
+  
+  // [sizhuo] lock front end & return its value
+  void lockFrontEnd(FrontEnd *fe) { frontEnd = fe; }
+  FrontEnd *getFrontEnd() { return frontEnd; }
+
+  // [sizhuo] set & get store early retire time
+  Time_t getEarlyRetireTime() { return earlyRetireTime; }
+  void setEarlyRetireTime(Time_t t) { earlyRetireTime = t; }
 
   void setWakeUpTime(Time_t t)  {
     //I(wakeUpTime <= t || t == 0);

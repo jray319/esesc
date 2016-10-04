@@ -190,9 +190,12 @@ protected:
   GStatsCntr nLdReExByRep;
   GStatsCntr nStLdForward;
   GStatsCntr nLdLdForward;
-  GStatsCntr nStEarlyRetire;
   GStatsCntr nVerifyLdByInv;
   GStatsCntr nVerifyLdByRep;
+
+  GStatsAvg  stEarlyRetireTime; // [sizhuo] average of how much time that a store is retired early
+  GStatsCntr nStEarlyRetireByOldSt; // [sizhuo] old store already retired, so do a new one
+  GStatsCntr nStEarlyRetireByStall; // [sizhuo] ROB retire stall
 
   GStatsCntr nUnalignLd;
   GStatsCntr nUnalignSt;
@@ -234,6 +237,8 @@ public:
   // [sizhuo] for reset when execption happens
   virtual void reset();
   virtual bool isReset();
+  // [sizhuo] retire store early
+  virtual bool retireStEarly() { return false; }
 
   // [sizhuo] return stats to processor
   int32_t getLdQUsage() { return maxLdNum - freeLdNum; }
@@ -271,6 +276,9 @@ private:
   const bool orderLdLd; // [sizhuo] order loads on same addr
   const bool orderLdSt; // [sizhuo] order Ld --po--> St
 
+  // [sizhuo] helper func to send st to comSQ
+  void sendStToComSQ(SpecLSQEntry *retireEn);
+
 protected:
   virtual void ldExecute(DInst *dinst);
   virtual void stCommited(Time_t id);
@@ -287,6 +295,8 @@ public:
   virtual void cacheEvict(AddrType lineAddr, bool isReplace) {};
   // [sizhuo] since we may have NULL ptr in specLSQ, reset needs to clear these NULL entries
   virtual void reset();
+  // [sizhuo] retire store early
+  virtual bool retireStEarly();
 };
 
 // [sizhuo] LSQ for SC & TSO
