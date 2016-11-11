@@ -1037,7 +1037,15 @@ void ThumbCrack::thumb32expand(RAWDInst *rinst)
 									// [sizhuo] ROI end
 									CrackInst::setup(rinst, iMALU_ROI_END, OP_S64_OR, 0, 0, 0, 0, 0, 0, 0);
 									MSG("INFO: crack magic inst ROI end");
-								} else {
+								} else if(regName == 1) {
+                  // [sizhuo] commit fence
+                  CrackInst::setup(rinst, iSALU_COM, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0);
+                  ID(MSG("INFO: crack magic inst COMMIT"));
+                } else if(regName == 2) {
+                  // [sizhuo] reconcile fence
+                  CrackInst::setup(rinst, iLALU_REC, OP_iRALU_move, 0, 0, 0, 0, 0, 0, 0);
+                  ID(MSG("INFO: crack magic inst RECONCILE"));
+                } else {
 									// [sizhuo] unknown
 									CrackInst::setup(rinst, iAALU, OP_S64_OR, RN, RM, 0, RD, Sbit, 0, 0);
 									MSG("WARNING: crack unknown magic inst orr.w r%d r%d r%d", regName, regName, regName);
