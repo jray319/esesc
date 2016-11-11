@@ -290,8 +290,8 @@ void WMMProcessor::retireFromROB(FlowID fid) {
       return;
     }
 
-    // [sizhuo] check ROI end
-    if(dinst->getInst()->isRoiEnd()) {
+    // [sizhuo] check ROI end (only in sim stage)
+    if(simStage == Sim && dinst->getInst()->isRoiEnd()) {
       // [sizhuo] switch to Done stage
       simStage = Done;
       // [sizhuo] set sim time counter
@@ -649,6 +649,11 @@ bool WMMProcessor::allOlderCtrlDone(Time_t id) {
     // [sizhuo] reach the store, so all older branch are done
     if(dinst->getID() >= id) {
       return true;
+    }
+    // [sizhuo] check for poison (should not happen)
+    if(dinst->isPoisoned()) {
+      I(0);
+      return false;
     }
     // [sizhuo] check for control
     if(dinst->getInst()->isControl()) {

@@ -22,8 +22,9 @@ const SSID_t FullMTStoreSet::invalidSSID = -1;
 FullMTStoreSet::FullMTStoreSet(int32_t cpu_id)
 	: ssit(0)
 	, lfmt(0)
-	// [sizhuo] only WMM orders loads to same addr
-	, orderLdLd(!strcasecmp(SescConf->getCharPtr("cpusimu", "memModel", cpu_id), "wmm"))
+  // [sizhuo] XXX both WMM (wmm) and Alpha (rcm) orders loads to same addr
+  , orderLdLd(!strcasecmp(SescConf->getCharPtr("cpusimu", "memModel", cpu_id), "wmm") ||
+              !strcasecmp(SescConf->getCharPtr("cpusimu", "memModel", cpu_id), "rcm"))
 	, ssitSize(SescConf->getInt("cpusimu", "ssitSize", cpu_id))
 	, ssitMask(ssitSize - 1)
 	, lfmtSize(SescConf->getInt("cpusimu", "lfmtSize", cpu_id))

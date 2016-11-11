@@ -17,8 +17,8 @@ MTLSQ* MTLSQ::create(GProcessor *gproc_) {
   if(!strcasecmp(memModel, "wmm")) {
     ret = new WMMLSQ(gproc_, true, true);
   } else if(!strcasecmp(memModel, "rcm")) {
-    // [sizhuo] new model: don't order loads on same addr, and don't order Ld->St
-    ret = new WMMLSQ(gproc_, false, false);
+    // [sizhuo] Alpha: order loads on same addr, but don't order Ld->St
+    ret = new WMMLSQ(gproc_, true, false);
   } else if(!strcasecmp(memModel, "tso")) {
     ret = new SCTSOLSQ(gproc_, false, ldWait, verifyLd);
   } else if(!strcasecmp(memModel, "sc")) {
