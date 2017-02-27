@@ -142,6 +142,15 @@ splash_param['ocean_cp'] = {
         'template' : False
         }
 
+splash_param['ocean_ncp'] = {
+        'dev'      : '-n258 -p__THREAD_NUM__ -e1e-07 -r20000 -t28800'  ,
+        'small'    : '-n514 -p__THREAD_NUM__ -e1e-07 -r20000 -t28800'  ,
+        'medium'   : '-n1026 -p__THREAD_NUM__ -e1e-07 -r20000 -t28800' ,
+        'large'    : '-n2050 -p__THREAD_NUM__ -e1e-07 -r20000 -t28800' ,
+        'thread'   : lambda core : core ,
+        'template' : False
+        }
+
 splash_param['radiosity'] = {
         'dev'      : '-bf 1.5e-1 -batch -room -p __THREAD_NUM__' ,
         'small'    : '-bf 1.5e-1 -batch -room -p __THREAD_NUM__' ,
@@ -156,6 +165,15 @@ splash_param['raytrace'] = {
         'small'    : '-s -p__THREAD_NUM__ -a8 teapot.env' ,
         'medium'   : '-s -p__THREAD_NUM__ -a2 balls4.env' ,
         'large'    : '-s -p__THREAD_NUM__ -a8 balls4.env' ,
+        'thread'   : lambda core : core ,
+        'template' : False
+        }
+
+splash_param['volrend'] = {
+        'dev'      : '__THREAD_NUM__ head-scaleddown4 4'   ,
+        'small'    : '__THREAD_NUM__ head-scaleddown4 20'  ,
+        'medium'   : '__THREAD_NUM__ head-scaleddown2 50'  ,
+        'large'    : '__THREAD_NUM__ head-scaleddown2 100' ,
         'thread'   : lambda core : core ,
         'template' : False
         }
